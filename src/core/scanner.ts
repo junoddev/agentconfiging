@@ -233,6 +233,23 @@ function shouldIncludeGlobalFile(relPath: string): boolean {
   return hasAllowedExt(normalizeRel(relPath));
 }
 
+/**
+ * Public WRITE-allowlist predicate (bead agentconfig-gxo.3): is `relPath` a
+ * KNOWN, writable config path within a scope of the given kind? Delegates to
+ * the exact same include rules the scanner walks with, so the write allowlist
+ * can never drift from what the engine recognizes — a write to an in-scope but
+ * unrecognized path (e.g. `random/evil.sh` under the project root) is refused.
+ *
+ * `relPath` is scope-relative; either separator is accepted (normalized here).
+ * Project scope allows: KNOWN_FILES at the root, ADDITIONAL_KNOWN_FILES, the
+ * scoped-instruction glob, and ALLOWED_EXTS files under a KNOWN_DIRS subtree.
+ * Global scope (root already an agent config dir like ~/.claude) allows any
+ * ALLOWED_EXTS file.
+ */
+export function isWritableConfigPath(relPath: string, scope: 'project' | 'global'): boolean {
+  return scope === 'global' ? shouldIncludeGlobalFile(relPath) : shouldIncludeProjectFile(relPath);
+}
+
 interface WalkEntry {
   absPath: string;
   relPath: string;

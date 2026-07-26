@@ -25,10 +25,15 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { KNOWN_DIRS } from '../core/index.js';
 import { createApp } from './app.js';
 import { handleRequest } from './bridge.js';
 import { ReportStore } from './store.js';
+import { defaultTrashDir } from './trash.js';
+import type { WriteScope } from './pathguard.js';
 import { LOOPBACK_HOST, resolveServerOptions } from './options.js';
 
 export { LOOPBACK_HOST, resolveServerOptions } from './options.js';
@@ -37,6 +42,12 @@ export { createApp } from './app.js';
 export type { AppConfig } from './app.js';
 export { ReportStore } from './store.js';
 export type { ReportScope, ServedReport } from './store.js';
+export { registerWriteRoutes } from './write.js';
+export type { WriteRoutesConfig } from './write.js';
+export { resolveWriteTarget } from './pathguard.js';
+export type { WriteScope, Resolution } from './pathguard.js';
+export { unifiedDiff } from './diff.js';
+export { trashFile, defaultTrashDir } from './trash.js';
 
 export interface StartServerOptions {
   /** Project root the report engine scans. */
@@ -68,6 +79,30 @@ function packageVersion(): string {
   }
 }
 
+/**
+ * Build the WRITE-API scopes: the project root (relative writes anchor here)
+ * plus every agent home config dir that exists (~/.claude, ~/.codex, ...). Each
+ * root is realpath'd so the path guard compares against canonical paths.
+ */
+function buildWriteScopes(root: string): WriteScope[] {
+  const scopes: WriteScope[] = [];
+  try {
+    scopes.push({ root: fs.realpathSync(path.resolve(root)), kind: 'project' });
+  } catch {
+    // Project root missing — the scan would fail anyway; leave it out.
+  }
+  const home = os.homedir();
+  for (const dir of KNOWN_DIRS) {
+    try {
+      const real = fs.realpathSync(path.join(home, dir));
+      if (fs.statSync(real).isDirectory()) scopes.push({ root: real, kind: 'global' });
+    } catch {
+      // Not present on this machine.
+    }
+  }
+  return scopes;
+}
+
 export async function startServer(opts: StartServerOptions): Promise<RunningServer> {
   if (opts.host !== undefined && opts.host !== LOOPBACK_HOST) {
     throw new Error(`refusing to bind non-loopback host ${opts.host}; only ${LOOPBACK_HOST}`);
@@ -88,6 +123,8 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
     distDir,
     store: new ReportStore(opts.root, version),
     version,
+    scopes: buildWriteScopes(opts.root),
+    trashDir: defaultTrashDir(),
   });
 
   const server = createServer((req, res) => {

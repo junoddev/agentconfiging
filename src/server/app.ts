@@ -56,6 +56,8 @@ import path from 'node:path';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { ReportStore } from './store.js';
+import { registerWriteRoutes } from './write.js';
+import type { WriteScope } from './pathguard.js';
 
 export interface AppConfig {
   /** SHA-256 digest of the session bearer token — the app never sees the raw token. */
@@ -70,6 +72,14 @@ export interface AppConfig {
   distDir: string;
   store: ReportStore;
   version: string;
+  /**
+   * WRITE-API scopes (bead gxo.3): the project root + any agent home config
+   * dirs, each realpath'd. Optional and defaults to [] — with no scopes every
+   * write/read is refused (fail-closed), which keeps the read-only tests valid.
+   */
+  scopes?: WriteScope[];
+  /** Where deletes are moved (never hard-unlinked). Required once scopes exist. */
+  trashDir?: string;
 }
 
 const MIME: Record<string, string> = {
@@ -249,6 +259,10 @@ export function createApp(config: AppConfig): Hono {
       return jsonError(500, 'report failed');
     }
   });
+
+  // WRITE API (gxo.3): POST /api/write, POST /api/delete, GET /api/file. These
+  // register under /api, so they inherit the token + Origin/CSRF gates above.
+  registerWriteRoutes(app, { scopes: config.scopes ?? [], trashDir: config.trashDir ?? '' });
 
   // Unknown /api paths (any method): 404 JSON, no static fallback.
   app.all('/api/*', () => jsonError(404, 'not found'));
