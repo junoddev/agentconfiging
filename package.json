@@ -44,6 +44,7 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
+    "chokidar": "^5.0.0",
     "commander": "^15.0.0",
     "hono": "^4.12.32",
     "ink": "^7.1.1",
