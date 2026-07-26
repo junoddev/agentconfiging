@@ -32,12 +32,12 @@ import {
   ScanError,
   scanGlobal,
   scanProject,
+  toReportFinding,
   type AnalyzerEnv,
   type DetectedAgent,
-  type Finding,
-  type Fix,
   type Manifest,
   type ManifestStats,
+  type ReportFinding,
 } from '../core/index.js';
 import { collectPathCommands } from './path-env.js';
 
@@ -91,11 +91,11 @@ export interface ReportIo {
 }
 
 /**
- * A finding as serialized in report output. `Finding.fix` carries complete
- * replacement file content and is NEVER serialized — it is summarized as
- * `hasFix` + `fixKind` so CI keeps the signal without the file body.
+ * A finding as serialized in report output — shared with the server API.
+ * `Finding.fix` is never serialized; see ReportFinding in src/core/report.ts
+ * (moved there by agentconfig-gxo.2 so CLI and server share one stripper).
  */
-export type ReportFinding = Omit<Finding, 'fix'> & { hasFix?: true; fixKind?: Fix['kind'] };
+export type { ReportFinding } from '../core/index.js';
 
 /** One scanned scope, content-free: paths/metadata/findings only. */
 interface ScopeReport {
@@ -130,8 +130,7 @@ interface ReportHeader {
 }
 
 type ReportPayload =
-  | (ReportHeader & ScopeReport)
-  | (ReportHeader & { project: ScopeReport; global: GlobalEntry[] });
+  (ReportHeader & ScopeReport) | (ReportHeader & { project: ScopeReport; global: GlobalEntry[] });
 
 function packageVersion(): string {
   // Works from both src/cli (tsx/vitest) and the bundled dist/cli/index.js:
@@ -153,11 +152,6 @@ function serializeError(err: unknown): SerializedError {
     ...(typeof code === 'string' ? { code } : {}),
     message: error.message,
   };
-}
-
-function toReportFinding(finding: Finding): ReportFinding {
-  const { fix, ...rest } = finding;
-  return fix ? { ...rest, hasFix: true, fixKind: fix.kind } : rest;
 }
 
 function scopeReport(manifest: Manifest, env: AnalyzerEnv | undefined): ScopeReport {

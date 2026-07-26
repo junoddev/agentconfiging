@@ -305,7 +305,7 @@ describe('built CLI smoke test', () => {
     }
     expect(status).toBe(64);
     expect(stdout).toBe('');
-    expect(stderr).toContain('unknown flag for report: --nope');
+    expect(stderr).toContain("unknown option '--nope'");
     expect(stderr).toContain('Usage: agentconfiging report');
   });
 });

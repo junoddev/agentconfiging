@@ -1,49 +1,114 @@
 /**
- * CLI dispatch — separated from the executable entry (index.ts) so tests
- * can drive the full command surface in-process, side-effect free.
+ * CLI dispatch (commander) — separated from the executable entry (index.ts)
+ * so tests can drive the full command surface in-process, side-effect free.
+ *
+ * Commands: default/`launch` (Ink UI + local server), `report` (plain JSON
+ * to stdout for CI — never Ink, never color, SPEC §4), `daemon` (stub until
+ * its bead lands — never Ink either).
  *
  * Usage errors (unknown command/flag, extra positionals) exit with
  * EX_USAGE (64) — deliberately distinct from 1, which `report` uses for
  * "warnings found" — and print the message plus usage to STDERR, keeping
- * stdout pure for machine consumers.
+ * stdout pure for machine consumers. Commander is wired with exitOverride +
+ * configureOutput to guarantee both properties.
  */
 
-import { parseCliArgs } from './args.js';
+import { Command, CommanderError } from 'commander';
+import { runLaunch, type LaunchOptions } from './launch.js';
 import { REPORT_HELP, runReport, type ReportIo } from './report.js';
 
 /** BSD sysexits EX_USAGE: command line usage error. */
 export const EX_USAGE = 64;
 
-export function runCli(argv: readonly string[], io: ReportIo): number {
-  let parsed;
-  try {
-    parsed = parseCliArgs(argv);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    io.stderr(`agentconfiging: ${message}\n\n${REPORT_HELP}`);
-    return EX_USAGE;
-  }
+export interface CliDeps {
+  /** Launch flow override for tests; defaults to the real runLaunch. */
+  launch?: (opts: LaunchOptions, io: ReportIo) => Promise<number>;
+}
 
-  switch (parsed.command) {
-    case 'report':
-      // Plain JSON to stdout for CI — never Ink, never color (SPEC §4).
-      if (parsed.help) {
+function addLaunchOptions(command: Command): Command {
+  return command
+    .option('--no-open', 'do not open the browser (URL is still printed)')
+    .option('--detach', 'quitting the UI leaves the server running');
+}
+
+export async function runCli(
+  argv: readonly string[],
+  io: ReportIo,
+  deps: CliDeps = {},
+): Promise<number> {
+  const launch = deps.launch ?? ((opts: LaunchOptions) => runLaunch(opts, { io }));
+  let code = 0;
+
+  // Root options are parsed greedily even when they appear after the
+  // `launch` subcommand name, so merge root + subcommand option bags.
+  const runLaunchAction = async (opts: { open?: boolean; detach?: boolean }): Promise<void> => {
+    const rootOpts = program.opts<{ open?: boolean; detach?: boolean }>();
+    code = await launch(
+      {
+        open: rootOpts.open !== false && opts.open !== false,
+        detach: rootOpts.detach === true || opts.detach === true,
+      },
+      io,
+    );
+  };
+
+  const program = new Command('agentconfiging');
+  program
+    .description('Local control center for AI agent configuration.')
+    .exitOverride()
+    .configureOutput({ writeOut: io.stdout, writeErr: io.stderr })
+    .showHelpAfterError()
+    .allowExcessArguments(false);
+
+  // Default command: launch. Options live on the root so both
+  // `agentconfiging --no-open` and `agentconfiging launch --no-open` work.
+  addLaunchOptions(program).action(runLaunchAction);
+  addLaunchOptions(
+    program.command('launch').description('start the server and open the terminal UI (default)'),
+  ).action(runLaunchAction);
+
+  program
+    .command('report')
+    .description('scan a project and print a JSON report to stdout (plain, CI-safe)')
+    .argument('[path]', 'project root to scan (default: current directory)')
+    .option('--pretty', 'pretty-print JSON with 2-space indent')
+    .option('--global', 'also scan global scope (~/.claude, ~/.codex, ...)')
+    // REPORT_HELP is the canonical help text (documents exit codes and the
+    // no-content guarantee); commander's generated help is bypassed.
+    .helpOption(false)
+    .option('-h, --help', 'show report help')
+    .action((reportPath: string | undefined, opts: Record<string, unknown>) => {
+      if (opts['help'] === true) {
         io.stdout(REPORT_HELP);
-        return 0;
+        return;
       }
-      return runReport(
+      code = runReport(
         {
-          pretty: parsed.pretty,
-          global: parsed.global,
-          ...(parsed.path !== undefined ? { path: parsed.path } : {}),
+          pretty: opts['pretty'] === true,
+          global: opts['global'] === true,
+          ...(reportPath !== undefined ? { path: reportPath } : {}),
         },
         io,
       );
-    case 'daemon':
-      io.stdout('agentconfiging daemon: not implemented yet\n');
-      return 0;
-    case 'launch':
-      io.stdout('agentconfiging: launch UI not implemented yet\n');
-      return 0;
+    });
+
+  program
+    .command('daemon')
+    .description('headless scheduler (not implemented yet)')
+    .action(() => {
+      // Never Ink, per SPEC §4. Real implementation is a later bead.
+      io.stderr('daemon: not implemented\n');
+      code = 1;
+    });
+
+  try {
+    await program.parseAsync([...argv], { from: 'user' });
+  } catch (err) {
+    if (err instanceof CommanderError) {
+      // Help/version display exits 0; everything else is a usage error.
+      return err.exitCode === 0 ? 0 : EX_USAGE;
+    }
+    throw err;
   }
+  return code;
 }
