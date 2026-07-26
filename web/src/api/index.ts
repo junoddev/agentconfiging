@@ -14,5 +14,9 @@ export type {
   Report,
   ReportFinding,
   Severity,
+  StorageCleanupResponse,
+  StorageEntry,
+  StorageHome,
+  StorageReport,
   WsMessage,
 } from './types.js';

@@ -19,6 +19,8 @@ import type {
   RemoveResponse,
   Report,
   ScanResponse,
+  StorageCleanupResponse,
+  StorageReport,
   UnloadResponse,
   WriteResponse,
 } from './types.js';
@@ -168,6 +170,24 @@ export class ApiClient {
   /** Drop an instance from the workspace entirely (mildly destructive). */
   removeInstance(id: string): Promise<RemoveResponse> {
     return this.#send<RemoveResponse>(`/api/instances/${encodeURIComponent(id)}`, 'DELETE');
+  }
+
+  /**
+   * STORAGE (bead wmc.2) — the settings editor is the one page that needs these;
+   * the shell keeps its client private, so the page builds its own ApiClient from
+   * the launch token (the Instances-page pattern). `getStorage` is a disk-usage
+   * breakdown per instance; `cleanupStorage` TRASHES one allowlisted, safe-to-
+   * clean subdir (server-validated by `home` KEY + `name`, never a raw path).
+   */
+  getStorage(instance?: string): Promise<StorageReport> {
+    const qs = instance ? `?instance=${encodeURIComponent(instance)}` : '';
+    return this.#get<StorageReport>(`/api/storage${qs}`);
+  }
+
+  cleanupStorage(home: string, name: string, instance?: string): Promise<StorageCleanupResponse> {
+    const body: Record<string, unknown> = { home, name };
+    if (instance !== undefined) body['instance'] = instance;
+    return this.#send<StorageCleanupResponse>('/api/storage/cleanup', 'POST', body);
   }
 
   async #get<T>(path: string): Promise<T> {

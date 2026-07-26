@@ -94,8 +94,10 @@ function isWritableTarget(rel: string, kind: 'project' | 'global'): boolean {
 
 const bad = (status: 400 | 403): RejectedTarget => ({ ok: false, status });
 
-/** Segment-aware containment: `child` is `parent` or strictly nested under it. */
-function isWithin(parent: string, child: string): boolean {
+/** Segment-aware containment: `child` is `parent` or strictly nested under it.
+ *  Exported as the single shared containment primitive (storage.ts reuses it)
+ *  so the two call sites can't drift. */
+export function isWithin(parent: string, child: string): boolean {
   if (parent === child) return true;
   const rel = path.relative(parent, child);
   return (

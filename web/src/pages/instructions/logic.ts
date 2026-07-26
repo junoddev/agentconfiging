@@ -1,0 +1,314 @@
+/**
+ * Instructions editor — pure, DOM-free logic (bead agentconfig-wmc.3). Kept out
+ * of the component so the load-bearing safety rules are unit-testable over plain
+ * data:
+ *   - which report files are INSTRUCTION files, and how they group by scope;
+ *   - @import extraction that ignores fenced code and email false-positives, and
+ *     resolves each ref against the known instance files (present / missing);
+ *   - REDACTION-mark detection — the correctness guard that keeps a user from
+ *     saving `[REDACTED:*]` placeholder text back over a real on-disk secret;
+ *   - a minimal, safe Markdown block tokenizer for the PREVIEW pane (the React
+ *     side renders each block as TEXT nodes only — never HTML).
+ *
+ * All strings handled here come from adversarially-parsed config; nothing is
+ * ever interpreted as markup.
+ */
+
+/** Basenames we treat as agent instruction files (SPEC §5 row 4, multi-runtime). */
+const INSTRUCTION_BASENAMES: ReadonlySet<string> = new Set([
+  'CLAUDE.md',
+  'CLAUDE.local.md',
+  'AGENTS.md',
+  'GEMINI.md',
+  '.cursorrules',
+]);
+
+/** Last path segment (the file name). */
+export function basename(path: string): string {
+  const slash = path.lastIndexOf('/');
+  return slash === -1 ? path : path.slice(slash + 1);
+}
+
+/** True when a path is an instruction file at any scope (root or `.claude/`). */
+export function isInstructionFile(path: string): boolean {
+  return INSTRUCTION_BASENAMES.has(basename(path));
+}
+
+/** Two display scopes: the project root, and anything under a `.claude/` dir. */
+export type InstructionScope = 'project' | 'claude-dir';
+
+/** A path groups under `.claude/` when it has a `.claude/` directory segment. */
+export function scopeOf(path: string): InstructionScope {
+  return /(?:^|\/)\.claude\//.test(path) ? 'claude-dir' : 'project';
+}
+
+/** The union of every agent's referenced INSTRUCTION files, de-duped and sorted. */
+export function collectInstructionFiles(agents: readonly { files: string[] }[]): string[] {
+  const set = new Set<string>();
+  for (const agent of agents) {
+    for (const file of agent.files) {
+      if (isInstructionFile(file)) set.add(file);
+    }
+  }
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+
+/** One scope's files, for the grouped left-hand list. */
+export interface InstructionGroup {
+  scope: InstructionScope;
+  label: string;
+  files: string[];
+}
+
+const SCOPE_LABEL: Record<InstructionScope, string> = {
+  project: 'PROJECT ROOT',
+  'claude-dir': '.CLAUDE/',
+};
+
+/**
+ * Group instruction paths by scope in stable order (project root, then
+ * `.claude/`). Empty groups are omitted.
+ */
+export function groupByScope(paths: readonly string[]): InstructionGroup[] {
+  const order: InstructionScope[] = ['project', 'claude-dir'];
+  const groups: InstructionGroup[] = [];
+  for (const scope of order) {
+    const files = paths.filter((p) => scopeOf(p) === scope);
+    if (files.length > 0) groups.push({ scope, label: SCOPE_LABEL[scope], files });
+  }
+  return groups;
+}
+
+// ── @import references ─────────────────────────────────────────────────────
+
+/** A raw `@import` reference found in an instruction file. */
+export interface ImportRef {
+  /** The path written after `@`, e.g. `./docs/setup.md`. */
+  target: string;
+  /** 1-based line number where the reference appears. */
+  line: number;
+}
+
+/** A fenced-code delimiter opening or closing a block. */
+const FENCE_RE = /^\s*(?:```|~~~)/;
+
+/**
+ * An `@import`: at the start of a line or after whitespace (so `user@host.com`
+ * mid-word is NOT a match), then `@`, then a path token. Emails are excluded by
+ * the leading `(?:^|\s)`; fenced/inline code is stripped before this runs.
+ */
+const IMPORT_RE = /(?:^|\s)@([A-Za-z0-9._~/-]+)/g;
+
+/** Blank out inline `code` spans so an @ inside one isn't read as an import. */
+function stripInlineCode(line: string): string {
+  return line.replace(/`[^`]*`/g, ' ');
+}
+
+/**
+ * Extract every `@import` reference, de-duplicated by target (first line kept).
+ * References inside fenced code blocks and inline code spans are ignored, as are
+ * `@` characters embedded in a word (email addresses). Trailing sentence
+ * punctuation is trimmed off the captured target.
+ */
+export function extractImports(content: string): ImportRef[] {
+  const out: ImportRef[] = [];
+  const seen = new Set<string>();
+  let inFence = false;
+
+  content.split('\n').forEach((raw, index) => {
+    if (FENCE_RE.test(raw)) {
+      inFence = !inFence;
+      return;
+    }
+    if (inFence) return;
+
+    const line = stripInlineCode(raw);
+    IMPORT_RE.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = IMPORT_RE.exec(line)) !== null) {
+      const captured = match[1];
+      if (captured === undefined) continue;
+      const target = captured.replace(/[.,;:)\]}]+$/, '');
+      if (target === '' || seen.has(target)) continue;
+      seen.add(target);
+      out.push({ target, line: index + 1 });
+    }
+  });
+
+  return out;
+}
+
+/** Collapse `.` / `..` / empty segments into a normalized relative path. */
+function normalizePath(path: string): string {
+  const out: string[] = [];
+  for (const part of path.split('/')) {
+    if (part === '' || part === '.') continue;
+    if (part === '..') {
+      out.pop();
+      continue;
+    }
+    out.push(part);
+  }
+  return out.join('/');
+}
+
+/**
+ * Resolve an import target to an instance-relative path, or `undefined` when it
+ * is absolute (`/…`) or home-anchored (`~/…`) and therefore cannot be matched
+ * against the instance's relative file set.
+ */
+export function resolveImport(target: string, fromPath: string): string | undefined {
+  if (target.startsWith('/') || target.startsWith('~')) return undefined;
+  const slash = fromPath.lastIndexOf('/');
+  const dir = slash === -1 ? '' : fromPath.slice(0, slash);
+  return normalizePath(dir === '' ? target : `${dir}/${target}`);
+}
+
+/**
+ * How an import resolves against the instance:
+ *  - `present`  — resolves to a file the instance knows about (openable);
+ *  - `missing`  — resolves inside the instance but no such file exists (broken);
+ *  - `external` — absolute / home path, outside the instance (not openable).
+ */
+export type ImportStatus = 'present' | 'missing' | 'external';
+
+/** An import reference classified for the UI. */
+export interface ResolvedImport extends ImportRef {
+  /** Instance-relative path (present/missing only). */
+  resolved?: string;
+  status: ImportStatus;
+}
+
+/** Classify each import against the set of known instance file paths. */
+export function resolveImports(
+  refs: readonly ImportRef[],
+  fromPath: string,
+  known: ReadonlySet<string>,
+): ResolvedImport[] {
+  return refs.map((ref) => {
+    const resolved = resolveImport(ref.target, fromPath);
+    if (resolved === undefined) return { ...ref, status: 'external' };
+    return { ...ref, resolved, status: known.has(resolved) ? 'present' : 'missing' };
+  });
+}
+
+// ── Redaction guard ────────────────────────────────────────────────────────
+
+/** Matches a server-inserted `[REDACTED:*]` placeholder mark. */
+const REDACTION_RE = /\[REDACTED:[^\]]*\]/;
+
+/**
+ * True when text carries a `[REDACTED:*]` mark. Saving such text would overwrite
+ * the real secret on disk with the placeholder, so the editor goes read-only
+ * whenever this (or the server's `spans`) says a file is redacted.
+ */
+export function hasRedactionMarks(content: string): boolean {
+  return REDACTION_RE.test(content);
+}
+
+// ── Minimal safe Markdown tokenizer (PREVIEW pane) ──────────────────────────
+
+/**
+ * A preview block. The React side renders each as a TEXT node in an appropriate
+ * element — there is no inline HTML and no `dangerouslySetInnerHTML`; the goal is
+ * light structure (headings, code, lists, quotes, paragraphs), not fidelity.
+ */
+export type MarkdownBlock =
+  | { kind: 'heading'; level: number; text: string }
+  | { kind: 'code'; text: string }
+  | { kind: 'list'; ordered: boolean; items: string[] }
+  | { kind: 'quote'; text: string }
+  | { kind: 'para'; text: string };
+
+const HEADING_RE = /^(#{1,6})\s+(.*)$/;
+const LIST_RE = /^\s*(?:[-*+]|\d+\.)\s+(.*)$/;
+const ORDERED_RE = /^\s*\d+\.\s+/;
+const QUOTE_RE = /^\s*>\s?(.*)$/;
+
+/**
+ * Tokenize Markdown into safe preview blocks. Fenced code is captured verbatim
+ * (never scanned for structure); consecutive list items and paragraph lines are
+ * grouped. Unterminated fences flush at end of input.
+ */
+export function tokenizeMarkdown(content: string): MarkdownBlock[] {
+  const blocks: MarkdownBlock[] = [];
+  const lines = content.split('\n');
+
+  let para: string[] = [];
+  let list: { ordered: boolean; items: string[] } | undefined;
+  let code: string[] | undefined;
+
+  const flushPara = () => {
+    if (para.length > 0) {
+      blocks.push({ kind: 'para', text: para.join('\n') });
+      para = [];
+    }
+  };
+  const flushList = () => {
+    if (list) {
+      blocks.push({ kind: 'list', ordered: list.ordered, items: list.items });
+      list = undefined;
+    }
+  };
+  const flushOpen = () => {
+    flushPara();
+    flushList();
+  };
+
+  for (const line of lines) {
+    if (code !== undefined) {
+      if (FENCE_RE.test(line)) {
+        blocks.push({ kind: 'code', text: code.join('\n') });
+        code = undefined;
+      } else {
+        code.push(line);
+      }
+      continue;
+    }
+
+    if (FENCE_RE.test(line)) {
+      flushOpen();
+      code = [];
+      continue;
+    }
+
+    const heading = HEADING_RE.exec(line);
+    if (heading) {
+      flushOpen();
+      blocks.push({ kind: 'heading', level: heading[1]?.length ?? 1, text: heading[2] ?? '' });
+      continue;
+    }
+
+    const quote = QUOTE_RE.exec(line);
+    if (quote) {
+      flushOpen();
+      blocks.push({ kind: 'quote', text: quote[1] ?? '' });
+      continue;
+    }
+
+    const item = LIST_RE.exec(line);
+    if (item) {
+      flushPara();
+      const ordered = ORDERED_RE.test(line);
+      if (!list || list.ordered !== ordered) {
+        flushList();
+        list = { ordered, items: [] };
+      }
+      list.items.push(item[1] ?? '');
+      continue;
+    }
+
+    if (line.trim() === '') {
+      flushOpen();
+      continue;
+    }
+
+    flushList();
+    para.push(line);
+  }
+
+  if (code !== undefined) blocks.push({ kind: 'code', text: code.join('\n') });
+  flushOpen();
+
+  return blocks;
+}

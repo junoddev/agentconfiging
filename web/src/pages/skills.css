@@ -1,0 +1,304 @@
+/* Skills & agents editor (#/skills, bead agentconfig-wmc.4). Chassis only —
+   tokens, hairlines, mono. Config content is adversarial data rendered as text
+   nodes, never markup. The connections graph is a static schematic; nothing
+   here animates (motion belongs to the signal layer). */
+
+.skills__count {
+  margin-left: 8px;
+  color: var(--fg-dim);
+}
+
+.skills__tabs {
+  display: flex;
+  gap: 8px;
+  margin-top: var(--gutter);
+}
+
+/* ── Two-pane layout: list + editor ────────────────────────────────────── */
+
+.skills {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  gap: var(--gutter);
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .skills {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.skills__list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-height: 72vh;
+  overflow-y: auto;
+}
+
+.skills__list .chip {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skills__list [aria-current] .chip {
+  background: var(--fg);
+  border-color: var(--fg);
+  color: var(--bg);
+}
+
+.skills__group {
+  margin-top: var(--gutter);
+  color: var(--fg-dim);
+}
+
+.skills__group:first-child {
+  margin-top: 0;
+}
+
+.skills__none {
+  color: var(--fg-dim);
+}
+
+/* ── Editor pane ───────────────────────────────────────────────────────── */
+
+.skills__editor {
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: var(--gutter);
+  min-height: 240px;
+}
+
+.skills__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px var(--gutter);
+  padding-bottom: 8px;
+  margin-bottom: var(--gutter);
+  border-bottom: var(--hairline-w) solid var(--hairline);
+}
+
+.skills__scope {
+  color: var(--fg-dim);
+}
+
+.skills__path {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 auto;
+}
+
+.skills__path-input {
+  background: var(--bg);
+  color: var(--fg);
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+}
+
+.skills__path-input:focus-visible {
+  outline: none;
+  border-color: var(--signal);
+}
+
+.skills__redact {
+  color: var(--warn);
+  border: var(--hairline-w) solid var(--warn);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  margin-bottom: var(--gutter);
+}
+
+.skills__views {
+  display: flex;
+  gap: 8px;
+  margin-bottom: var(--gutter);
+}
+
+.skills__raw {
+  width: 100%;
+  min-height: 320px;
+  resize: vertical;
+  background: var(--bg);
+  color: var(--fg);
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: var(--gutter);
+  white-space: pre;
+  overflow: auto;
+  tab-size: 2;
+}
+
+.skills__raw:focus-visible {
+  outline: none;
+  border-color: var(--signal);
+}
+
+.skills__raw[readonly] {
+  color: var(--fg-dim);
+}
+
+.skills__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: var(--gutter);
+}
+
+/* ── Frontmatter cards ─────────────────────────────────────────────────── */
+
+.fmcards__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px var(--gutter);
+}
+
+.fmcards__name {
+  font-family: var(--font-sans);
+  font-size: var(--size-section);
+  line-height: var(--leading-section);
+  font-weight: 700;
+  letter-spacing: var(--tracking-heading);
+}
+
+.fmcards__model {
+  color: var(--fg-dim);
+}
+
+.fmcards__desc {
+  margin: 8px 0 var(--gutter);
+  color: var(--fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.fmcards__none {
+  color: var(--fg-dim);
+}
+
+.fmcard {
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  margin-top: 8px;
+}
+
+.fmcard__label {
+  color: var(--fg-dim);
+  margin-bottom: 6px;
+}
+
+.fmcard__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fmcard__chip {
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 2px 6px;
+  word-break: break-all;
+}
+
+.fmcard__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fmcard__row {
+  display: flex;
+  gap: var(--gutter);
+}
+
+.fmcard__key {
+  color: var(--fg-dim);
+  white-space: nowrap;
+}
+
+.fmcard__val {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── Connections graph (static schematic) ──────────────────────────────── */
+
+.cgraph {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.cgraph__canvas {
+  position: relative;
+}
+
+.cgraph__edges {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.cgraph__edge {
+  fill: none;
+  stroke: var(--signal);
+  stroke-width: 1;
+}
+
+.cgraph__col {
+  position: absolute;
+  top: 0;
+  width: 220px;
+}
+
+.cgraph__col--src {
+  left: 0;
+}
+
+.cgraph__slot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 40px;
+  display: flex;
+  align-items: center;
+}
+
+.cgraph__node {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  background: var(--bg);
+}
+
+.cgraph__node--tool {
+  border-color: var(--fg-dim);
+}
+
+.cgraph__node--mcp {
+  border-color: var(--signal);
+}
+
+.cgraph__kind {
+  color: var(--fg-dim);
+}
+
+.cgraph__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cgraph__empty {
+  color: var(--fg-dim);
+}

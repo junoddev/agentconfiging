@@ -48,6 +48,8 @@ export { InstanceRegistry, InvalidRootError, MAX_INSTANCES } from './registry.js
 export type { RegistryInstance, InstanceSummary, StoreFactory } from './registry.js';
 export { registerApplyFixRoute, registerWriteRoutes } from './write.js';
 export type { ApplyFixRoutesConfig, WriteRoutesConfig } from './write.js';
+export { registerStorageRoutes } from './storage.js';
+export type { StorageRoutesConfig } from './storage.js';
 export { resolveWriteTarget } from './pathguard.js';
 export type { WriteScope, Resolution } from './pathguard.js';
 export { unifiedDiff } from './diff.js';

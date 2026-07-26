@@ -202,6 +202,47 @@ export interface FileContent {
 }
 
 /**
+ * One subdirectory row in a storage home (src/server/storage.ts). `bytes`/`files`
+ * are a recursive total; `safeToClean` marks an ephemeral runtime-state dir the
+ * cleanup allowlist permits trashing. `name` is filesystem data — text only.
+ */
+export interface StorageEntry {
+  name: string;
+  bytes: number;
+  files: number;
+  safeToClean: boolean;
+}
+
+/**
+ * One agent-config home in a storage breakdown (src/server/storage.ts). `key` is
+ * the server-issued handle cleanup takes (e.g. 'global:.claude'); `root` is the
+ * absolute path (text only). Never pass a raw path to cleanup — pass `key`.
+ */
+export interface StorageHome {
+  key: string;
+  scope: 'project' | 'global';
+  root: string;
+  totalBytes: number;
+  entries: StorageEntry[];
+}
+
+/** GET /api/storage payload (src/server/storage.ts). */
+export interface StorageReport {
+  instance: string;
+  homes: StorageHome[];
+}
+
+/** POST /api/storage/cleanup payload (src/server/storage.ts). */
+export interface StorageCleanupResponse {
+  cleaned: true;
+  home: string;
+  name: string;
+  bytes: number;
+  files: number;
+  trashedTo: string;
+}
+
+/**
  * Server→client WebSocket push messages (src/server/watcher.ts,
  * `WatcherMessage`). A `report` push means the instance's config changed on disk
  * → the UI should refetch; `live-session` is a growing-session pulse.

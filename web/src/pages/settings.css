@@ -1,0 +1,174 @@
+/* Settings editor (#/settings, bead wmc.2). Chassis only — tokens, hairlines,
+   mono. Nothing here animates; config content is adversarial data rendered as
+   text nodes, never markup. */
+
+.settings__sub {
+  margin-left: 8px;
+  color: var(--fg-dim);
+}
+
+.settings__section-title {
+  color: var(--fg-dim);
+  margin-bottom: var(--gutter);
+}
+
+/* Shared vs local, side by side; stacks on narrow viewports. */
+.settings__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gutter);
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .settings__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── Scope panel ────────────────────────────────────────────────────────── */
+
+.settings__panel {
+  padding: var(--gutter);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gutter);
+}
+
+.settings__panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px var(--gutter);
+  padding-bottom: 8px;
+  border-bottom: var(--hairline-w) solid var(--hairline);
+}
+
+.settings__panel-title {
+  color: var(--fg);
+  word-break: break-all;
+}
+
+.settings__panel-tag {
+  color: var(--fg-dim);
+  letter-spacing: var(--tracking-micro);
+}
+
+.settings__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings__input {
+  width: 100%;
+  min-width: 0;
+  background: var(--surface);
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  color: var(--fg);
+  padding: 4px 8px;
+}
+
+.settings__input::placeholder {
+  color: var(--fg-dim);
+}
+
+.settings__input:disabled {
+  color: var(--fg-dim);
+  opacity: 0.85;
+}
+
+.settings__rule,
+.settings__env-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.settings__input--key {
+  flex: 0 0 40%;
+}
+
+.settings__none {
+  color: var(--fg-dim);
+}
+
+.settings__note {
+  color: var(--fg-dim);
+  margin: 0;
+}
+
+.settings__note--warn {
+  color: var(--warn);
+}
+
+.settings__note--ok {
+  color: var(--signal);
+}
+
+.settings__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ── Storage breakdown ──────────────────────────────────────────────────── */
+
+.settings__storage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gutter);
+}
+
+.settings__home {
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: var(--gutter);
+}
+
+.settings__usage {
+  list-style: none;
+  margin: var(--gutter) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings__usage-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto minmax(120px, auto) auto;
+  gap: var(--gutter);
+  align-items: center;
+  min-height: var(--row-h);
+  border-bottom: var(--hairline-w) solid var(--hairline);
+}
+
+.settings__usage-name {
+  color: var(--fg);
+  word-break: break-all;
+}
+
+.settings__usage-size {
+  color: var(--fg-dim);
+  text-align: right;
+}
+
+.settings__usage-action {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.settings__usage-action .micro-label {
+  color: var(--fg-dim);
+}
+
+@media (max-width: 720px) {
+  .settings__usage-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-auto-flow: row;
+  }
+}

@@ -58,6 +58,7 @@ import type { Context } from 'hono';
 import { DiscoveryError, discoverProjects } from '../core/index.js';
 import { InstanceRegistry, InvalidRootError } from './registry.js';
 import { registerApplyFixRoute, registerWriteRoutes } from './write.js';
+import { registerStorageRoutes } from './storage.js';
 import type { WriteScope } from './pathguard.js';
 
 export interface AppConfig {
@@ -345,6 +346,16 @@ export function createApp(config: AppConfig): Hono {
   // under /api (inherits the same gates); recomputes the fix per-instance and
   // writes every edit through the SAME guarded write path as /api/write.
   registerApplyFixRoute(app, { scopes: config.scopes ?? [], registry });
+
+  // STORAGE (wmc.2): GET /api/storage + POST /api/storage/cleanup — disk-usage
+  // breakdown per instance and a recoverable, allowlisted cleanup. Also under
+  // /api (inherits the token + Origin/CSRF gates); cleanup trashes (never
+  // hard-deletes) and only ever an allowlisted runtime-state subdir.
+  registerStorageRoutes(app, {
+    scopes: config.scopes ?? [],
+    registry,
+    trashDir: config.trashDir ?? '',
+  });
 
   // Unknown /api paths (any method): 404 JSON, no static fallback.
   app.all('/api/*', () => jsonError(404, 'not found'));
