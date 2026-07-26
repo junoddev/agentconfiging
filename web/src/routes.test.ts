@@ -21,6 +21,8 @@ describe('parseRoute', () => {
     expect(routeHash({ name: 'dashboard' })).toBe('#/dashboard');
     expect(parseRoute('#/sessions')).toEqual({ name: 'sessions' });
     expect(routeHash({ name: 'sessions' })).toBe('#/sessions');
+    expect(parseRoute('#/analytics')).toEqual({ name: 'analytics' });
+    expect(routeHash({ name: 'analytics' })).toBe('#/analytics');
   });
 
   it('routes agent detail with its kind param', () => {
@@ -80,6 +82,7 @@ describe('routeHash', () => {
       { name: 'instances' },
       { name: 'dashboard' },
       { name: 'sessions' },
+      { name: 'analytics' },
       { name: 'gallery' },
       { name: 'agent', kind: 'claude-code' },
     ];

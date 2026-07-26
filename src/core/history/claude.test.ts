@@ -270,6 +270,52 @@ describe('parseClaudeSession resilience', () => {
     expect(session.diagnostics.malformed).toBe(0);
   });
 
+  it('lifts the assistant message usage block into TokenUsage counts', () => {
+    const text = [
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          model: 'claude-opus-4-5',
+          content: [{ type: 'text', text: 'ok' }],
+          usage: {
+            input_tokens: 12,
+            output_tokens: 340,
+            cache_creation_input_tokens: 35230,
+            cache_read_input_tokens: 900,
+            service_tier: 'standard',
+          },
+        },
+      }),
+      // A malformed usage block coerces every field to 0, never NaN.
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          model: 'claude-sonnet-4-5',
+          content: [{ type: 'text', text: 'hi' }],
+          usage: { input_tokens: 'bad', output_tokens: -5 },
+        },
+      }),
+      // A user message carries no usage.
+      JSON.stringify({ type: 'user', message: { role: 'user', content: 'go' } }),
+    ].join('\n');
+    const session = parseClaudeSession(text);
+    expect(session.messages[0]!.usage).toEqual({
+      inputTokens: 12,
+      outputTokens: 340,
+      cacheCreationTokens: 35230,
+      cacheReadTokens: 900,
+    });
+    expect(session.messages[1]!.usage).toEqual({
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
+    });
+    expect(session.messages[2]!.usage).toBeUndefined();
+  });
+
   it('does not pollute prototypes when logs carry __proto__ keys', () => {
     const text = [
       '{"type":"user","message":{"role":"user","content":"x"},"__proto__":{"polluted":"yes"}}',

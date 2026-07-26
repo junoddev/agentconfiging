@@ -15,6 +15,7 @@ export * from './analyzers/index.js';
 export * from './parsers/index.js';
 export * from './history/index.js';
 export * from './stats/index.js';
+export * from './analytics/index.js';
 export * from './redact/index.js';
 export * from './discovery/index.js';
 export * from './runtimes/index.js';

@@ -74,6 +74,24 @@ export type ContentBlock =
     }
   | { type: 'unknown'; blockType: string };
 
+/**
+ * Per-message token accounting, lifted verbatim from an assistant message's
+ * `message.usage` block. Pure token COUNTS (never content) — the analytics
+ * engine (src/core/analytics) turns these into cost/cache aggregates. Absent
+ * fields default to 0; the whole struct is absent when the message carried no
+ * usage block (user messages, older logs).
+ */
+export interface TokenUsage {
+  /** Fresh (uncached) input tokens billed at the input rate. */
+  inputTokens: number;
+  /** Generated output tokens. */
+  outputTokens: number;
+  /** Tokens written INTO the prompt cache (billed at the cache-write rate). */
+  cacheCreationTokens: number;
+  /** Tokens served FROM the prompt cache (billed at the cheap cache-read rate). */
+  cacheReadTokens: number;
+}
+
 export interface SessionMessage {
   role: 'user' | 'assistant';
   uuid?: string;
@@ -87,6 +105,8 @@ export interface SessionMessage {
   isMeta: boolean;
   /** Model id for assistant messages, when present. */
   model?: string;
+  /** Token usage from the assistant `message.usage` block, when present. */
+  usage?: TokenUsage;
   content: ContentBlock[];
 }
 

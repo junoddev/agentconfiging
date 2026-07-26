@@ -1,0 +1,164 @@
+/* Analytics (rail 19 ANALYTICS, docs/DESIGN.md §5–§7). Page-local styles only;
+   the shared chassis lives in app.css / styles/ and components.css. Tokens only
+   — no raw hex, no shadows, no gradients. */
+
+.an__lede {
+  margin-top: 8px;
+  color: var(--fg-dim);
+  max-width: 60ch;
+}
+
+.an__acquiring {
+  padding: var(--gutter) 0;
+}
+
+/* Top stat row: four figures on the 12-column page grid, hairline column rules
+   between them. Reflows to two-up, then one-up, on narrow viewports. */
+.an__stats {
+  row-gap: var(--gutter);
+}
+
+.an__stat {
+  grid-column: span 3;
+}
+
+@media (max-width: 900px) {
+  .an__stat {
+    grid-column: span 6;
+  }
+  .an__stat.col-rule {
+    border-left: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .an__stat {
+    grid-column: span 12;
+  }
+}
+
+.an__heading {
+  margin-bottom: 8px;
+}
+
+.an__section-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gutter);
+  min-height: var(--row-h);
+}
+
+.an__range {
+  margin-left: auto;
+  color: var(--fg-dim);
+}
+
+.an__note {
+  margin-top: 8px;
+  color: var(--fg-dim);
+  max-width: 80ch;
+}
+
+/* An unrecognized-model row's fallback-rate marker. */
+.an__est {
+  color: var(--warn);
+}
+
+/* Hand-rolled SVG chart: peak caption above, stretched plot, mono axis below. */
+.an-chart {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.an-chart__peak {
+  color: var(--fg-dim);
+  text-align: right;
+}
+
+.an-chart__svg {
+  display: block;
+  width: 100%;
+  height: 180px;
+}
+
+.an-chart__bar {
+  fill: var(--signal);
+}
+
+.an-chart__grid {
+  stroke: var(--hairline);
+  stroke-dasharray: 2 4;
+}
+
+.an-chart__axis {
+  stroke: var(--hairline);
+}
+
+.an-chart__axis-labels {
+  display: flex;
+  justify-content: space-between;
+  color: var(--fg-dim);
+}
+
+/* ── Chrome cost widget (TopBar CostWidgetSlot) ─────────────────────────────
+   A compact this-month API-equivalent spend pill with a budget-alert state. */
+.cost-widget {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  background: none;
+  cursor: pointer;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: var(--size-data);
+  line-height: var(--leading-data);
+}
+
+.cost-widget:hover {
+  border-color: var(--fg-dim);
+}
+
+.cost-widget__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius);
+  background: var(--fg-dim);
+  flex: none;
+}
+
+.cost-widget--ok .cost-widget__dot {
+  background: var(--signal);
+}
+
+.cost-widget--near .cost-widget__dot {
+  background: var(--warn);
+}
+
+.cost-widget--over .cost-widget__dot {
+  background: var(--red);
+}
+
+.cost-widget--near {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.cost-widget--over {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.cost-widget__label {
+  color: var(--fg-dim);
+}
+
+.cost-widget--near .cost-widget__label,
+.cost-widget--over .cost-widget__label {
+  color: inherit;
+}

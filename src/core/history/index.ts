@@ -8,6 +8,7 @@ export type {
   Session,
   SessionFileRef,
   SessionMessage,
+  TokenUsage,
 } from './types.js';
 export { RUNTIMES } from './types.js';
 export { claudeAdapter, parseClaudeHistory, parseClaudeSession, readSessionCwd } from './claude.js';

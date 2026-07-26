@@ -504,6 +504,84 @@ export interface StatsResponse {
   capped: boolean;
 }
 
+/**
+ * TOKEN/COST ANALYTICS (bead 7yb.5, src/server/analytics-routes.ts). These
+ * aggregates are derived server-side from THIS machine's runtime history by
+ * summing per-message TOKEN COUNTS — never by reading message content. Every
+ * field is a number or a model id string; render model ids as text nodes (they
+ * are opaque log text).
+ */
+
+/** Token totals across the four billed classes. */
+export interface TokenTotals {
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+}
+
+/** USD cost split by billed class, plus the total. */
+export interface CostBreakdown {
+  input: number;
+  output: number;
+  cacheWrite: number;
+  cacheRead: number;
+  total: number;
+}
+
+/** Per-model token + cost aggregate. `model` is opaque log text. */
+export interface ModelUsage {
+  model: string;
+  /** False when priced by the fallback rate (unknown family) — mark approximate. */
+  priced: boolean;
+  messageCount: number;
+  tokens: TokenTotals;
+  cost: CostBreakdown;
+}
+
+/** One day of the cost/token trend (UTC `YYYY-MM-DD`). */
+export interface DailyPoint {
+  date: string;
+  tokens: number;
+  cost: number;
+}
+
+/** One hour-of-day activity bucket (UTC hour 0..23). */
+export interface HourlyPoint {
+  hour: number;
+  messages: number;
+  tokens: number;
+}
+
+/** GET /api/analytics payload — token/cost aggregates + the session window. */
+export interface AnalyticsResponse {
+  totals: TokenTotals;
+  totalCost: number;
+  /** cache-read ÷ all input-side tokens, 0..1. */
+  cacheEfficiency: number;
+  /** Per-model aggregates, sorted by cost descending. */
+  models: ModelUsage[];
+  /** Daily trend, ascending by date. */
+  daily: DailyPoint[];
+  /** 24 hour-of-day buckets (0..23). */
+  hourly: HourlyPoint[];
+  /** Assistant messages that carried a usage block. */
+  pricedMessages: number;
+  /** API-equivalent USD in the current UTC month (drives the chrome cost widget). */
+  currentMonthCost: number;
+  /** UTC `YYYY-MM` the current-month figure covers. */
+  currentMonth: string;
+  /** Date the pricing data file was last verified. */
+  pricingDate: string;
+  /** Provenance for the pricing rates. */
+  pricingNote: string;
+  /** Plan-aware caveat (API-equivalent estimate, not a bill). */
+  planNote: string;
+  sessionsScanned: number;
+  sessionsTotal: number;
+  capped: boolean;
+}
+
 /** One session's METADATA (no message content). Titles/cwds are text only. */
 export interface SessionSummary {
   id: string;

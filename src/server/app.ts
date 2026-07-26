@@ -63,6 +63,7 @@ import { registerSyncRoute } from './sync.js';
 import { registerCatalogRoutes, type CatalogSource } from './catalog.js';
 import { registerMarketplaceRoutes, type ClaudeExec } from './marketplace.js';
 import { registerStatsRoutes } from './stats-routes.js';
+import { registerAnalyticsRoutes } from './analytics-routes.js';
 import type { WriteScope } from './pathguard.js';
 
 export interface AppConfig {
@@ -412,6 +413,14 @@ export function createApp(config: AppConfig): Hono {
   // session CONTENT but REDACTS every secret-bearing string server-side (SPEC §3)
   // before it crosses the wire.
   registerStatsRoutes(app);
+
+  // TOKEN/COST ANALYTICS (7yb.5): GET /api/analytics. Also under /api (inherits
+  // the token + Origin/CSRF gates); reads THIS machine's runtime history
+  // (~/.claude) through the committed adapter + shared caching discipline,
+  // bounded to the most-recent N session files. Returns token/cost aggregates
+  // per model, cache efficiency, and daily/hourly trends — content-free (counts,
+  // costs, model ids, buckets; never a message body).
+  registerAnalyticsRoutes(app);
 
   // Unknown /api paths (any method): 404 JSON, no static fallback.
   app.all('/api/*', () => jsonError(404, 'not found'));

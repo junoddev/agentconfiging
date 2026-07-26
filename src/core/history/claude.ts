@@ -33,6 +33,7 @@ import type {
   Session,
   SessionFileRef,
   SessionMessage,
+  TokenUsage,
 } from './types.js';
 
 /**
@@ -51,6 +52,26 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function asString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
+}
+
+/** A finite non-negative token count, or 0 for anything malformed. */
+function asTokenCount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+/**
+ * Lift an assistant message's `message.usage` block into a {@link TokenUsage}.
+ * Returns undefined when no usage object is present. Every field is coerced to a
+ * finite non-negative count, so a malformed usage block yields zeros, never NaN.
+ */
+function toTokenUsage(raw: unknown): TokenUsage | undefined {
+  if (!isRecord(raw)) return undefined;
+  return {
+    inputTokens: asTokenCount(raw.input_tokens),
+    outputTokens: asTokenCount(raw.output_tokens),
+    cacheCreationTokens: asTokenCount(raw.cache_creation_input_tokens),
+    cacheReadTokens: asTokenCount(raw.cache_read_input_tokens),
+  };
 }
 
 function stripBom(text: string): string {
@@ -259,6 +280,8 @@ export function parseClaudeSession(text: string, filePath = ''): Session {
         model: asString(record.message.model),
         content: toContentBlocks(record.message.content, ctx),
       };
+      const usage = toTokenUsage(record.message.usage);
+      if (usage !== undefined) message.usage = usage;
       messages.push(message);
       if (message.cwd !== undefined && !cwds.includes(message.cwd)) cwds.push(message.cwd);
       gitBranch ??= asString(record.gitBranch);
