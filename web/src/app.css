@@ -1,24 +1,103 @@
-/* Self-hosted fonts (DESIGN.md §3): Archivo 500/600/700, IBM Plex Mono
-   400/500/600. Latin + latin-ext subsets; vite bundles the woff2 files —
-   the built app never fetches Google Fonts. */
-@import '@fontsource/archivo/latin-500.css';
-@import '@fontsource/archivo/latin-600.css';
-@import '@fontsource/archivo/latin-700.css';
-@import '@fontsource/archivo/latin-ext-500.css';
-@import '@fontsource/archivo/latin-ext-600.css';
-@import '@fontsource/archivo/latin-ext-700.css';
-@import '@fontsource/ibm-plex-mono/latin-400.css';
-@import '@fontsource/ibm-plex-mono/latin-500.css';
-@import '@fontsource/ibm-plex-mono/latin-600.css';
-@import '@fontsource/ibm-plex-mono/latin-ext-400.css';
-@import '@fontsource/ibm-plex-mono/latin-ext-500.css';
-@import '@fontsource/ibm-plex-mono/latin-ext-600.css';
-
-/* Signal Grid foundation */
+/* Signal Grid foundation (imported first — CSS requires @import before
+   any other statement, including the @font-face rules below). */
 @import './styles/tokens.css';
 @import './styles/base.css';
 @import './styles/type.css';
 @import './styles/grid.css';
+
+/* Self-hosted fonts (DESIGN.md §3): Archivo 500/600/700, IBM Plex Mono
+   400/500/600. Latin + latin-ext subsets. Fontsource's stock per-subset
+   CSS also ships a legacy .woff fallback (~180KB) that every current
+   browser ignores in favour of .woff2, so we declare @font-face inline
+   against the woff2 files only — vite bundles woff2 exclusively and the
+   built app never fetches Google Fonts. */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url('@fontsource/archivo/files/archivo-latin-500-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url('@fontsource/archivo/files/archivo-latin-600-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url('@fontsource/archivo/files/archivo-latin-700-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url('@fontsource/archivo/files/archivo-latin-ext-500-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url('@fontsource/archivo/files/archivo-latin-ext-600-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url('@fontsource/archivo/files/archivo-latin-ext-700-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url('@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url('@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-600-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-ext-400-normal.woff2')
+    format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url('@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-ext-500-normal.woff2')
+    format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url('@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-ext-600-normal.woff2')
+    format('woff2');
+}
 
 /* ── App chrome (top bar + rail, DESIGN.md §4) ─────────────────────────── */
 

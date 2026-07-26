@@ -22,7 +22,11 @@ function useRoute(): Route {
  *  switch. `#/gallery` is the internal component gallery; the default
  *  route is a placeholder until the real dashboard (E4). */
 export function App() {
-  const [theme, setTheme] = useState<Theme>('paper');
+  // Seed from the OS preference so a system-dark user lands on Ink instead
+  // of always being pinned to Paper; the toggle flips explicitly thereafter.
+  const [theme, setTheme] = useState<Theme>(() =>
+    window.matchMedia('(prefers-color-scheme: dark)').matches ? 'ink' : 'paper',
+  );
   const route = useRoute();
 
   useEffect(() => {
