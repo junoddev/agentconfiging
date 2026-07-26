@@ -1,12 +1,32 @@
 import { useEffect, useState } from 'react';
+import {
+  LiveDot,
+  SweepOverlay,
+  VuMeter,
+  Waveform,
+  type ConfigSource,
+} from './components/signal/index.js';
 import { pluralize } from './lib/format.js';
 
 type Theme = 'paper' | 'ink';
+
+/** Fake manifest for the waveform proof — the real one comes from the core. */
+const FAKE_SOURCES: ConfigSource[] = [
+  { path: 'CLAUDE.md', size: 3120, hash: 'a1b2c3d4' },
+  { path: '.claude/settings.json', size: 512, hash: '9f8e7d6c' },
+];
+const FAKE_SOURCES_ALT: ConfigSource[] = [
+  { path: 'AGENTS.md', size: 5934, hash: '11aa22bb' },
+  { path: '.codex/config.toml', size: 244, hash: 'cc33dd44' },
+];
 
 /** Foundation proof page — exercises the Signal Grid tokens, type, and grid
  *  primitives. Seed of the component gallery (built out in a later bead). */
 export function App() {
   const [theme, setTheme] = useState<Theme>('paper');
+  const [connected, setConnected] = useState(true);
+  const [pulseKey, setPulseKey] = useState(0);
+  const [sweepKey, setSweepKey] = useState(0);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -17,10 +37,7 @@ export function App() {
       <header className="topbar">
         <span className="wordmark">AGENTCONFIG</span>
         <span className="mono-data topbar__path">~/projects/agentconfig</span>
-        <span className="live micro-label">
-          <span className="live-dot" aria-hidden="true" />
-          LIVE
-        </span>
+        <LiveDot connected={connected} />
         <button
           type="button"
           className="btn-outline"
@@ -60,6 +77,46 @@ export function App() {
                 ARTIFACTS <span className="mono-data stat__delta">+3</span>
               </div>
             </div>
+          </div>
+        </section>
+
+        <hr className="rule-h" />
+
+        <section className="gallery__section" id="agents">
+          <h2 className="micro-label">SIGNAL LAYER</h2>
+          <div className="surface sweep-panel">
+            <div className="row" style={{ gap: 'var(--gutter)' }}>
+              <Waveform sources={FAKE_SOURCES} pulseKey={pulseKey} label="claude fingerprint" />
+              <VuMeter level={0.9} label="claude confidence" />
+              <span className="mono-data">CLAUDE.md · 2 FILES</span>
+            </div>
+            <div className="row" style={{ gap: 'var(--gutter)', borderBottom: 0 }}>
+              <Waveform sources={FAKE_SOURCES_ALT} pulseKey={pulseKey} label="codex fingerprint" />
+              <VuMeter level={0.65} label="codex confidence" />
+              <span className="mono-data">AGENTS.md · 2 FILES</span>
+            </div>
+            <div className="row" style={{ gap: 'var(--gutter)', borderBottom: 0 }}>
+              <VuMeter level={0.2} label="cache efficiency" />
+              <VuMeter level={0} label="token budget" />
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={() => setPulseKey((k) => k + 1)}
+              >
+                [FILE EVENT]
+              </button>
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={() => setSweepKey((k) => k + 1)}
+              >
+                [RESCAN]
+              </button>
+              <button type="button" className="btn-outline" onClick={() => setConnected((c) => !c)}>
+                [{connected ? 'DISCONNECT' : 'CONNECT'}]
+              </button>
+            </div>
+            <SweepOverlay sweepKey={sweepKey} />
           </div>
         </section>
 
