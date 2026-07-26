@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+docs/
+fixtures/
+.beads/
+.agents/
+.claude/
+.codex/
+package-lock.json
+*.md
