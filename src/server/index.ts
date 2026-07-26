@@ -31,7 +31,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { KNOWN_DIRS } from '../core/index.js';
 import { createApp } from './app.js';
 import { handleRequest } from './bridge.js';
-import { ReportStore } from './store.js';
+import { InstanceRegistry } from './registry.js';
 import { defaultTrashDir } from './trash.js';
 import type { WriteScope } from './pathguard.js';
 import { LOOPBACK_HOST, resolveServerOptions } from './options.js';
@@ -42,6 +42,8 @@ export { createApp } from './app.js';
 export type { AppConfig } from './app.js';
 export { ReportStore } from './store.js';
 export type { ReportScope, ServedReport } from './store.js';
+export { InstanceRegistry, InvalidRootError, MAX_INSTANCES } from './registry.js';
+export type { RegistryInstance, InstanceSummary, StoreFactory } from './registry.js';
 export { registerWriteRoutes } from './write.js';
 export type { WriteRoutesConfig } from './write.js';
 export { resolveWriteTarget } from './pathguard.js';
@@ -50,8 +52,14 @@ export { unifiedDiff } from './diff.js';
 export { trashFile, defaultTrashDir } from './trash.js';
 
 export interface StartServerOptions {
-  /** Project root the report engine scans. */
+  /** Launch root — the DEFAULT instance, served when `?instance=` is absent. */
   root: string;
+  /**
+   * Additional roots to seed as lazy instances (SPEC §4.2), e.g. the CLI's
+   * restored workspace.json list. Registered without scanning; deduped
+   * against `root`. A stale/removed root surfaces only at load time.
+   */
+  instances?: readonly string[];
   /** Bind host — loopback only; anything but 127.0.0.1 is rejected. */
   host?: string;
   /** Port to bind; default 0 (OS-assigned random ephemeral port). */
@@ -114,6 +122,14 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
   const token = randomBytes(32).toString('base64url');
   const tokenHash = createHash('sha256').update(token).digest();
 
+  // ONE registry hosts every instance; the launch root is the default. Extra
+  // roots (the CLI's restored workspace) seed as lazy instances — no scan
+  // until first opened. seed() is trusted (no existence check): a since-
+  // removed root surfaces as a report-time 500, matching v1's single store.
+  const registry = new InstanceRegistry(version);
+  registry.seed(opts.root, { makeDefault: true });
+  for (const extra of opts.instances ?? []) registry.seed(extra);
+
   // The real port exists only after listen; until then port() returns 0 and
   // the app's Host allowlist rejects everything (fail-closed).
   let boundPort = 0;
@@ -121,7 +137,7 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
     tokenHash,
     port: () => boundPort,
     distDir,
-    store: new ReportStore(opts.root, version),
+    registry,
     version,
     scopes: buildWriteScopes(opts.root),
     trashDir: defaultTrashDir(),

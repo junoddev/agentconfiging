@@ -229,6 +229,44 @@ describe('scanProject', () => {
     expect((err as ScanError).code).toBe('E_TOO_MANY_FILES');
   });
 
+  it('throws E_TOO_MANY_DIRS over the dir-visit cap, failing fast (bead gxo.6)', () => {
+    const root = makeTempDir();
+    // A handful of sibling dirs — the injected cap (not 10000 real dirs)
+    // trips the walk. Fail-fast: the walk stops before visiting them all.
+    for (let i = 0; i < 20; i += 1) write(root, `.claude/d${i}/x.md`, 'x\n');
+    const err = (() => {
+      try {
+        scanProject(root, { maxDirs: 3 });
+        return undefined;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(ScanError);
+    expect((err as ScanError).code).toBe('E_TOO_MANY_DIRS');
+  });
+
+  it('the default dir cap is generous enough for normal trees', () => {
+    const root = makeTempDir();
+    write(root, 'CLAUDE.md', '# hi\n');
+    write(root, '.claude/agents/a.md', 'a\n');
+    // No opts → CAPS.maxDirs (10000) applies; a normal tree scans cleanly.
+    expect(() => scanProject(root)).not.toThrow();
+    expect(scanProject(root).files.map((f) => f.path)).toContain('CLAUDE.md');
+  });
+
+  it('prunes subtrees deeper than maxDepth instead of throwing (bead gxo.6)', () => {
+    const root = makeTempDir();
+    write(root, '.claude/shallow.md', 'shallow\n'); // depth 1 file, kept
+    // A config file buried far deeper than a small injected maxDepth.
+    write(root, '.claude/a/b/c/d/e/deep.md', 'deep\n');
+    const manifest = scanProject(root, { maxDepth: 2 });
+    const paths = manifest.files.map((f) => f.path);
+    expect(paths).toContain('.claude/shallow.md'); // shallow config still scanned
+    expect(paths).not.toContain('.claude/a/b/c/d/e/deep.md'); // deep subtree pruned
+    expect(manifest.stats.skipped).toBeGreaterThan(0); // pruned dirs counted as skipped
+  });
+
   it('throws E_TOO_LARGE over the total byte cap', () => {
     const root = makeTempDir();
     const chunk = 'b'.repeat(CAPS.maxFileBytes);

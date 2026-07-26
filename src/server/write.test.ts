@@ -11,7 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
-import { ReportStore } from './store.js';
+import { InstanceRegistry } from './registry.js';
 import type { WriteScope } from './pathguard.js';
 
 const PORT = 8788;
@@ -55,11 +55,13 @@ function build() {
 }
 
 function app() {
+  const registry = new InstanceRegistry('1.0.0');
+  registry.seed(projectRoot, { makeDefault: true });
   return createApp({
     tokenHash,
     port: () => PORT,
     distDir: path.join(base, 'nodist'),
-    store: new ReportStore(projectRoot, '1.0.0'),
+    registry,
     version: '1.0.0',
     scopes,
     trashDir,

@@ -10,6 +10,7 @@ import {
   type LaunchOptions,
   type ServerHandle,
 } from './launch.js';
+import { loadWorkspace, saveWorkspace } from './workspace.js';
 
 const tempDirs: string[] = [];
 afterEach(() => {
@@ -32,7 +33,9 @@ interface Harness {
   spawnCalls: { cmd: string; args: readonly string[] }[];
   close: ReturnType<typeof vi.fn>;
   logDir: string;
+  stateDir: string;
   cwd: string;
+  serverInstances: () => readonly string[] | undefined;
   renderedProps: () => AppProps | undefined;
 }
 
@@ -43,9 +46,11 @@ function makeHarness(overrides: Partial<LaunchDeps> = {}): Harness {
   const spawnCalls: { cmd: string; args: readonly string[] }[] = [];
   const close = vi.fn(async () => undefined);
   const logDir = makeTempDir();
+  const stateDir = makeTempDir();
   const cwd = makeTempDir();
   let rendered: AppProps | undefined;
 
+  let serverInstances: readonly string[] | undefined;
   const handle: ServerHandle = { url: URL, port: 4242, token: 'tok', close };
   const deps: LaunchDeps = {
     io: {
@@ -54,6 +59,7 @@ function makeHarness(overrides: Partial<LaunchDeps> = {}): Harness {
     },
     serverFactory: async (opts) => {
       serverCalls.push({ root: opts.root });
+      serverInstances = opts.instances;
       return handle;
     },
     spawnOpen: (cmd, args) => void spawnCalls.push({ cmd, args }),
@@ -63,7 +69,7 @@ function makeHarness(overrides: Partial<LaunchDeps> = {}): Harness {
     loadCounts: () => ({ agentCount: 2, findingCount: 3 }),
     discover: () => [],
     cwd,
-    env: { AGENTCONFIGING_LOG_DIR: logDir },
+    env: { AGENTCONFIGING_LOG_DIR: logDir, AGENTCONFIGING_STATE_DIR: stateDir },
     isTTY: false,
     platform: 'darwin',
     now: () => new Date('2026-07-26T12:00:00.000Z'),
@@ -78,7 +84,9 @@ function makeHarness(overrides: Partial<LaunchDeps> = {}): Harness {
     spawnCalls,
     close,
     logDir,
+    stateDir,
     cwd,
+    serverInstances: () => serverInstances,
     renderedProps: () => rendered,
   };
 }
@@ -232,6 +240,69 @@ describe('runLaunch (TTY / Ink mode)', () => {
       hits: [other],
       message: `SCAN ${other} · 1 HIT`,
     });
+  });
+});
+
+describe('workspace persistence (agentconfig-gxo.6)', () => {
+  const workspaceFile = (stateDir: string) => path.join(stateDir, 'workspace.json');
+
+  it('records cwd in workspace.json on launch', async () => {
+    const h = makeHarness();
+    await runLaunch(OPTS, h.deps);
+    const ws = loadWorkspace(workspaceFile(h.stateDir));
+    expect(ws.instances.map((e) => e.root)).toEqual([h.cwd]);
+    expect(ws.instances[0]!.addedAt).toBe('2026-07-26T12:00:00.000Z');
+  });
+
+  it('restores persisted roots as lazy instances and seeds them into the server', async () => {
+    const other = makeTempDir();
+    const h = makeHarness({ isTTY: true });
+    // Pre-seed the workspace with cwd + another root.
+    saveWorkspace(workspaceFile(h.stateDir), {
+      version: 1,
+      instances: [
+        { root: h.cwd, addedAt: '2026-01-01T00:00:00.000Z' },
+        { root: other, addedAt: '2026-01-02T00:00:00.000Z' },
+      ],
+    });
+    await runLaunch(OPTS, h.deps);
+
+    // cwd loaded eagerly; the restored root follows as a lazy (○) instance.
+    const list = h.renderedProps()?.initialList;
+    expect(list?.instances.map((i) => i.root)).toEqual([h.cwd, other]);
+    expect(list?.instances[0]?.loaded).toBe(true);
+    expect(list?.instances[1]?.loaded).toBe(false);
+    // The one server process is seeded with the restored root.
+    expect(h.serverInstances()).toEqual([other]);
+  });
+
+  it('does not seed a persisted root that duplicates cwd', async () => {
+    const h = makeHarness();
+    saveWorkspace(workspaceFile(h.stateDir), {
+      version: 1,
+      instances: [{ root: h.cwd, addedAt: '2026-01-01T00:00:00.000Z' }],
+    });
+    await runLaunch(OPTS, h.deps);
+    expect(h.serverInstances()).toEqual([]);
+  });
+
+  it('addFolder persists the added folder for the next launch', async () => {
+    const other = makeTempDir();
+    const h = makeHarness({ isTTY: true });
+    await runLaunch(OPTS, h.deps);
+    const result = h.renderedProps()?.addFolder(other);
+    expect(result?.ok).toBe(true);
+    const ws = loadWorkspace(workspaceFile(h.stateDir));
+    expect(ws.instances.map((e) => e.root)).toEqual([h.cwd, other]);
+  });
+
+  it('a corrupt workspace.json degrades to just cwd, no crash', async () => {
+    const h = makeHarness();
+    fs.mkdirSync(h.stateDir, { recursive: true });
+    fs.writeFileSync(workspaceFile(h.stateDir), '{ not json ]');
+    const code = await runLaunch(OPTS, h.deps);
+    expect(code).toBe(0);
+    expect(loadWorkspace(workspaceFile(h.stateDir)).instances.map((e) => e.root)).toEqual([h.cwd]);
   });
 });
 

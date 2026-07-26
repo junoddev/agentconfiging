@@ -169,13 +169,35 @@ export const GLOBAL_SKIP_DIRS: ReadonlySet<string> = new Set([
   'tmp',
 ]);
 
+/**
+ * `maxDirs` / `maxDepth` added for bead agentconfig-gxo.6 (adversarial review):
+ * gxo.6 broadened the report target from cwd-only to any user-designated,
+ * token-named directory, so `add({path:"/"}) + report` could otherwise walk
+ * essentially the whole disk synchronously (blocking the event loop) before
+ * any file/byte cap — which only checks AFTER the full walk — ever tripped.
+ * These bound the WALK itself, mirroring the discovery walker (discovery.ts,
+ * which caps at 10000 dirs / depth 6). `maxDepth` is generous: real config
+ * lives shallow (.claude/agents/x.md is depth 2, .cursor/rules/*.mdc depth 2).
+ * The verbatim markdowning caps (maxFiles/maxTotalBytes/maxFileBytes) are
+ * untouched.
+ */
 export const CAPS = {
   maxFiles: 200,
   maxTotalBytes: 2 * 1024 * 1024,
   maxFileBytes: 64 * 1024,
+  maxDirs: 10000,
+  maxDepth: 16,
 } as const;
 
-export type ScanErrorCode = 'E_TOO_MANY_FILES' | 'E_TOO_LARGE';
+export type ScanErrorCode = 'E_TOO_MANY_FILES' | 'E_TOO_LARGE' | 'E_TOO_MANY_DIRS';
+
+/** Per-scan overrides for the walk bounds (tests inject small caps; prod uses CAPS). */
+export interface ScanOptions {
+  /** Max directories readdir'd before failing fast (default CAPS.maxDirs). */
+  maxDirs?: number;
+  /** Max directory depth descended into; deeper subtrees are pruned (default CAPS.maxDepth). */
+  maxDepth?: number;
+}
 
 export class ScanError extends Error {
   readonly code: ScanErrorCode;
@@ -259,11 +281,25 @@ function walk(
   rootDir: string,
   include: (relPath: string) => boolean,
   skipDirs: ReadonlySet<string>,
+  limits: { maxDirs: number; maxDepth: number },
 ): { entries: WalkEntry[]; skipped: number } {
   const out: WalkEntry[] = [];
   let skipped = 0;
+  let dirsVisited = 0;
 
-  function recur(dir: string): void {
+  function recur(dir: string, depth: number): void {
+    // Dir-visit cap (bead agentconfig-gxo.6 review): fail fast BEFORE the
+    // next readdir, so a system-root-style scan raises a typed ScanError
+    // rather than storming the disk and blocking the event loop. Consistent
+    // with the E_TOO_MANY_FILES / E_TOO_LARGE fail-loud pattern.
+    if (dirsVisited >= limits.maxDirs) {
+      throw new ScanError(
+        'E_TOO_MANY_DIRS',
+        `Scan visited too many directories (limit ${limits.maxDirs}). Run in a smaller subtree.`,
+      );
+    }
+    dirsVisited += 1;
+
     let entries: fs.Dirent[];
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -290,7 +326,14 @@ function walk(
           skipped += 1;
           continue;
         }
-        recur(full);
+        // Depth cap (bead agentconfig-gxo.6 review): real config is shallow,
+        // so prune subtrees deeper than maxDepth rather than throw — a deep
+        // repo still scans its config, it just doesn't descend forever.
+        if (depth + 1 > limits.maxDepth) {
+          skipped += 1;
+          continue;
+        }
+        recur(full, depth + 1);
       } else if (entry.isFile()) {
         if (include(rel)) {
           out.push({ absPath: full, relPath: normalizeRel(rel) });
@@ -299,7 +342,7 @@ function walk(
     }
   }
 
-  recur(rootDir);
+  recur(rootDir, 0);
   return { entries: out, skipped };
 }
 
@@ -397,16 +440,21 @@ function buildManifest(
  *
  * A symlinked root is resolved once via realpathSync (the caller designated
  * it as in-scope); `root` is the real path, `cwdBasename` keeps the name the
- * caller pointed at. Throws ScanError (E_TOO_MANY_FILES | E_TOO_LARGE) when
- * caps are exceeded.
+ * caller pointed at. Throws ScanError (E_TOO_MANY_FILES | E_TOO_LARGE |
+ * E_TOO_MANY_DIRS) when caps are exceeded. `opts` overrides the walk bounds
+ * (agentconfig-gxo.6); production omits it and uses CAPS.
  */
-export function scanProject(rootDir: string): Manifest {
+export function scanProject(rootDir: string, opts: ScanOptions = {}): Manifest {
   const logicalRoot = path.resolve(rootDir);
   const absRoot = fs.realpathSync(logicalRoot);
+  const limits = {
+    maxDirs: opts.maxDirs ?? CAPS.maxDirs,
+    maxDepth: opts.maxDepth ?? CAPS.maxDepth,
+  };
   return buildManifest(
     absRoot,
     path.basename(logicalRoot),
-    walk(absRoot, shouldIncludeProjectFile, SKIP_DIRS),
+    walk(absRoot, shouldIncludeProjectFile, SKIP_DIRS, limits),
     'project',
   );
 }
@@ -440,7 +488,10 @@ export function scanGlobal(homeDir: string): Manifest[] {
       buildManifest(
         absRoot,
         path.basename(logicalRoot),
-        walk(absRoot, shouldIncludeGlobalFile, GLOBAL_SKIP_DIRS),
+        walk(absRoot, shouldIncludeGlobalFile, GLOBAL_SKIP_DIRS, {
+          maxDirs: CAPS.maxDirs,
+          maxDepth: CAPS.maxDepth,
+        }),
         'global',
       ),
     );

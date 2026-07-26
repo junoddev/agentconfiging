@@ -19,7 +19,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { buildReport, detect, discoverProjects, scanProject } from '../core/index.js';
 import type { AppProps } from './app.js';
-import { addInstance, createInstanceList, markLoaded, type InstanceList } from './instances.js';
+import {
+  addInstance,
+  addInstances,
+  createInstanceList,
+  markLoaded,
+  type InstanceList,
+} from './instances.js';
 import {
   createFileLogger,
   formatTerminalLine,
@@ -30,6 +36,13 @@ import {
 } from './logs.js';
 import type { ReportIo } from './report.js';
 import { colorEnabled, resolveRenderMode } from './tty.js';
+import {
+  addWorkspaceRoot,
+  loadWorkspace,
+  resolveWorkspacePath,
+  saveWorkspace,
+  type Workspace,
+} from './workspace.js';
 
 /** Contract of src/server startServer (implemented in the server bead). */
 export interface ServerHandle {
@@ -41,6 +54,8 @@ export interface ServerHandle {
 
 export interface ServerFactoryOptions {
   root: string;
+  /** Extra roots (the restored workspace) to seed as lazy instances. */
+  instances?: readonly string[];
   host?: string;
   port?: number;
   distDir?: string;
@@ -154,9 +169,36 @@ export async function runLaunch(opts: LaunchOptions, deps: LaunchDeps): Promise<
 
   emit('info', `LOG ${logPath}`);
 
+  // Restore the persisted instance list (SPEC §4.2): roots come back LAZY —
+  // reading workspace.json never scans. Corrupt/missing file → empty list
+  // (loadWorkspace never throws). cwd is keyed by its real path so it dedupes
+  // against a persisted entry that points at the same folder via a symlink.
+  const workspacePath = resolveWorkspacePath(env, deps.homeDir ?? os.homedir());
+  let workspace: Workspace = loadWorkspace(workspacePath);
+  let realCwd = cwd;
+  try {
+    realCwd = fs.realpathSync(cwd);
+  } catch {
+    // cwd off-disk (unusual) — the lexical path is the best key we have.
+  }
+  const restoredRoots = workspace.instances.map((e) => e.root).filter((r) => r !== realCwd);
+
+  // Persist cwd + the restored list so a fresh launch (empty file) records
+  // the current root. A read-only state dir degrades to a warning, not a crash.
+  const persistWorkspace = (): void => {
+    try {
+      saveWorkspace(workspacePath, workspace);
+    } catch (err) {
+      emit('warn', `WORKSPACE SAVE FAILED · ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
   let server: ServerHandle;
   try {
-    server = await (deps.serverFactory ?? defaultServerFactory)({ root: cwd });
+    server = await (deps.serverFactory ?? defaultServerFactory)({
+      root: cwd,
+      instances: restoredRoots,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logger.append({ time: now(), level: 'error', text: `SERVER FAILED · ${message}` });
@@ -166,8 +208,10 @@ export async function runLaunch(opts: LaunchOptions, deps: LaunchDeps): Promise<
 
   emit('signal', `SIGNAL ACQUIRED · ${server.url}`);
 
-  // First instance = cwd, loaded eagerly so the list shows real counts.
+  // First instance = cwd, loaded eagerly so the list shows real counts. The
+  // restored roots follow as lazy instances (○, counts unknown until opened).
   let list: InstanceList = addInstance(createInstanceList(), cwd).list;
+  list = addInstances(list, restoredRoots).list;
   try {
     const counts = (deps.loadCounts ?? defaultLoadCounts)(cwd);
     list = markLoaded(list, cwd, counts);
@@ -179,6 +223,10 @@ export async function runLaunch(opts: LaunchOptions, deps: LaunchDeps): Promise<
   } catch (err) {
     emit('warn', `SCAN FAILED · ${err instanceof Error ? err.message : String(err)}`);
   }
+
+  // Record cwd in the persisted list (no-op if already present) and flush.
+  workspace = addWorkspaceRoot(workspace, realCwd, now());
+  persistWorkspace();
 
   const spawnOpen = deps.spawnOpen ?? defaultSpawnOpen;
   const openUrl = (): void => {
@@ -217,6 +265,12 @@ export async function runLaunch(opts: LaunchOptions, deps: LaunchDeps): Promise<
       } catch {
         return { ok: false, message: `NO SUCH FOLDER · ${requested}` };
       }
+      // Persist so the folder returns on the next launch (SPEC §4.2). The
+      // running server registry is not mutated here — the web workspace UI
+      // (c6p.6, blocked on this bead) drives POST /api/instances for live
+      // switching; restore-on-next-launch is what this wiring guarantees.
+      workspace = addWorkspaceRoot(workspace, root, now());
+      persistWorkspace();
       return { ok: true, root, message: `ADDED ${root}` };
     },
     scanFolder: (input) => {

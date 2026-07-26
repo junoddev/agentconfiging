@@ -55,7 +55,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import type { ReportStore } from './store.js';
+import { DiscoveryError, discoverProjects } from '../core/index.js';
+import { InstanceRegistry, InvalidRootError } from './registry.js';
 import { registerWriteRoutes } from './write.js';
 import type { WriteScope } from './pathguard.js';
 
@@ -70,7 +71,12 @@ export interface AppConfig {
   port: () => number;
   /** Directory the static app shell is served from (dist/web). */
   distDir: string;
-  store: ReportStore;
+  /**
+   * The multi-instance registry (SPEC §4.2). Hosts every root the server
+   * knows about; the default instance (launch cwd) serves report requests
+   * that omit `?instance=`. Replaces the single ReportStore of v1.
+   */
+  registry: InstanceRegistry;
   version: string;
   /**
    * WRITE-API scopes (bead gxo.3): the project root + any agent home config
@@ -246,13 +252,84 @@ export function createApp(config: AppConfig): Hono {
 
   app.get('/api/health', (c) => c.json({ ok: true, version: config.version }));
 
+  const registry = config.registry;
+
+  // Parse a JSON body's `path` field. Returns undefined (never throws) when
+  // the body is not JSON or `path` is missing/blank — the route maps that to
+  // a 400. Keeps a malformed/hostile body from ever reaching the fs layer.
+  const readPathField = async (c: Context): Promise<string | undefined> => {
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return undefined;
+    }
+    if (body === null || typeof body !== 'object') return undefined;
+    const value = (body as { path?: unknown }).path;
+    return typeof value === 'string' && value.trim() !== '' ? value : undefined;
+  };
+
+  // GET /api/instances — the hosted instance list (summaries, no engine data).
+  app.get('/api/instances', (c) => c.json({ instances: registry.list() }));
+
+  // POST /api/instances {path} — the ADD flow: the ONE place new roots enter.
+  // Validated (realpath + must be an existing directory) in the registry;
+  // added lazily (no scan until first report). Bad path → 400.
+  app.post('/api/instances', async (c) => {
+    const requested = await readPathField(c);
+    if (requested === undefined) return jsonError(400, 'path required');
+    try {
+      return c.json(registry.summary(registry.add(requested)));
+    } catch (err) {
+      if (err instanceof InvalidRootError) return jsonError(400, err.message);
+      console.error(`agentconfiging server: add instance failed: ${String(err)}`);
+      return jsonError(500, 'add failed');
+    }
+  });
+
+  // POST /api/instances/scan {path} — recursive discovery. Returns hits to
+  // OFFER; does NOT auto-add (adding still goes through POST /api/instances).
+  // discoverProjects is depth/dir-bounded and realpaths its own root; a bad
+  // root throws DiscoveryError → 400.
+  app.post('/api/instances/scan', async (c) => {
+    const requested = await readPathField(c);
+    if (requested === undefined) return jsonError(400, 'path required');
+    try {
+      const { hits, stats } = discoverProjects(requested);
+      return c.json({ hits, stats });
+    } catch (err) {
+      if (err instanceof DiscoveryError) return jsonError(400, 'invalid scan root');
+      console.error(`agentconfiging server: scan failed: ${String(err)}`);
+      return jsonError(500, 'scan failed');
+    }
+  });
+
+  // POST /api/instances/:id/unload — drop the engine store (free memory),
+  // keep the instance in the list. Next report re-scans. Unknown id → 404.
+  app.post('/api/instances/:id/unload', (c) =>
+    registry.unload(c.req.param('id'))
+      ? c.json({ id: c.req.param('id'), loaded: false })
+      : jsonError(404, 'unknown instance'),
+  );
+
+  // DELETE /api/instances/:id — remove the instance entirely. Unknown id → 404.
+  app.delete('/api/instances/:id', (c) =>
+    registry.remove(c.req.param('id'))
+      ? c.json({ id: c.req.param('id'), removed: true })
+      : jsonError(404, 'unknown instance'),
+  );
+
   app.get('/api/report', (c) => {
     const url = new URL(c.req.url);
     const scope = url.searchParams.get('scope') ?? 'project';
     if (scope !== 'project') return jsonError(400, 'unsupported scope');
     const fresh = url.searchParams.get('fresh') === '1';
+    // Selector resolves ONLY against registered instances — an unknown id or
+    // an unregistered path is a 404, never a scan of an attacker-chosen path.
+    const instance = registry.resolve(url.searchParams.get('instance') ?? undefined);
+    if (!instance) return jsonError(404, 'unknown instance');
     try {
-      return c.json(config.store.get('project', { fresh }));
+      return c.json(registry.report(instance, { fresh }));
     } catch (err) {
       // Details to stderr only — no stack traces or messages in responses.
       console.error(`agentconfiging server: report failed: ${String(err)}`);

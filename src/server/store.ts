@@ -23,6 +23,7 @@ import {
   type DetectedAgent,
   type ManifestStats,
   type ReportFinding,
+  type ScanOptions,
 } from '../core/index.js';
 
 /** Scopes the API can report on. v1 is project-only; 'global' is a later bead. */
@@ -43,11 +44,19 @@ export interface ServedReport {
 export class ReportStore {
   readonly #root: string;
   readonly #version: string;
+  readonly #scanOptions: ScanOptions;
   readonly #cache = new Map<ReportScope, ServedReport>();
 
-  constructor(root: string, version: string) {
+  /**
+   * `scanOptions` overrides the engine walk bounds (agentconfig-gxo.6);
+   * production omits it (CAPS defaults apply). It exists so a system-root-
+   * style over-cap scan can be exercised end-to-end as a fast typed
+   * E_TOO_MANY_DIRS error rather than a hang.
+   */
+  constructor(root: string, version: string, scanOptions: ScanOptions = {}) {
     this.#root = root;
     this.#version = version;
+    this.#scanOptions = scanOptions;
   }
 
   /**
@@ -72,7 +81,7 @@ export class ReportStore {
   }
 
   #build(): ServedReport {
-    const manifest = scanProject(this.#root);
+    const manifest = scanProject(this.#root, this.#scanOptions);
     const agents = detect(manifest);
     const { findings } = buildReport(manifest, agents);
     return {
