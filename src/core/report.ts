@@ -19,7 +19,7 @@
 
 import type { DetectedAgent } from './detectors/index.js';
 import { dirPrefix, filesUnder, findFile } from './detectors/shared.js';
-import { sortFindings, type Finding } from './findings.js';
+import { sortFindings, type Finding, type Fix } from './findings.js';
 import type { Manifest } from './manifest.js';
 import { allAnalyzers } from './analyzers/index.js';
 import {
@@ -195,6 +195,23 @@ export function runAnalyzers(input: AnalyzerInput): Finding[] {
     return id === finding.id ? finding : { ...finding, id };
   });
   return sortFindings(unique);
+}
+
+/**
+ * A finding as serialized for EXTERNAL output (CLI report JSON, server API).
+ * `Finding.fix` carries complete replacement file content — which can embed
+ * secrets (e.g. env values in settings.json) — and is NEVER serialized; it
+ * is summarized as `hasFix` + `fixKind` so consumers keep the signal
+ * without the file body. Shared by src/cli/report.ts and src/server so both
+ * emitters use the identical fix-stripping path (agentconfig-gxo.2 moved it
+ * here from src/cli/report.ts).
+ */
+export type ReportFinding = Omit<Finding, 'fix'> & { hasFix?: true; fixKind?: Fix['kind'] };
+
+/** Strip the fix payload from a finding for serialization (see ReportFinding). */
+export function toReportFinding(finding: Finding): ReportFinding {
+  const { fix, ...rest } = finding;
+  return fix ? { ...rest, hasFix: true, fixKind: fix.kind } : rest;
 }
 
 /** Compose input building + analysis into a full Report. */
