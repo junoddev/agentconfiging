@@ -34,7 +34,10 @@ const HOME = '/home/user';
 
 describe('path resolution (mirrors logs.ts overrides)', () => {
   it('AGENTCONFIGING_STATE_DIR overrides everything', () => {
-    const dir = resolveStateDir({ AGENTCONFIGING_STATE_DIR: '/custom/state', XDG_STATE_HOME: '/xdg' }, HOME);
+    const dir = resolveStateDir(
+      { AGENTCONFIGING_STATE_DIR: '/custom/state', XDG_STATE_HOME: '/xdg' },
+      HOME,
+    );
     expect(dir).toBe('/custom/state');
     expect(resolveWorkspacePath({ AGENTCONFIGING_STATE_DIR: '/custom/state' }, HOME)).toBe(
       '/custom/state/workspace.json',
@@ -44,7 +47,9 @@ describe('path resolution (mirrors logs.ts overrides)', () => {
   it('then XDG_STATE_HOME, then ~/.local/state', () => {
     expect(resolveStateDir({ XDG_STATE_HOME: '/xdg' }, HOME)).toBe('/xdg/agentconfiging');
     expect(resolveStateDir({}, HOME)).toBe('/home/user/.local/state/agentconfiging');
-    expect(resolveWorkspacePath({}, HOME)).toBe('/home/user/.local/state/agentconfiging/workspace.json');
+    expect(resolveWorkspacePath({}, HOME)).toBe(
+      '/home/user/.local/state/agentconfiging/workspace.json',
+    );
   });
 
   it('blank overrides are ignored', () => {

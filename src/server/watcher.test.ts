@@ -95,8 +95,10 @@ describe('reportDiff (pure structural diff)', () => {
 
   it('is empty when nothing structural changed', () => {
     const r = makeReport([{ id: 'a' }], [{ kind: 'claude-code', files: ['CLAUDE.md'] }]);
-    expect(reportDiff(r, makeReport([{ id: 'a' }], [{ kind: 'claude-code', files: ['CLAUDE.md'] }]))
-      .changed).toEqual([]);
+    expect(
+      reportDiff(r, makeReport([{ id: 'a' }], [{ kind: 'claude-code', files: ['CLAUDE.md'] }]))
+        .changed,
+    ).toEqual([]);
   });
 });
 

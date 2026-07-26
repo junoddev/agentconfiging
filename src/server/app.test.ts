@@ -294,8 +294,19 @@ describe('instance endpoints (agentconfig-gxo.6)', () => {
       } as unknown as ReportStore;
     });
     registry.seed(defaultRoot, { makeDefault: true });
-    const instApp = createApp({ tokenHash, port: () => PORT, distDir: dist, registry, version: '1.2.3' });
-    const send = (pathname: string, method: string, body?: unknown, extra: Record<string, string> = {}) =>
+    const instApp = createApp({
+      tokenHash,
+      port: () => PORT,
+      distDir: dist,
+      registry,
+      version: '1.2.3',
+    });
+    const send = (
+      pathname: string,
+      method: string,
+      body?: unknown,
+      extra: Record<string, string> = {},
+    ) =>
       Promise.resolve(
         instApp.fetch(
           new Request(`http://${HOST}${pathname}`, {
@@ -303,7 +314,9 @@ describe('instance endpoints (agentconfig-gxo.6)', () => {
             headers: {
               host: HOST,
               ...AUTH,
-              ...(method === 'GET' ? {} : { origin: SAME_ORIGIN, 'content-type': 'application/json' }),
+              ...(method === 'GET'
+                ? {}
+                : { origin: SAME_ORIGIN, 'content-type': 'application/json' }),
               ...extra,
             },
             ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -342,7 +355,9 @@ describe('instance endpoints (agentconfig-gxo.6)', () => {
 
   it('added instance is LAZY: no store/scan until GET /api/report?instance= hits it', async () => {
     const { send, builds, scans } = makeInstanceApp(path.join(trees, 'claude-rich'));
-    const added = (await (await send('/api/instances', 'POST', { path: path.join(trees, 'negative-plain') })).json()) as {
+    const added = (await (
+      await send('/api/instances', 'POST', { path: path.join(trees, 'negative-plain') })
+    ).json()) as {
       id: string;
     };
     expect(builds).toEqual([]); // added, never scanned
@@ -356,7 +371,9 @@ describe('instance endpoints (agentconfig-gxo.6)', () => {
 
   it('POST /api/instances/:id/unload frees the store; re-report re-scans', async () => {
     const { send, builds } = makeInstanceApp(path.join(trees, 'claude-rich'));
-    const added = (await (await send('/api/instances', 'POST', { path: path.join(trees, 'negative-plain') })).json()) as {
+    const added = (await (
+      await send('/api/instances', 'POST', { path: path.join(trees, 'negative-plain') })
+    ).json()) as {
       id: string;
     };
     await send(`/api/report?instance=${added.id}`, 'GET');
@@ -383,14 +400,20 @@ describe('instance endpoints (agentconfig-gxo.6)', () => {
 
   it('POST /api/instances/scan on a bad root → 400 (never a partial scan)', async () => {
     const { send } = makeInstanceApp(path.join(trees, 'claude-rich'));
-    expect((await send('/api/instances/scan', 'POST', { path: path.join(base, 'nope') })).status).toBe(400);
-    expect((await send('/api/instances/scan', 'POST', { path: path.join(base, 'secret.txt') })).status).toBe(400);
+    expect(
+      (await send('/api/instances/scan', 'POST', { path: path.join(base, 'nope') })).status,
+    ).toBe(400);
+    expect(
+      (await send('/api/instances/scan', 'POST', { path: path.join(base, 'secret.txt') })).status,
+    ).toBe(400);
     expect((await send('/api/instances/scan', 'POST', {})).status).toBe(400);
   });
 
   it('DELETE /api/instances/:id removes it; unknown id → 404', async () => {
     const { send, registry } = makeInstanceApp(path.join(trees, 'claude-rich'));
-    const added = (await (await send('/api/instances', 'POST', { path: path.join(trees, 'negative-plain') })).json()) as {
+    const added = (await (
+      await send('/api/instances', 'POST', { path: path.join(trees, 'negative-plain') })
+    ).json()) as {
       id: string;
     };
     expect((await send(`/api/instances/${added.id}`, 'DELETE')).status).toBe(200);
@@ -413,7 +436,13 @@ describe('instance endpoints (agentconfig-gxo.6)', () => {
     const { send } = makeInstanceApp(path.join(trees, 'claude-rich'));
     // No Origin + no Sec-Fetch-Site → CSRF 403 before anything else.
     const noOrigin = await Promise.resolve(
-      createApp({ tokenHash, port: () => PORT, distDir: dist, registry: registryFor(path.join(trees, 'claude-rich')), version: '1.2.3' }).fetch(
+      createApp({
+        tokenHash,
+        port: () => PORT,
+        distDir: dist,
+        registry: registryFor(path.join(trees, 'claude-rich')),
+        version: '1.2.3',
+      }).fetch(
         new Request(`http://${HOST}/api/instances`, {
           method: 'POST',
           headers: { host: HOST, ...AUTH },
@@ -423,13 +452,22 @@ describe('instance endpoints (agentconfig-gxo.6)', () => {
     );
     expect(noOrigin.status).toBe(403);
     // Bad token (with same-origin) → 401.
-    const badToken = await send('/api/instances', 'POST', { path: trees }, { authorization: 'Bearer wrong' });
+    const badToken = await send(
+      '/api/instances',
+      'POST',
+      { path: trees },
+      { authorization: 'Bearer wrong' },
+    );
     expect(badToken.status).toBe(401);
     // GET list without a token → 401.
     const noToken = await Promise.resolve(
-      createApp({ tokenHash, port: () => PORT, distDir: dist, registry: registryFor(path.join(trees, 'claude-rich')), version: '1.2.3' }).fetch(
-        new Request(`http://${HOST}/api/instances`, { headers: { host: HOST } }),
-      ),
+      createApp({
+        tokenHash,
+        port: () => PORT,
+        distDir: dist,
+        registry: registryFor(path.join(trees, 'claude-rich')),
+        version: '1.2.3',
+      }).fetch(new Request(`http://${HOST}/api/instances`, { headers: { host: HOST } })),
     );
     expect(noToken.status).toBe(401);
   });
@@ -451,7 +489,13 @@ describe('real engine scan path (agentconfig-gxo.6 review)', () => {
     // No fake factory: this exercises scanProject → detect → buildReport.
     const registry = new InstanceRegistry('1.2.3');
     registry.seed(realRoot, { makeDefault: true });
-    const realApp = createApp({ tokenHash, port: () => PORT, distDir: dist, registry, version: '1.2.3' });
+    const realApp = createApp({
+      tokenHash,
+      port: () => PORT,
+      distDir: dist,
+      registry,
+      version: '1.2.3',
+    });
 
     const res = await realGet(realApp, '/api/report');
     expect(res.status).toBe(200);
@@ -477,7 +521,13 @@ describe('real engine scan path (agentconfig-gxo.6 review)', () => {
       (root, v) => new ReportStore(root, v, { maxDirs: 2 }),
     );
     registry.seed(bigRoot, { makeDefault: true });
-    const cappedApp = createApp({ tokenHash, port: () => PORT, distDir: dist, registry, version: '1.2.3' });
+    const cappedApp = createApp({
+      tokenHash,
+      port: () => PORT,
+      distDir: dist,
+      registry,
+      version: '1.2.3',
+    });
 
     const started = Date.now();
     const res = await realGet(cappedApp, '/api/report');

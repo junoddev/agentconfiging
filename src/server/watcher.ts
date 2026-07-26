@@ -92,7 +92,8 @@ export function reportDiff(prev: ServedReport | undefined, next: ServedReport): 
     if (!before) changed.push(`agent-added:${kind}`);
     else if (agentChanged(before, after)) changed.push(`agent-changed:${kind}`);
   }
-  for (const kind of prevAgents.keys()) if (!nextAgents.has(kind)) changed.push(`agent-removed:${kind}`);
+  for (const kind of prevAgents.keys())
+    if (!nextAgents.has(kind)) changed.push(`agent-removed:${kind}`);
 
   return { changed: changed.sort() };
 }

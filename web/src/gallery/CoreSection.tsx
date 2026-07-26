@@ -8,12 +8,7 @@ import {
   StatBlock,
   Table,
 } from '../components/core/index.js';
-import {
-  CLAUDE_SOURCES,
-  CODEX_SOURCES,
-  buildDemoDiff,
-  buildDemoFindings,
-} from './fixtures.js';
+import { CLAUDE_SOURCES, CODEX_SOURCES, buildDemoDiff, buildDemoFindings } from './fixtures.js';
 
 const DEMO_DIFF = buildDemoDiff();
 const DEMO_FINDINGS = buildDemoFindings();

@@ -112,10 +112,7 @@ export class InstanceRegistry {
   #defaultId: string | undefined;
   #lifecycle: InstanceLifecycle | undefined;
 
-  constructor(
-    version: string,
-    makeStore: StoreFactory = (root, v) => new ReportStore(root, v),
-  ) {
+  constructor(version: string, makeStore: StoreFactory = (root, v) => new ReportStore(root, v)) {
     this.#version = version;
     this.#makeStore = makeStore;
   }

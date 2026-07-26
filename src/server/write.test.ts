@@ -68,12 +68,22 @@ function app() {
   });
 }
 
-function post(pathname: string, body: unknown, headers: Record<string, string> = {}): Promise<Response> {
+function post(
+  pathname: string,
+  body: unknown,
+  headers: Record<string, string> = {},
+): Promise<Response> {
   return Promise.resolve(
     app().fetch(
       new Request(`http://${HOST}${pathname}`, {
         method: 'POST',
-        headers: { host: HOST, origin: ORIGIN, 'content-type': 'application/json', ...AUTH, ...headers },
+        headers: {
+          host: HOST,
+          origin: ORIGIN,
+          'content-type': 'application/json',
+          ...AUTH,
+          ...headers,
+        },
         body: JSON.stringify(body),
       }),
     ),
@@ -82,7 +92,9 @@ function post(pathname: string, body: unknown, headers: Record<string, string> =
 
 function get(pathname: string, headers: Record<string, string> = {}): Promise<Response> {
   return Promise.resolve(
-    app().fetch(new Request(`http://${HOST}${pathname}`, { headers: { host: HOST, ...AUTH, ...headers } })),
+    app().fetch(
+      new Request(`http://${HOST}${pathname}`, { headers: { host: HOST, ...AUTH, ...headers } }),
+    ),
   );
 }
 
@@ -91,7 +103,11 @@ beforeEach(build);
 describe('POST /api/write — dry-run', () => {
   it('create: diff against empty, willCreate, no disk touch', async () => {
     const target = path.join(projectRoot, '.claude', 'settings.json');
-    const res = await post('/api/write', { path: '.claude/settings.json', content: '{"a":1}\n', dryRun: true });
+    const res = await post('/api/write', {
+      path: '.claude/settings.json',
+      content: '{"a":1}\n',
+      dryRun: true,
+    });
     expect(res.status).toBe(200);
     const json = (await res.json()) as Record<string, unknown>;
     expect(json['willCreate']).toBe(true);
@@ -124,23 +140,40 @@ describe('POST /api/write — dry-run', () => {
 
 describe('POST /api/write — commit', () => {
   it('create: writes the file, reports created', async () => {
-    const res = await post('/api/write', { path: '.claude/settings.json', content: '{"x":true}\n', dryRun: false });
+    const res = await post('/api/write', {
+      path: '.claude/settings.json',
+      content: '{"x":true}\n',
+      dryRun: false,
+    });
     expect(res.status).toBe(200);
     const json = (await res.json()) as Record<string, unknown>;
     expect(json['committed']).toBe(true);
     expect(json['created']).toBe(true);
-    expect(fs.readFileSync(path.join(projectRoot, '.claude', 'settings.json'), 'utf-8')).toBe('{"x":true}\n');
+    expect(fs.readFileSync(path.join(projectRoot, '.claude', 'settings.json'), 'utf-8')).toBe(
+      '{"x":true}\n',
+    );
   });
 
   it('modify: overwrites existing content', async () => {
-    const res = await post('/api/write', { path: 'CLAUDE.md', content: 'new body\n', dryRun: false });
+    const res = await post('/api/write', {
+      path: 'CLAUDE.md',
+      content: 'new body\n',
+      dryRun: false,
+    });
     expect(res.status).toBe(200);
-    expect((await res.json()) as Record<string, unknown>).toMatchObject({ committed: true, modified: true });
+    expect((await res.json()) as Record<string, unknown>).toMatchObject({
+      committed: true,
+      modified: true,
+    });
     expect(fs.readFileSync(path.join(projectRoot, 'CLAUDE.md'), 'utf-8')).toBe('new body\n');
   });
 
   it('writes into a global (agent home) scope', async () => {
-    const res = await post('/api/write', { path: path.join(globalRoot, 'CLAUDE.md'), content: 'hi\n', dryRun: false });
+    const res = await post('/api/write', {
+      path: path.join(globalRoot, 'CLAUDE.md'),
+      content: 'hi\n',
+      dryRun: false,
+    });
     expect(res.status).toBe(200);
     expect((await res.json()) as Record<string, unknown>).toMatchObject({ pathScope: 'global' });
     expect(fs.readFileSync(path.join(globalRoot, 'CLAUDE.md'), 'utf-8')).toBe('hi\n');
@@ -165,7 +198,11 @@ describe('path guard — traversal + scope', () => {
   });
 
   it('absolute out-of-scope path → 403', async () => {
-    const res = await post('/api/write', { path: path.join(base, 'outside-existing.md'), content: 'x', dryRun: false });
+    const res = await post('/api/write', {
+      path: path.join(base, 'outside-existing.md'),
+      content: 'x',
+      dryRun: false,
+    });
     expect(res.status).toBe(403);
     expect(fs.readFileSync(path.join(base, 'outside-existing.md'), 'utf-8')).toBe('SECRET-OUTSIDE');
   });
@@ -173,7 +210,11 @@ describe('path guard — traversal + scope', () => {
   it('in-scope but NON-config path (random/evil.sh at root) → 403', async () => {
     // .sh is an allowed ext but only under a KNOWN_DIRS subtree; at the project
     // root it is not a known config path shape.
-    const res = await post('/api/write', { path: 'random/evil.sh', content: 'rm -rf /', dryRun: false });
+    const res = await post('/api/write', {
+      path: 'random/evil.sh',
+      content: 'rm -rf /',
+      dryRun: false,
+    });
     expect(res.status).toBe(403);
     expect(fs.existsSync(path.join(projectRoot, 'random'))).toBe(false);
   });
@@ -187,7 +228,11 @@ describe('path guard — traversal + scope', () => {
     const link = path.join(projectRoot, '.claude', 'link.md');
     fs.symlinkSync(path.join(escapeDir, 'target.md'), link);
     scopes = [{ root: fs.realpathSync(projectRoot), kind: 'project' }];
-    const res = await post('/api/write', { path: '.claude/link.md', content: 'PWNED', dryRun: false });
+    const res = await post('/api/write', {
+      path: '.claude/link.md',
+      content: 'PWNED',
+      dryRun: false,
+    });
     expect(res.status).toBe(403);
     expect(fs.readFileSync(path.join(escapeDir, 'target.md'), 'utf-8')).toBe('SECRET-VIA-SYMLINK');
   });
@@ -196,7 +241,11 @@ describe('path guard — traversal + scope', () => {
     const link = path.join(projectRoot, '.claude', 'escaped');
     fs.symlinkSync(escapeDir, link);
     scopes = [{ root: fs.realpathSync(projectRoot), kind: 'project' }];
-    const res = await post('/api/write', { path: '.claude/escaped/new.md', content: 'x', dryRun: false });
+    const res = await post('/api/write', {
+      path: '.claude/escaped/new.md',
+      content: 'x',
+      dryRun: false,
+    });
     expect(res.status).toBe(403);
     expect(fs.existsSync(path.join(escapeDir, 'new.md'))).toBe(false);
   });
@@ -210,7 +259,11 @@ describe('path guard — DANGLING symlink escapes (write-through)', () => {
     fs.mkdirSync(path.join(base, 'evil-outside'), { recursive: true });
     const target = path.join(base, 'evil-outside', 'PWNED.md');
     fs.symlinkSync(target, path.join(projectRoot, '.claude', 'pwn.md'));
-    const res = await post('/api/write', { path: '.claude/pwn.md', content: 'PWNED', dryRun: false });
+    const res = await post('/api/write', {
+      path: '.claude/pwn.md',
+      content: 'PWNED',
+      dryRun: false,
+    });
     expect(res.status).toBe(403);
     expect(fs.existsSync(target)).toBe(false);
   });
@@ -230,33 +283,49 @@ describe('path guard — DANGLING symlink escapes (write-through)', () => {
 
   it('(c) intermediate dangling symlink → 403 (not 500)', async () => {
     fs.symlinkSync(path.join(base, 'nonexistent-dir'), path.join(projectRoot, '.claude', 'dlink'));
-    const res = await post('/api/write', { path: '.claude/dlink/x.md', content: 'x', dryRun: false });
+    const res = await post('/api/write', {
+      path: '.claude/dlink/x.md',
+      content: 'x',
+      dryRun: false,
+    });
     expect(res.status).toBe(403);
     expect(fs.existsSync(path.join(base, 'nonexistent-dir'))).toBe(false);
   });
 
   it('(d) symlinked delete target → 403, out-of-scope file untouched', async () => {
-    fs.symlinkSync(path.join(base, 'outside-existing.md'), path.join(projectRoot, '.claude', 'dellink.md'));
+    fs.symlinkSync(
+      path.join(base, 'outside-existing.md'),
+      path.join(projectRoot, '.claude', 'dellink.md'),
+    );
     const res = await post('/api/delete', { path: '.claude/dellink.md', dryRun: false });
     expect(res.status).toBe(403);
     expect(fs.readFileSync(path.join(base, 'outside-existing.md'), 'utf-8')).toBe('SECRET-OUTSIDE');
   });
 
   it('(d2) DANGLING symlinked delete target → 403', async () => {
-    fs.symlinkSync(path.join(base, 'evil-outside', 'gone.md'), path.join(projectRoot, '.claude', 'delgone.md'));
+    fs.symlinkSync(
+      path.join(base, 'evil-outside', 'gone.md'),
+      path.join(projectRoot, '.claude', 'delgone.md'),
+    );
     const res = await post('/api/delete', { path: '.claude/delgone.md', dryRun: false });
     expect(res.status).toBe(403);
   });
 
   it('(e) symlinked read (GET /api/file) → 403, no content leaked', async () => {
-    fs.symlinkSync(path.join(base, 'outside-existing.md'), path.join(projectRoot, '.claude', 'readlink.md'));
+    fs.symlinkSync(
+      path.join(base, 'outside-existing.md'),
+      path.join(projectRoot, '.claude', 'readlink.md'),
+    );
     const res = await get('/api/file?path=.claude/readlink.md');
     expect(res.status).toBe(403);
     expect(await res.text()).not.toContain('SECRET-OUTSIDE');
   });
 
   it('(e2) DANGLING symlinked read → 403', async () => {
-    fs.symlinkSync(path.join(base, 'evil-outside', 'nope.md'), path.join(projectRoot, '.claude', 'readgone.md'));
+    fs.symlinkSync(
+      path.join(base, 'evil-outside', 'nope.md'),
+      path.join(projectRoot, '.claude', 'readgone.md'),
+    );
     const res = await get('/api/file?path=.claude/readgone.md');
     expect(res.status).toBe(403);
   });
@@ -264,8 +333,16 @@ describe('path guard — DANGLING symlink escapes (write-through)', () => {
 
 describe('no-existence oracle', () => {
   it('out-of-scope EXISTING vs NONEXISTENT → byte-identical 403', async () => {
-    const existing = await post('/api/write', { path: path.join(base, 'outside-existing.md'), content: 'x', dryRun: true });
-    const missing = await post('/api/write', { path: path.join(base, 'outside-missing.md'), content: 'x', dryRun: true });
+    const existing = await post('/api/write', {
+      path: path.join(base, 'outside-existing.md'),
+      content: 'x',
+      dryRun: true,
+    });
+    const missing = await post('/api/write', {
+      path: path.join(base, 'outside-missing.md'),
+      content: 'x',
+      dryRun: true,
+    });
     expect(existing.status).toBe(403);
     expect(missing.status).toBe(403);
     expect(await existing.text()).toBe(await missing.text());
@@ -276,7 +353,10 @@ describe('POST /api/delete — trash, never unlink', () => {
   it('dry-run: reports without moving', async () => {
     const res = await post('/api/delete', { path: 'CLAUDE.md', dryRun: true });
     expect(res.status).toBe(200);
-    expect((await res.json()) as Record<string, unknown>).toMatchObject({ willTrash: true, path: 'CLAUDE.md' });
+    expect((await res.json()) as Record<string, unknown>).toMatchObject({
+      willTrash: true,
+      path: 'CLAUDE.md',
+    });
     expect(fs.existsSync(path.join(projectRoot, 'CLAUDE.md'))).toBe(true);
   });
 
@@ -292,7 +372,9 @@ describe('POST /api/delete — trash, never unlink', () => {
     expect(fs.existsSync(trashedTo)).toBe(true); // recoverable
     expect(fs.readFileSync(trashedTo, 'utf-8')).toBe(originalContent);
     // METADATA.json records the original absolute path.
-    const meta = JSON.parse(fs.readFileSync(path.join(path.dirname(trashedTo), 'METADATA.json'), 'utf-8'));
+    const meta = JSON.parse(
+      fs.readFileSync(path.join(path.dirname(trashedTo), 'METADATA.json'), 'utf-8'),
+    );
     expect(meta.originalPath).toBe(fs.realpathSync(projectRoot) + path.sep + 'CLAUDE.md');
   });
 
@@ -302,7 +384,10 @@ describe('POST /api/delete — trash, never unlink', () => {
   });
 
   it('delete out-of-scope → 403 (no unlink)', async () => {
-    const res = await post('/api/delete', { path: path.join(base, 'outside-existing.md'), dryRun: false });
+    const res = await post('/api/delete', {
+      path: path.join(base, 'outside-existing.md'),
+      dryRun: false,
+    });
     expect(res.status).toBe(403);
     expect(fs.existsSync(path.join(base, 'outside-existing.md'))).toBe(true);
   });
@@ -318,7 +403,10 @@ describe('GET /api/file', () => {
   });
 
   it('out-of-scope read → 403; in-scope absent → 404; traversal → 400/403', async () => {
-    expect((await get(`/api/file?path=${encodeURIComponent(path.join(base, 'outside-existing.md'))}`)).status).toBe(403);
+    expect(
+      (await get(`/api/file?path=${encodeURIComponent(path.join(base, 'outside-existing.md'))}`))
+        .status,
+    ).toBe(403);
     expect((await get('/api/file?path=.claude/nope.json')).status).toBe(404);
     expect([400, 403]).toContain((await get('/api/file?path=..%2f..%2fetc%2fpasswd')).status);
   });
@@ -352,7 +440,12 @@ describe('inherited gates (token + CSRF) still cover write routes', () => {
     const res = await app().fetch(
       new Request(`http://${HOST}/api/delete`, {
         method: 'POST',
-        headers: { host: HOST, origin: 'http://evil.com', 'content-type': 'application/json', ...AUTH },
+        headers: {
+          host: HOST,
+          origin: 'http://evil.com',
+          'content-type': 'application/json',
+          ...AUTH,
+        },
         body: JSON.stringify({ path: 'CLAUDE.md' }),
       }),
     );
@@ -380,6 +473,8 @@ describe('malformed request bodies', () => {
 
   it('oversized content → 400', async () => {
     const huge = 'x'.repeat(64 * 1024 + 1);
-    expect((await post('/api/write', { path: 'CLAUDE.md', content: huge, dryRun: true })).status).toBe(400);
+    expect(
+      (await post('/api/write', { path: 'CLAUDE.md', content: huge, dryRun: true })).status,
+    ).toBe(400);
   });
 });

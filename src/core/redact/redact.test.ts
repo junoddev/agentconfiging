@@ -335,7 +335,10 @@ describe('catalogue upgrades (np8.11)', () => {
     for (const FAKE of ['xoxb-1234567890-FAKEFAKE1234', 'xoxp-9876543210-FAKEFAKE5678']) {
       const { text, spans } = redact(`slack ${FAKE}\n`);
       expect(text, FAKE).toBe(`slack ${markFor('slack')}\n`);
-      expect(spans.map((s) => s.id), FAKE).toEqual(['slack']);
+      expect(
+        spans.map((s) => s.id),
+        FAKE,
+      ).toEqual(['slack']);
     }
     // Below the 10-char run bound: not a token.
     expect(redact('xoxb-short').spans).toEqual([]);
@@ -376,8 +379,14 @@ describe('pathological input timing (regression guards, generous CI margins)', (
       'key: ' + 'a+'.repeat(n / 2), // chord-shape check on a huge bare-`key` value
     ];
     for (const input of cases) {
-      expect(elapsed(() => redact(input)), input.slice(0, 16)).toBeLessThan(500);
-      expect(elapsed(() => containsSecrets(input)), input.slice(0, 16)).toBeLessThan(500);
+      expect(
+        elapsed(() => redact(input)),
+        input.slice(0, 16),
+      ).toBeLessThan(500);
+      expect(
+        elapsed(() => containsSecrets(input)),
+        input.slice(0, 16),
+      ).toBeLessThan(500);
     }
   });
 });

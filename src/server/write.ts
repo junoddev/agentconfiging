@@ -83,10 +83,12 @@ export function registerWriteRoutes(app: Hono, config: WriteRoutesConfig): void 
     const { path: reqPath, content, dryRun } = body;
     if (typeof content !== 'string') return jsonError(400, 'bad request');
     if (dryRun !== undefined && typeof dryRun !== 'boolean') return jsonError(400, 'bad request');
-    if (Buffer.byteLength(content, 'utf-8') > CAPS.maxFileBytes) return jsonError(400, 'bad request');
+    if (Buffer.byteLength(content, 'utf-8') > CAPS.maxFileBytes)
+      return jsonError(400, 'bad request');
 
     const resolved = resolveWriteTarget(reqPath, scopes);
-    if (!resolved.ok) return jsonError(resolved.status, resolved.status === 400 ? 'bad request' : 'forbidden');
+    if (!resolved.ok)
+      return jsonError(resolved.status, resolved.status === 400 ? 'bad request' : 'forbidden');
 
     const existing = statFile(resolved.absPath);
     // In-scope path that exists but is NOT a regular file (a dir): refuse
@@ -139,7 +141,8 @@ export function registerWriteRoutes(app: Hono, config: WriteRoutesConfig): void 
     if (dryRun !== undefined && typeof dryRun !== 'boolean') return jsonError(400, 'bad request');
 
     const resolved = resolveWriteTarget(reqPath, scopes);
-    if (!resolved.ok) return jsonError(resolved.status, resolved.status === 400 ? 'bad request' : 'forbidden');
+    if (!resolved.ok)
+      return jsonError(resolved.status, resolved.status === 400 ? 'bad request' : 'forbidden');
 
     // In-scope existence is not secret (the guard already refused everything
     // out-of-scope with an identical 403), so a 404 here is fine.
@@ -167,7 +170,8 @@ export function registerWriteRoutes(app: Hono, config: WriteRoutesConfig): void 
   app.get('/api/file', (c) => {
     const reqPath = new URL(c.req.url).searchParams.get('path');
     const resolved = resolveWriteTarget(reqPath, scopes);
-    if (!resolved.ok) return jsonError(resolved.status, resolved.status === 400 ? 'bad request' : 'forbidden');
+    if (!resolved.ok)
+      return jsonError(resolved.status, resolved.status === 400 ? 'bad request' : 'forbidden');
 
     if (!statFile(resolved.absPath)) return jsonError(404, 'not found');
 

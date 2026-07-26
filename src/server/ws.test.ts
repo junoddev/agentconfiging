@@ -165,9 +165,10 @@ describe('authorizeUpgrade gates (WS bypasses CORS — these are the defense)', 
   });
 
   it('rejects a foreign Host → 403 (DNS-rebinding defense)', () => {
-    expect(
-      authorizeUpgrade(fakeReq({ ...validHeaders(), host: 'evil.example' }), config),
-    ).toEqual({ ok: false, status: 403 });
+    expect(authorizeUpgrade(fakeReq({ ...validHeaders(), host: 'evil.example' }), config)).toEqual({
+      ok: false,
+      status: 403,
+    });
   });
 
   it('rejects a missing Sec-WebSocket-Key → 400', () => {
@@ -223,10 +224,19 @@ describe('WsConnection', () => {
 
 describe('WsConnection RFC 6455 hardening (fail-close on hostile frames)', () => {
   const hostile: Array<[string, Buffer]> = [
-    ['an unmasked client frame (§5.1)', craftFrame({ opcode: 0x1, masked: false, payload: Buffer.from('x') })],
-    ['a frame with an RSV bit set (§5.2)', craftFrame({ opcode: 0x1, rsv: 0b100, payload: Buffer.from('x') })],
+    [
+      'an unmasked client frame (§5.1)',
+      craftFrame({ opcode: 0x1, masked: false, payload: Buffer.from('x') }),
+    ],
+    [
+      'a frame with an RSV bit set (§5.2)',
+      craftFrame({ opcode: 0x1, rsv: 0b100, payload: Buffer.from('x') }),
+    ],
     ['an invalid opcode (§5.2)', craftFrame({ opcode: 0x3, payload: Buffer.from('x') })],
-    ['an unexpected continuation frame (§5.4)', craftFrame({ opcode: 0x0, payload: Buffer.from('x') })],
+    [
+      'an unexpected continuation frame (§5.4)',
+      craftFrame({ opcode: 0x0, payload: Buffer.from('x') }),
+    ],
     ['an oversized control frame (§5.5)', craftFrame({ opcode: 0x9, payload: Buffer.alloc(126) })],
     ['a fragmented control frame (§5.5)', craftFrame({ opcode: 0x9, fin: false })],
   ];
@@ -313,7 +323,12 @@ describe('handleUpgrade', () => {
 
   it('rejects with 503 once the connection cap is reached (no handshake)', () => {
     const hub = new WsHub(1);
-    handleUpgrade(fakeReq(validHeaders()), new FakeSocket().asDuplex(), Buffer.alloc(0), config(hub));
+    handleUpgrade(
+      fakeReq(validHeaders()),
+      new FakeSocket().asDuplex(),
+      Buffer.alloc(0),
+      config(hub),
+    );
     expect(hub.isFull()).toBe(true);
 
     const socket = new FakeSocket();
