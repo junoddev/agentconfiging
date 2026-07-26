@@ -239,3 +239,68 @@
   color: var(--fg-dim);
   word-break: break-all;
 }
+
+/* ── Runtime setup (guided scaffolding) ───────────────────────────────────── */
+
+.runtime-card__detected {
+  margin-left: auto;
+  color: var(--fg-dim);
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+}
+
+.runtime-card__scaffolds {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.runtime-card__scaffolds-label {
+  color: var(--fg-dim);
+}
+
+.runtime-card__files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--fg-dim);
+  word-break: break-all;
+}
+
+.runtime-soon {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: var(--gutter);
+}
+
+.runtime-soon__label {
+  color: var(--fg-dim);
+  letter-spacing: var(--tracking-micro);
+}
+
+.runtime-soon__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px var(--gutter);
+}
+
+.runtime-soon__item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--fg-dim);
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 2px 8px;
+}
+
+.runtime-soon__name {
+  color: var(--fg);
+}

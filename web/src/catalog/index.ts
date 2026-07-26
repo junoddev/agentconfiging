@@ -2,6 +2,17 @@
  *  agentconfig-0zm.4 install flow, 0zm.3 browse: shelves, search, quick-add). */
 export { CatalogCard, type CatalogCardProps } from './CatalogCard.js';
 export { QuickAdd, type QuickAddProps } from './QuickAdd.js';
+export { RuntimeScaffold, type RuntimeScaffoldProps } from './RuntimeScaffold.js';
+export {
+  KNOWN_RUNTIMES,
+  RUNTIME_TEMPLATE_KIND,
+  buildRuntimeSetups,
+  detectedKindSet,
+  partitionRuntimeSetups,
+  runtimeTemplateEntries,
+  type KnownRuntime,
+  type RuntimeSetup,
+} from './runtimeSetup.js';
 export {
   useCatalogFlow,
   type CatalogAction,

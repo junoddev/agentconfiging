@@ -26,8 +26,11 @@ import { EmptyState } from '../components/core/index.js';
 import {
   CatalogCard,
   QuickAdd,
+  RuntimeScaffold,
   EMPTY_FILTER,
   INSTALLABLE_KINDS,
+  RUNTIME_TEMPLATE_KIND,
+  detectedKindSet,
   filterEntries,
   installedByKey,
   installedCount,
@@ -36,7 +39,7 @@ import {
   templateCount,
   type CatalogFilter,
 } from '../catalog/index.js';
-import { useAppState } from '../state/index.js';
+import { useAppState, useReport } from '../state/index.js';
 import './catalog.css';
 
 const bootToken =
@@ -57,6 +60,7 @@ const INSTALLABLE = new Set<string>(INSTALLABLE_KINDS);
 
 export function Catalog() {
   const { currentInstance, refetch } = useAppState();
+  const { report } = useReport();
   const client = useMemo(() => (bootToken ? new ApiClient(bootToken) : undefined), []);
   const instanceId = currentInstance?.id;
 
@@ -105,11 +109,18 @@ export function Catalog() {
   const allKinds = useMemo(() => kindsPresent(entries), [entries]);
   const templates = useMemo(() => templateCount(entries), [entries]);
   const filtered = useMemo(() => filterEntries(entries, filter), [entries, filter]);
-  const shelves = useMemo(() => shelveEntries(filtered), [filtered]);
+  // Runtime setups are rendered by the guided RuntimeScaffold section (below), so
+  // the generic shelf loop drops the 'runtime' shelf to avoid duplication.
+  const shelves = useMemo(
+    () => shelveEntries(filtered).filter((s) => s.id !== 'runtime'),
+    [filtered],
+  );
   const filteredInstalled = useMemo(
     () => installedCount(filtered, installedMap),
     [filtered, installedMap],
   );
+  // Detector kinds from the current report drive the "detected in project" state.
+  const detected = useMemo(() => detectedKindSet(report?.agents ?? []), [report]);
 
   const toggleKind = useCallback((kind: string) => {
     setFilter((f) => ({
@@ -171,17 +182,19 @@ export function Catalog() {
                   onChange={(e) => setFilter((f) => ({ ...f, query: e.target.value }))}
                 />
                 <div className="catalog__chips" role="group" aria-label="filter by kind">
-                  {allKinds.map((kind) => (
-                    <button
-                      key={kind}
-                      type="button"
-                      className="catalog-chip micro-label"
-                      aria-pressed={filter.kinds.includes(kind)}
-                      onClick={() => toggleKind(kind)}
-                    >
-                      {kind}
-                    </button>
-                  ))}
+                  {allKinds
+                    .filter((kind) => kind !== RUNTIME_TEMPLATE_KIND)
+                    .map((kind) => (
+                      <button
+                        key={kind}
+                        type="button"
+                        className="catalog-chip micro-label"
+                        aria-pressed={filter.kinds.includes(kind)}
+                        onClick={() => toggleKind(kind)}
+                      >
+                        {kind}
+                      </button>
+                    ))}
                   {templates > 0 && (
                     <button
                       type="button"
@@ -229,36 +242,47 @@ export function Catalog() {
                 </section>
               )}
 
-              {/* ── Shelves ───────────────────────────────────────────────── */}
-              {shelves.length === 0 ? (
-                <section className="page__section">
-                  <EmptyState instruction="no entries match this filter" />
-                </section>
-              ) : (
-                shelves.map((shelf) => (
-                  <section key={shelf.id} className="page__section catalog__shelf">
-                    <div className="catalog__shelf-head">
-                      <h2 className="catalog__shelf-title">{shelf.title}</h2>
-                      <span className="catalog__shelf-count micro-label">
-                        {shelf.entries.length}
-                      </span>
-                    </div>
-                    <p className="catalog__shelf-note micro-label">{shelf.note}</p>
-                    <ul className="catalog__list">
-                      {shelf.entries.map((entry) => (
-                        <CatalogCard
-                          key={entry.key}
-                          entry={entry}
-                          installed={installedMap.get(entry.key)}
-                          client={client}
-                          instance={instanceId}
-                          onChanged={onChanged}
-                        />
-                      ))}
-                    </ul>
-                  </section>
-                ))
-              )}
+              {/* ── Artifact shelves ──────────────────────────────────────── */}
+              {shelves.length === 0
+                ? filterActive && (
+                    <section className="page__section">
+                      <EmptyState instruction="no artifacts match this filter" />
+                    </section>
+                  )
+                : shelves.map((shelf) => (
+                    <section key={shelf.id} className="page__section catalog__shelf">
+                      <div className="catalog__shelf-head">
+                        <h2 className="catalog__shelf-title">{shelf.title}</h2>
+                        <span className="catalog__shelf-count micro-label">
+                          {shelf.entries.length}
+                        </span>
+                      </div>
+                      <p className="catalog__shelf-note micro-label">{shelf.note}</p>
+                      <ul className="catalog__list">
+                        {shelf.entries.map((entry) => (
+                          <CatalogCard
+                            key={entry.key}
+                            entry={entry}
+                            installed={installedMap.get(entry.key)}
+                            client={client}
+                            instance={instanceId}
+                            onChanged={onChanged}
+                          />
+                        ))}
+                      </ul>
+                    </section>
+                  ))}
+
+              {/* ── Runtime setup (guided scaffolding; ignores the artifact
+                  search/filter — it is a small fixed set browsed as a picker) ── */}
+              <RuntimeScaffold
+                entries={entries}
+                installed={installedMap}
+                detected={detected}
+                client={client}
+                instance={instanceId}
+                onChanged={onChanged}
+              />
             </>
           )}
         </>
