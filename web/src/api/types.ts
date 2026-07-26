@@ -85,16 +85,75 @@ export interface InstancesResponse {
   instances: InstanceSummary[];
 }
 
+/**
+ * One discovery hit from POST /api/instances/scan (src/core/discovery/
+ * discovery.ts, `DiscoveryHit`). `root` is user/filesystem data — render as a
+ * text node only, never HTML.
+ */
+export interface ScanHit {
+  /** Absolute path of the directory that carries markers. */
+  root: string;
+  /** Marker entry names found at this root (e.g. 'CLAUDE.md'), codepoint-sorted. */
+  markers: string[];
+  /** Runtime ids the markers attribute to (detector ids), codepoint-sorted. */
+  runtimes: string[];
+}
+
+/** Scan walk statistics (src/core/discovery/discovery.ts, `DiscoveryStats`). */
+export interface ScanStats {
+  dirsVisited: number;
+  truncated: boolean;
+  skipped: number;
+}
+
+/**
+ * POST /api/instances/scan payload — OFFERS discovery hits; it never auto-adds
+ * (adding still goes through POST /api/instances). See src/server/app.ts.
+ */
+export interface ScanResponse {
+  hits: ScanHit[];
+  stats: ScanStats;
+}
+
+/** POST /api/instances/:id/unload payload. */
+export interface UnloadResponse {
+  id: string;
+  loaded: boolean;
+}
+
+/** DELETE /api/instances/:id payload. */
+export interface RemoveResponse {
+  id: string;
+  removed: boolean;
+}
+
 /** GET /api/health payload. */
 export interface HealthResponse {
   ok: boolean;
   version: string;
 }
 
-/** GET /api/file payload (src/server/write.ts). `content` is RAW — text only. */
+/**
+ * One `[REDACTED:*]` mark's offsets over a served file's `content`
+ * (src/core/redact.ts `RedactionSpan`). `[start, end)` index into the REDACTED
+ * text; `id` names the catalogue pattern that fired (e.g. 'openai', 'github').
+ */
+export interface RedactionSpan {
+  start: number;
+  end: number;
+  id: string;
+}
+
+/**
+ * GET /api/file payload (src/server/write.ts). `content` is the REDACTED text —
+ * secrets are replaced server-side by visible `[REDACTED:*]` marks BEFORE the
+ * response is serialized, so a raw secret never crosses the wire (SPEC §3).
+ * `spans` locates each mark within `content` for styling. Render as text only.
+ */
 export interface FileContent {
   path: string;
   content: string;
+  spans: RedactionSpan[];
   pathScope: string;
 }
 

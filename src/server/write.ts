@@ -15,10 +15,15 @@
  *      dryRun:true  → {willTrash, path, pathScope, trashTarget}   NO disk touch
  *      dryRun:false → moves the file to trash, then {trashed, path, pathScope,
  *                     originalPath, trashedTo}
- *  - GET  /api/file?path=   → {path, content, pathScope}
- *      Reads a single IN-SCOPE KNOWN config file for the editor. Returns RAW
- *      content (redaction is a render concern the UI applies); only ever serves
- *      files that pass the same path guard.
+ *  - GET  /api/file?path=   → {path, content, spans, pathScope}
+ *      Reads a single IN-SCOPE KNOWN config file for display. `content` is the
+ *      REDACTED text (secrets replaced by visible `[REDACTED:*]` marks via the
+ *      hardened src/core/redact catalogue); `spans` are the mark offsets over
+ *      that text so the UI can style each mark. The RAW secret-bearing content
+ *      NEVER crosses the wire — redaction happens here, server-side, so even the
+ *      local UI never receives a secret in the clear (SPEC §3). A future
+ *      authenticated "reveal" path is out of scope. Only ever serves files that
+ *      pass the same path guard.
  *
  * ERROR DISCIPLINE (constant JSON bodies, no stack traces, no path echo that
  * could confirm out-of-scope existence):
@@ -31,7 +36,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Hono } from 'hono';
-import { CAPS } from '../core/index.js';
+import { CAPS, redact } from '../core/index.js';
 import { unifiedDiff } from './diff.js';
 import { resolveWriteTarget, type WriteScope } from './pathguard.js';
 import { trashFile } from './trash.js';
@@ -41,7 +46,7 @@ export interface WriteRoutesConfig {
   trashDir: string;
 }
 
-function jsonError(status: 400 | 403 | 404 | 500, message: string): Response {
+function jsonError(status: 400 | 403 | 404 | 413 | 500, message: string): Response {
   return new Response(JSON.stringify({ error: message }), {
     status,
     headers: { 'content-type': 'application/json' },
@@ -173,7 +178,11 @@ export function registerWriteRoutes(app: Hono, config: WriteRoutesConfig): void 
     if (!resolved.ok)
       return jsonError(resolved.status, resolved.status === 400 ? 'bad request' : 'forbidden');
 
-    if (!statFile(resolved.absPath)) return jsonError(404, 'not found');
+    const st = statFile(resolved.absPath);
+    if (!st) return jsonError(404, 'not found');
+    // Byte cap parity with the write path: don't read + redact an arbitrarily
+    // large in-scope file into memory per request.
+    if (st.size > CAPS.maxFileBytes) return jsonError(413, 'file too large');
 
     // O_NOFOLLOW backstop: refuse a symlinked leaf (TOCTOU swap after the
     // guard) rather than read through it to an out-of-scope target.
@@ -187,8 +196,17 @@ export function registerWriteRoutes(app: Hono, config: WriteRoutesConfig): void 
       throw err;
     }
     try {
-      const content = fs.readFileSync(fd, 'utf-8');
-      return c.json({ path: resolved.relPath, content, pathScope: resolved.scope.kind });
+      const raw = fs.readFileSync(fd, 'utf-8');
+      // Redact BEFORE serializing: the raw secret must never leave the process,
+      // even to the same-machine UI. `content` carries the marked text; `spans`
+      // let the renderer highlight each `[REDACTED:*]` mark.
+      const { text, spans } = redact(raw);
+      return c.json({
+        path: resolved.relPath,
+        content: text,
+        spans,
+        pathScope: resolved.scope.kind,
+      });
     } finally {
       fs.closeSync(fd);
     }

@@ -66,6 +66,83 @@ describe('ApiClient URL + header construction', () => {
   });
 });
 
+describe('ApiClient instance mutations', () => {
+  it('POSTs the add-instance body with the bearer token', async () => {
+    const fetchImpl = stubFetch({ id: '1', name: 'proj', root: '/p', markers: [], loaded: false });
+    const client = new ApiClient('tok', { fetchImpl });
+    const summary = await client.addInstance('/p');
+    const [url, init] = firstCall(fetchImpl);
+    expect(url).toBe('/api/instances');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe(JSON.stringify({ path: '/p' }));
+    expect(init.headers).toMatchObject({
+      Authorization: 'Bearer tok',
+      'content-type': 'application/json',
+    });
+    expect(summary).toMatchObject({ id: '1', root: '/p' });
+  });
+
+  it('POSTs the scan body and returns hits + stats', async () => {
+    const body = {
+      hits: [{ root: '/p/a', markers: ['CLAUDE.md'], runtimes: ['claude-code'] }],
+      stats: { dirsVisited: 12, truncated: false, skipped: 3 },
+    };
+    const fetchImpl = stubFetch(body);
+    const client = new ApiClient('tok', { fetchImpl });
+    const res = await client.scanFolder('/p');
+    const [url, init] = firstCall(fetchImpl);
+    expect(url).toBe('/api/instances/scan');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe(JSON.stringify({ path: '/p' }));
+    expect(res).toEqual(body);
+  });
+
+  it('POSTs unload to the encoded instance id (no body)', async () => {
+    const fetchImpl = stubFetch({ id: 'a/b', loaded: false });
+    const client = new ApiClient('tok', { fetchImpl });
+    await client.unloadInstance('a/b');
+    const [url, init] = firstCall(fetchImpl);
+    expect(url).toBe('/api/instances/a%2Fb/unload');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBeUndefined();
+    expect(init.headers).toEqual({ Authorization: 'Bearer tok' });
+  });
+
+  it('DELETEs the encoded instance id', async () => {
+    const fetchImpl = stubFetch({ id: 'x', removed: true });
+    const client = new ApiClient('tok', { fetchImpl });
+    const res = await client.removeInstance('x');
+    const [url, init] = firstCall(fetchImpl);
+    expect(url).toBe('/api/instances/x');
+    expect(init.method).toBe('DELETE');
+    expect(res).toEqual({ id: 'x', removed: true });
+  });
+
+  it('maps a 400 add to a badrequest ApiError carrying the server message', async () => {
+    const fetchImpl = stubFetch({ error: 'not a directory' }, 400);
+    const client = new ApiClient('tok', { fetchImpl });
+    const err = await client.addInstance('/nope').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({ status: 400, kind: 'badrequest', message: 'not a directory' });
+  });
+
+  it('falls back to HTTP <status> when the error body lacks a message', async () => {
+    const fetchImpl = stubFetch({}, 500);
+    const client = new ApiClient('tok', { fetchImpl });
+    const err = await client.scanFolder('/p').catch((e: unknown) => e);
+    expect(err).toMatchObject({ status: 500, kind: 'server', message: 'HTTP 500' });
+  });
+
+  it('maps a thrown fetch during a mutation to a network ApiError', async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new Error('down');
+    }) as unknown as typeof fetch;
+    const client = new ApiClient('tok', { fetchImpl });
+    const err = await client.removeInstance('x').catch((e: unknown) => e);
+    expect(err).toMatchObject({ status: 0, kind: 'network' });
+  });
+});
+
 describe('ApiClient error mapping', () => {
   it('maps 401 to an unauthorized ApiError', async () => {
     const client = new ApiClient('tok', { fetchImpl: stubFetch({ error: 'unauthorized' }, 401) });

@@ -1,13 +1,157 @@
-import { EmptyState } from '../components/core/index.js';
+import { useMemo, useState, type ReactNode } from 'react';
+import type { Severity } from '../api/types.js';
+import { EmptyState, FindingRow, severityClass } from '../components/core/index.js';
+import { routeHash } from '../routes.js';
+import { useReport } from '../state/index.js';
+import {
+  SEVERITY_ORDER,
+  countBySeverity,
+  filterFindings,
+  hasApplicableFix,
+  rowSeverity,
+  severityCountLabel,
+} from './findings/logic.js';
+import './findings.css';
 
-/** STUB — the findings list (rail `03 FINDINGS`) lands in bead c6p.5, which
- *  replaces this file. Consumes data via `useAppState()`. */
+/**
+ * Findings page (rail `03 FINDINGS`, route `#/findings`, bead c6p.5). Renders the
+ * content-free report findings — already severity-sorted server-side, order
+ * preserved — as timetable FindingRows, with per-severity filter chips and the
+ * APPLY affordance in STUB form.
+ *
+ * APPLY is a stub by design: clicking [APPLY] does NOT write. The finding never
+ * carries a patch body (stripped server-side; the client only sees `hasFix`), so
+ * the button reveals an honest "diff preview · E5" note instead of faking a
+ * write. The real flow (dry-run diff → commit via /api/write) is bead E5.
+ *
+ * All finding strings (title / detail / suggestion) come from adversarially
+ * parsed config and are rendered as TEXT NODES only — never as HTML.
+ */
 export function Findings() {
+  const { report, loading, error } = useReport();
+
+  // Which severity bands are visible. All on by default; a chip toggles its band.
+  const [active, setActive] = useState<Set<Severity>>(() => new Set(SEVERITY_ORDER));
+  // The finding whose [APPLY] is currently expanded to its E5 stub note (or null).
+  const [pendingApply, setPendingApply] = useState<string | null>(null);
+
+  const findings = report?.findings ?? [];
+
+  // Counts are over the FULL set so the chips report totals, not the filtered view.
+  const counts = useMemo(() => countBySeverity(findings), [findings]);
+  const visible = useMemo(() => filterFindings(findings, active), [findings, active]);
+  // Stable 1-based timetable index per finding id — filtering never renumbers.
+  const indexById = useMemo(() => {
+    const map = new Map<string, number>();
+    findings.forEach((f, i) => map.set(f.id, i + 1));
+    return map;
+  }, [findings]);
+
+  function toggle(sev: Severity) {
+    setActive((prev) => {
+      const next = new Set(prev);
+      if (next.has(sev)) next.delete(sev);
+      else next.add(sev);
+      return next;
+    });
+  }
+
+  // Fetch error before any report is available (unauthorized is handled by the shell).
+  if (error && !report) {
+    return (
+      <Frame>
+        <EmptyState instruction={error.message} />
+      </Frame>
+    );
+  }
+
+  // First load, before the initial report has arrived. Live updates flow through
+  // the hook, so this resolves on its own once the report lands.
+  if (!report) {
+    return (
+      <Frame>
+        <EmptyState
+          title="ACQUIRING"
+          instruction={loading ? 'scanning config …' : 'awaiting report'}
+        />
+      </Frame>
+    );
+  }
+
+  // Clean config — the affirmative empty state (§7 voice).
+  if (findings.length === 0) {
+    return (
+      <Frame>
+        <EmptyState instruction="clean config · nothing to fix" />
+      </Frame>
+    );
+  }
+
+  return (
+    <Frame>
+      <div className="findings__filters" role="group" aria-label="filter by severity">
+        {SEVERITY_ORDER.map((sev) => {
+          const on = active.has(sev);
+          return (
+            <button
+              key={sev}
+              type="button"
+              className="findings__chip"
+              aria-pressed={on}
+              onClick={() => toggle(sev)}
+            >
+              <span className={`sev ${severityClass(rowSeverity(sev))}`} aria-hidden="true" />
+              <span className="mono-data">{severityCountLabel(sev, counts[sev])}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {visible.length === 0 ? (
+        <EmptyState instruction="no findings match the active filters" />
+      ) : (
+        <ol className="findings__list">
+          {visible.map((f) => (
+            <li key={f.id} className="findings__item">
+              <FindingRow
+                index={indexById.get(f.id) ?? 0}
+                severity={rowSeverity(f.severity)}
+                title={f.title}
+                fix={f.suggestion}
+                onApply={
+                  hasApplicableFix(f)
+                    ? () => setPendingApply((cur) => (cur === f.id ? null : f.id))
+                    : undefined
+                }
+              />
+              <div className="findings__meta">
+                {/* Group the finding under its agent (route text — never HTML). */}
+                <a
+                  className="findings__agent mono-data"
+                  href={routeHash({ name: 'agent', kind: f.agent })}
+                >
+                  {f.agent}
+                </a>
+                {f.detail !== '' && <span className="findings__detail">{f.detail}</span>}
+              </div>
+              {pendingApply === f.id && (
+                <p className="findings__apply-stub mono-data" role="status">
+                  APPLY → diff preview · lands in E5
+                </p>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+    </Frame>
+  );
+}
+
+/** Shared page chassis so every state renders in the same main/section shell. */
+function Frame({ children }: { children: ReactNode }) {
   return (
     <main className="layout-main page">
-      <section className="page__section">
-        <EmptyState instruction="findings · page pending (c6p.5)" />
-      </section>
+      <section className="page__section">{children}</section>
     </main>
   );
 }

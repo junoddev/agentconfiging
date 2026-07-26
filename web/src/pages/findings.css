@@ -1,0 +1,76 @@
+/* Findings page (#/findings, bead c6p.5). Owns only its own selectors; the
+   FindingRow / severity-block chassis lives in components.css. Signal Grid
+   tokens only — no new colors, no motion. */
+
+/* ── Severity filter chips: toggle a band on/off; each shows its live count. ── */
+.findings__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gutter);
+  padding: 8px 0 var(--gutter);
+}
+
+.findings__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: transparent;
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.findings__chip[aria-pressed='false'] {
+  color: var(--fg-dim);
+}
+
+/* Dim the severity square when its band is toggled off. */
+.findings__chip[aria-pressed='false'] .sev {
+  opacity: 0.3;
+}
+
+/* ── Finding list: one FindingRow per entry plus a meta/agent line. ────────── */
+.findings__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.findings__item {
+  padding: 0;
+}
+
+/* Agent link + detail, sitting under the FindingRow it annotates. */
+.findings__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--gutter);
+  padding: 2px 0 8px;
+  color: var(--fg-dim);
+}
+
+.findings__agent {
+  color: var(--signal);
+  text-decoration: none;
+}
+
+.findings__agent:hover {
+  text-decoration: underline;
+}
+
+.findings__detail {
+  font-family: var(--font-sans);
+  font-size: var(--size-body);
+  line-height: var(--leading-body);
+}
+
+/* APPLY stub: the affordance fires, but the write flow (dry-run diff → commit
+   via /api/write) is bead E5. This note is the honest placeholder. */
+.findings__apply-stub {
+  padding: 4px 8px 12px;
+  color: var(--warn);
+}

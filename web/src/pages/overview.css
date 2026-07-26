@@ -1,0 +1,69 @@
+/* Overview dashboard (rail 01 SIGNAL, docs/DESIGN.md §5–§7). Page-local styles
+   only; the shared chassis lives in app.css / styles/. Tokens only — no raw
+   hex, no shadows, no gradients. */
+
+/* Top stat row: four figures on the 12-column page grid, hairline column rules
+   between them. Reflows to two-up, then one-up, on narrow viewports. */
+.overview__stats {
+  row-gap: var(--gutter);
+}
+
+.overview__stat {
+  grid-column: span 3;
+}
+
+@media (max-width: 900px) {
+  .overview__stat {
+    grid-column: span 6;
+  }
+  /* Column rules read as row dividers once wrapped — drop them. */
+  .overview__stat.col-rule {
+    border-left: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .overview__stat {
+    grid-column: span 12;
+  }
+}
+
+/* Section captions above the agent strips and findings summary. */
+.overview__heading {
+  margin-bottom: 8px;
+}
+
+/* Findings summary header: caption · terse severity line · link to the full
+   findings page, pushed to the trailing edge. */
+.overview__findings-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gutter);
+  min-height: var(--row-h);
+}
+
+.overview__summary {
+  color: var(--fg-dim);
+}
+
+.overview__link {
+  margin-left: auto;
+  color: var(--signal);
+  text-decoration: none;
+}
+
+/* Terse status text (loading / clean) in place of any skeleton or spinner. */
+.overview__acquiring {
+  padding: var(--gutter) 0;
+}
+
+/* Error panel — a dead-signal state, not a crash. */
+.overview__error {
+  padding: calc(var(--gutter) * 2) var(--gutter);
+  text-align: center;
+}
+
+.overview__error-msg {
+  margin-top: var(--gutter);
+  color: var(--fg-dim);
+}

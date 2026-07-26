@@ -10,6 +10,7 @@ export type {
   InstanceSummary,
   InstancesResponse,
   ManifestStats,
+  RedactionSpan,
   Report,
   ReportFinding,
   Severity,

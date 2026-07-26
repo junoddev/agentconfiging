@@ -1,0 +1,101 @@
+/* Artifact browser (#/artifacts, bead c6p.4). Chassis only — tokens, hairlines,
+   mono. Nothing animates here; the config content is adversarial data rendered
+   as text nodes, never markup. */
+
+.artifact {
+  display: grid;
+  grid-template-columns: minmax(200px, 280px) minmax(0, 1fr);
+  gap: var(--gutter);
+  align-items: start;
+}
+
+/* Narrow viewports: stack the list above the detail. */
+@media (max-width: 720px) {
+  .artifact {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.artifact__count {
+  margin-left: 8px;
+  color: var(--fg-dim);
+}
+
+/* ── File list: a column of FileChips ──────────────────────────────────── */
+
+.artifact__list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.artifact__list .chip {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Selected chip: fill, matching the primary-button treatment. The wrapping
+   span carries aria-current; the chip inside it takes the fill. */
+.artifact__list [aria-current] .chip {
+  background: var(--fg);
+  border-color: var(--fg);
+  color: var(--bg);
+}
+
+/* ── Detail panel ──────────────────────────────────────────────────────── */
+
+.artifact__detail {
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: var(--gutter);
+  min-height: 200px;
+}
+
+.artifact__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px var(--gutter);
+  padding-bottom: 8px;
+  margin-bottom: var(--gutter);
+  border-bottom: var(--hairline-w) solid var(--hairline);
+}
+
+.artifact__scope {
+  color: var(--fg-dim);
+}
+
+.artifact__views {
+  display: flex;
+  gap: 8px;
+  margin-bottom: var(--gutter);
+}
+
+/* Redacted source / parsed structural view: mono, wrapping, own scroll. */
+.artifact__pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
+/* [REDACTED:*] mark — a distinct token treatment on a TEXT node. Override the
+   browser default <mark> yellow with theme tokens. */
+.artifact__redact {
+  background: none;
+  color: var(--warn);
+  font-weight: 600;
+  border: var(--hairline-w) solid var(--warn);
+  border-radius: var(--radius);
+  padding: 0 2px;
+}
+
+.artifact__note {
+  margin-top: var(--gutter);
+  color: var(--fg-dim);
+}

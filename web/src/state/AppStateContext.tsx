@@ -27,7 +27,7 @@ import {
 } from 'react';
 import { ApiClient, ApiError } from '../api/client.js';
 import { bootstrapToken } from '../api/token.js';
-import type { InstanceSummary, Report } from '../api/types.js';
+import type { FileContent, InstanceSummary, Report } from '../api/types.js';
 import { WsClient, type WsState } from '../ws/client.js';
 import {
   appReducer,
@@ -47,6 +47,9 @@ export interface AppStateValue extends AppState {
   refetch: () => void;
   /** Dismiss a non-fatal error. */
   clearError: () => void;
+  /** Fetch one in-scope config file's REDACTED content for the artifact browser
+   *  (delegates to the token-bearing client). Rejects when unauthenticated. */
+  getFile: (path: string) => Promise<FileContent>;
 }
 
 /**
@@ -155,6 +158,16 @@ export function AppStateProvider({ children, deps }: AppStateProviderProps) {
 
   const clearError = useCallback(() => dispatch({ type: 'error:clear' }), []);
 
+  const getFile = useCallback(
+    (filePath: string): Promise<FileContent> => {
+      if (!client) {
+        return Promise.reject(new ApiError(401, 'unauthorized', 'no session'));
+      }
+      return client.getFile(filePath);
+    },
+    [client],
+  );
+
   // Boot: no deps ⇒ unauthorized; otherwise load instances + default report and
   // open the socket. Cleanup closes the socket so no handle leaks.
   useEffect(() => {
@@ -209,8 +222,9 @@ export function AppStateProvider({ children, deps }: AppStateProviderProps) {
       selectInstance,
       refetch,
       clearError,
+      getFile,
     }),
-    [state, selectInstance, refetch, clearError],
+    [state, selectInstance, refetch, clearError, getFile],
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

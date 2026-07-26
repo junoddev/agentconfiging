@@ -402,6 +402,12 @@ describe('GET /api/file', () => {
     expect(json['pathScope']).toBe('project');
   });
 
+  it('rejects an oversized in-scope file with 413 (byte-cap parity with write)', async () => {
+    fs.writeFileSync(path.join(projectRoot, '.claude', 'big.json'), 'x'.repeat(64 * 1024 + 10));
+    const res = await get('/api/file?path=.claude/big.json');
+    expect(res.status).toBe(413);
+  });
+
   it('out-of-scope read → 403; in-scope absent → 404; traversal → 400/403', async () => {
     expect(
       (await get(`/api/file?path=${encodeURIComponent(path.join(base, 'outside-existing.md'))}`))
@@ -409,6 +415,38 @@ describe('GET /api/file', () => {
     ).toBe(403);
     expect((await get('/api/file?path=.claude/nope.json')).status).toBe(404);
     expect([400, 403]).toContain((await get('/api/file?path=..%2f..%2fetc%2fpasswd')).status);
+  });
+
+  it('SECURITY: secrets are redacted server-side — raw secret never crosses the wire', async () => {
+    // A settings.local.json with FAKE secrets (mirrors the claude-rich fixture).
+    const openaiKey = 'sk-FAKE00000000000000000000000000000000FAKE';
+    const githubToken = 'ghp_FAKE0000000000000000000000000000FAKE';
+    fs.writeFileSync(
+      path.join(projectRoot, '.claude', 'settings.local.json'),
+      JSON.stringify({ env: { OPENAI_API_KEY: openaiKey, GITHUB_TOKEN: githubToken } }, null, 2),
+    );
+
+    const res = await get('/api/file?path=.claude/settings.local.json');
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { content: string; spans: unknown[] };
+
+    // Visible [REDACTED:*] marks are present — one per secret value. (Secret-
+    // NAMED JSON keys make the kv_secret catch-all fire, so the mark id is
+    // kv_secret rather than the token-specific ids; the exact id is irrelevant
+    // to the security property.)
+    expect(json.content).toContain('[REDACTED:');
+    expect(json.content.match(/\[REDACTED:/g)).toHaveLength(2);
+
+    // The critical property: neither raw secret appears ANYWHERE in the
+    // serialized response — no secret crosses the wire, even to the local UI.
+    const wire = JSON.stringify(json);
+    expect(wire).not.toContain(openaiKey);
+    expect(wire).not.toContain(githubToken);
+    expect(wire).not.toContain('FAKE');
+
+    // One mark span per redaction, over the returned (redacted) text.
+    expect(Array.isArray(json.spans)).toBe(true);
+    expect(json.spans.length).toBe(2);
   });
 });
 

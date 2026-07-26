@@ -10,12 +10,22 @@
  * blank page.
  */
 
-import type { FileContent, HealthResponse, InstancesResponse, Report } from './types.js';
+import type {
+  FileContent,
+  HealthResponse,
+  InstanceSummary,
+  InstancesResponse,
+  RemoveResponse,
+  Report,
+  ScanResponse,
+  UnloadResponse,
+} from './types.js';
 
 export type ApiErrorKind =
   | 'unauthorized' // 401 — token missing or wrong
   | 'forbidden' // 403 — Host/Origin gate
   | 'notfound' // 404 — unknown instance / absent file
+  | 'badrequest' // 400 — validation (e.g. add/scan path is not a directory)
   | 'network' // fetch itself threw (server down, offline)
   | 'server' // 5xx
   | 'unknown';
@@ -36,8 +46,27 @@ function kindForStatus(status: number): ApiErrorKind {
   if (status === 401) return 'unauthorized';
   if (status === 403) return 'forbidden';
   if (status === 404) return 'notfound';
+  if (status === 400) return 'badrequest';
   if (status >= 500) return 'server';
   return 'unknown';
+}
+
+/**
+ * Pull the server's terse `{ error }` message from a failed response so callers
+ * (e.g. the instance-add flow) can surface it inline. Falls back to `HTTP <n>`
+ * when the body is absent or not the expected shape.
+ */
+async function errorMessage(res: Response): Promise<string> {
+  try {
+    const body: unknown = await res.json();
+    if (body !== null && typeof body === 'object') {
+      const { error } = body as { error?: unknown };
+      if (typeof error === 'string' && error !== '') return error;
+    }
+  } catch {
+    // body was not JSON — fall through to the coarse status message.
+  }
+  return `HTTP ${res.status}`;
 }
 
 export interface ApiClientOptions {
@@ -75,9 +104,39 @@ export class ApiClient {
     return this.#get<HealthResponse>('/api/health');
   }
 
-  /** GET a single in-scope config file's RAW content (render as text only). */
+  /** GET a single in-scope config file's REDACTED content + mark spans (secrets
+   *  are stripped server-side; render as text only). */
   getFile(path: string): Promise<FileContent> {
     return this.#get<FileContent>(`/api/file?path=${encodeURIComponent(path)}`);
+  }
+
+  /**
+   * ADD FLOW — the one place a new root enters the workspace. The server
+   * realpath-guards + requires an existing directory; a bad path is a 400
+   * (`kind: 'badrequest'`) whose `message` is the server's terse reason. Added
+   * lazily — no scan until the instance is first opened.
+   */
+  addInstance(path: string): Promise<InstanceSummary> {
+    return this.#send<InstanceSummary>('/api/instances', 'POST', { path });
+  }
+
+  /**
+   * RECURSIVE SCAN — depth/dir-bounded discovery under `path`. Returns hits to
+   * OFFER (each add still goes through {@link addInstance}); it never auto-adds.
+   * A bad scan root is a 400.
+   */
+  scanFolder(path: string): Promise<ScanResponse> {
+    return this.#send<ScanResponse>('/api/instances/scan', 'POST', { path });
+  }
+
+  /** Free a loaded instance's engine store (●→○); the next report re-scans it. */
+  unloadInstance(id: string): Promise<UnloadResponse> {
+    return this.#send<UnloadResponse>(`/api/instances/${encodeURIComponent(id)}/unload`, 'POST');
+  }
+
+  /** Drop an instance from the workspace entirely (mildly destructive). */
+  removeInstance(id: string): Promise<RemoveResponse> {
+    return this.#send<RemoveResponse>(`/api/instances/${encodeURIComponent(id)}`, 'DELETE');
   }
 
   async #get<T>(path: string): Promise<T> {
@@ -91,6 +150,27 @@ export class ApiClient {
     }
     if (!res.ok) {
       throw new ApiError(res.status, kindForStatus(res.status), `HTTP ${res.status}`);
+    }
+    return (await res.json()) as T;
+  }
+
+  /** Bearer-authed mutation (POST/DELETE) with an optional JSON body. Surfaces
+   *  the server's terse `{ error }` reason on failure (see {@link errorMessage}). */
+  async #send<T>(path: string, method: 'POST' | 'DELETE', body?: unknown): Promise<T> {
+    const headers: Record<string, string> = { Authorization: `Bearer ${this.#token}` };
+    const init: RequestInit = { method, headers };
+    if (body !== undefined) {
+      headers['content-type'] = 'application/json';
+      init.body = JSON.stringify(body);
+    }
+    let res: Response;
+    try {
+      res = await this.#fetch(`${this.#baseUrl}${path}`, init);
+    } catch (err) {
+      throw new ApiError(0, 'network', `request failed: ${String(err)}`);
+    }
+    if (!res.ok) {
+      throw new ApiError(res.status, kindForStatus(res.status), await errorMessage(res));
     }
     return (await res.json()) as T;
   }
