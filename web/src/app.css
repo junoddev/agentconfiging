@@ -41,19 +41,6 @@
   padding: var(--gutter);
 }
 
-/* Bracket button: rectangular, 2px radius, mono all-caps, hairline outline. */
-.btn-outline {
-  font-family: var(--font-mono);
-  font-size: var(--size-micro);
-  letter-spacing: var(--tracking-micro);
-  text-transform: uppercase;
-  background: none;
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: 4px 8px;
-  cursor: pointer;
-}
-
 .rail__item {
   display: block;
   padding: 8px var(--gutter);
@@ -79,21 +66,21 @@
   color: var(--signal);
 }
 
-/* Severity block: 8px colored square (DESIGN.md §6 FindingRow). */
-.sev {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
+/* Severity block styles (.sev) moved to components/core/components.css —
+   FindingRow owns them now. */
+
+/* One demo block in the COMPONENTS gallery section. */
+.gallery__demo {
+  margin-top: var(--gutter);
 }
 
-.sev--ok {
-  background: var(--signal);
+.gallery__demo > .micro-label:first-child {
+  margin-bottom: 8px;
 }
 
-.sev--warn {
-  background: var(--warn);
-}
-
-.sev--error {
-  background: var(--red);
+.gallery__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }

@@ -1,5 +1,16 @@
 import { useEffect, useState } from 'react';
 import {
+  Button,
+  DiffPanel,
+  EmptyState,
+  FileChip,
+  FindingRow,
+  SignalStrip,
+  StatBlock,
+  Table,
+  type DiffHunk,
+} from './components/core/index.js';
+import {
   LiveDot,
   SweepOverlay,
   VuMeter,
@@ -20,6 +31,20 @@ const FAKE_SOURCES_ALT: ConfigSource[] = [
   { path: '.codex/config.toml', size: 244, hash: 'cc33dd44' },
 ];
 
+/** Fake parsed diff for the DiffPanel proof — the real model comes from the core. */
+const FAKE_DIFF: DiffHunk[] = [
+  {
+    header: '@@ -1,3 +1,4 @@',
+    lines: [
+      { kind: 'ctx', text: 'node_modules/' },
+      { kind: 'ctx', text: 'dist/' },
+      { kind: 'del', text: '.env' },
+      { kind: 'add', text: '.env*' },
+      { kind: 'add', text: '.claude/settings.local.json' },
+    ],
+  },
+];
+
 /** Foundation proof page — exercises the Signal Grid tokens, type, and grid
  *  primitives. Seed of the component gallery (built out in a later bead). */
 export function App() {
@@ -38,13 +63,10 @@ export function App() {
         <span className="wordmark">AGENTCONFIG</span>
         <span className="mono-data topbar__path">~/projects/agentconfig</span>
         <LiveDot connected={connected} />
-        <button
-          type="button"
-          className="btn-outline"
+        <Button
+          label={theme === 'paper' ? 'ink' : 'paper'}
           onClick={() => setTheme(theme === 'paper' ? 'ink' : 'paper')}
-        >
-          [{theme === 'paper' ? 'INK' : 'PAPER'}]
-        </button>
+        />
       </header>
 
       <nav className="rail" aria-label="Sections">
@@ -56,6 +78,9 @@ export function App() {
         </a>
         <a className="micro-label rail__item" href="#findings">
           03 FINDINGS
+        </a>
+        <a className="micro-label rail__item" href="#components">
+          04 COMPONENTS
         </a>
       </nav>
 
@@ -98,23 +123,12 @@ export function App() {
             <div className="row" style={{ gap: 'var(--gutter)', borderBottom: 0 }}>
               <VuMeter level={0.2} label="cache efficiency" />
               <VuMeter level={0} label="token budget" />
-              <button
-                type="button"
-                className="btn-outline"
-                onClick={() => setPulseKey((k) => k + 1)}
-              >
-                [FILE EVENT]
-              </button>
-              <button
-                type="button"
-                className="btn-outline"
-                onClick={() => setSweepKey((k) => k + 1)}
-              >
-                [RESCAN]
-              </button>
-              <button type="button" className="btn-outline" onClick={() => setConnected((c) => !c)}>
-                [{connected ? 'DISCONNECT' : 'CONNECT'}]
-              </button>
+              <Button label="file event" onClick={() => setPulseKey((k) => k + 1)} />
+              <Button label="rescan" onClick={() => setSweepKey((k) => k + 1)} />
+              <Button
+                label={connected ? 'disconnect' : 'connect'}
+                onClick={() => setConnected((c) => !c)}
+              />
             </div>
             <SweepOverlay sweepKey={sweepKey} />
           </div>
@@ -124,45 +138,134 @@ export function App() {
 
         <section className="gallery__section" id="findings">
           <h2 className="micro-label">FINDINGS</h2>
-          <table className="table-hairline mono-data">
-            <thead>
-              <tr>
-                <th className="micro-label">NO</th>
-                <th className="micro-label">SEV</th>
-                <th className="micro-label">FILE</th>
-                <th className="micro-label">FINDING</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>01</td>
-                <td>
-                  <span className="sev sev--error" aria-label="error" />
-                </td>
-                <td>.claude/settings.local.json</td>
-                <td>add to .gitignore</td>
-              </tr>
-              <tr>
-                <td>02</td>
-                <td>
-                  <span className="sev sev--warn" aria-label="warning" />
-                </td>
-                <td>CLAUDE.md</td>
-                <td>build commands section is empty</td>
-              </tr>
-              <tr>
-                <td>03</td>
-                <td>
-                  <span className="sev sev--ok" aria-label="ok" />
-                </td>
-                <td>.agents/</td>
-                <td>signal acquired</td>
-              </tr>
-            </tbody>
-          </table>
+          <FindingRow
+            index={1}
+            severity="error"
+            title=".claude/settings.local.json is committed"
+            fix="add to .gitignore"
+          />
+          <FindingRow
+            index={2}
+            severity="warn"
+            title="CLAUDE.md build commands section is empty"
+            fix="add build & test commands"
+          />
+          <FindingRow index={3} severity="ok" title="SIGNAL ACQUIRED" />
           <p className="micro-label" style={{ marginTop: 'var(--gutter)' }}>
             {pluralize(3, 'finding').toUpperCase()} · 1 ERROR · 1 WARNING
           </p>
+        </section>
+
+        <hr className="rule-h" />
+
+        <section className="gallery__section" id="components">
+          <h2 className="micro-label">COMPONENTS</h2>
+
+          <div className="gallery__demo">
+            <h3 className="micro-label">STATBLOCK</h3>
+            <div className="grid-page">
+              <div style={{ gridColumn: 'span 3' }}>
+                <StatBlock value={2} label="AGENTS" size="md" />
+              </div>
+              <div style={{ gridColumn: 'span 3' }}>
+                <StatBlock value={3} label="WARNINGS" delta={-1} size="md" />
+              </div>
+              <div style={{ gridColumn: 'span 3' }}>
+                <StatBlock value={14} label="ARTIFACTS" delta={3} size="md" />
+              </div>
+            </div>
+          </div>
+
+          <div className="gallery__demo">
+            <h3 className="micro-label">SIGNALSTRIP</h3>
+            <SignalStrip
+              kind="CLAUDE"
+              sources={FAKE_SOURCES}
+              confidence={0.9}
+              fileCount={2}
+              pulseKey={pulseKey}
+            />
+            <SignalStrip
+              kind="CODEX"
+              sources={FAKE_SOURCES_ALT}
+              confidence={0.65}
+              fileCount={2}
+              pulseKey={pulseKey}
+            />
+          </div>
+
+          <div className="gallery__demo">
+            <h3 className="micro-label">FINDINGROW</h3>
+            <FindingRow
+              index={1}
+              severity="error"
+              title="settings.local.json is committed"
+              fix="add .claude/settings.local.json to .gitignore"
+              onApply={() => setSweepKey((k) => k + 1)}
+            />
+            <FindingRow
+              index={2}
+              severity="warn"
+              title="CLAUDE.md build commands section is empty"
+              fix="add build & test commands"
+            />
+            <FindingRow index={3} severity="ok" title="SIGNAL ACQUIRED" />
+          </div>
+
+          <div className="gallery__demo">
+            <h3 className="micro-label">FILECHIP</h3>
+            <div className="gallery__chips">
+              <FileChip
+                path="CLAUDE.md"
+                size={3120}
+                sha="a1b2c3d4"
+                onClick={() => setPulseKey((k) => k + 1)}
+              />
+              <FileChip path=".claude/settings.json" size={512} sha="9f8e7d6c" />
+              <FileChip path=".codex/config.toml" />
+            </div>
+          </div>
+
+          <div className="gallery__demo">
+            <h3 className="micro-label">DIFFPANEL</h3>
+            <DiffPanel
+              label=".gitignore"
+              hunks={FAKE_DIFF}
+              onCommit={() => setSweepKey((k) => k + 1)}
+              onDiscard={() => setPulseKey((k) => k + 1)}
+            />
+          </div>
+
+          <div className="gallery__demo">
+            <h3 className="micro-label">BUTTONS</h3>
+            <div className="gallery__chips">
+              <Button label="apply" variant="primary" />
+              <Button label="discard" variant="destructive" />
+              <Button label="install" />
+              <Button label="offline" disabled />
+            </div>
+          </div>
+
+          <div className="gallery__demo">
+            <h3 className="micro-label">TABLE</h3>
+            <Table headers={['NO', 'KIND', 'FILES']}>
+              <tr>
+                <td>01</td>
+                <td>CLAUDE</td>
+                <td>2</td>
+              </tr>
+              <tr>
+                <td>02</td>
+                <td>CODEX</td>
+                <td>2</td>
+              </tr>
+            </Table>
+          </div>
+
+          <div className="gallery__demo">
+            <h3 className="micro-label">EMPTYSTATE</h3>
+            <EmptyState instruction="add a folder to begin watching" />
+          </div>
         </section>
       </main>
     </div>

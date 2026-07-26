@@ -1,0 +1,204 @@
+/* Core components (docs/DESIGN.md §6). All chassis — nothing here animates;
+   motion belongs to the signal layer alone. Tokens only: no raw hex, no
+   gradients, no shadows, no radius above 2px. */
+
+/* ── Button: rectangular, 2px radius, mono all-caps bracket labels ─────── */
+
+.btn {
+  font-family: var(--font-mono);
+  font-size: var(--size-micro);
+  line-height: var(--leading-micro);
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.btn--default {
+  background: none;
+  border: var(--hairline-w) solid var(--hairline);
+  color: var(--fg);
+}
+
+.btn--primary {
+  background: var(--fg);
+  border: var(--hairline-w) solid var(--fg);
+  color: var(--bg);
+}
+
+.btn--destructive {
+  background: var(--red);
+  border: var(--hairline-w) solid var(--red);
+  color: var(--bg);
+}
+
+.btn:disabled {
+  background: none;
+  border-color: var(--hairline);
+  color: var(--fg-dim);
+  cursor: default;
+}
+
+/* ── StatBlock: giant numeral + micro-label, hairline-boxed ────────────── */
+
+.statblock {
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: var(--gutter);
+}
+
+.statblock__delta--signal {
+  color: var(--signal);
+}
+
+.statblock__delta--red {
+  color: var(--red);
+}
+
+.statblock__delta--dim {
+  color: var(--fg-dim);
+}
+
+/* ── SignalStrip: agent row hosting signal-layer primitives ────────────── */
+
+.strip {
+  display: flex;
+  align-items: center;
+  gap: var(--gutter);
+  min-height: var(--row-h);
+  border-bottom: var(--hairline-w) solid var(--hairline);
+}
+
+.strip__kind {
+  font-family: var(--font-sans);
+  font-size: var(--size-body);
+  line-height: var(--leading-body);
+  font-weight: 600;
+  letter-spacing: var(--tracking-heading);
+  min-width: 96px;
+}
+
+.strip__count {
+  margin-left: auto;
+  color: var(--fg-dim);
+}
+
+/* ── Severity block: 8px colored square (FindingRow) ───────────────────── */
+
+.sev {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+}
+
+.sev--ok {
+  background: var(--signal);
+}
+
+.sev--warn {
+  background: var(--warn);
+}
+
+.sev--error {
+  background: var(--red);
+}
+
+/* ── FindingRow: timetable row ─────────────────────────────────────────── */
+
+.finding {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--gutter);
+  min-height: var(--row-h);
+  padding: 4px 0;
+  border-bottom: var(--hairline-w) solid var(--hairline);
+}
+
+.finding__index {
+  color: var(--fg-dim);
+}
+
+.finding__body {
+  display: flex;
+  flex-direction: column;
+}
+
+.finding__title {
+  font-family: var(--font-sans);
+  font-size: var(--size-body);
+  line-height: var(--leading-body);
+  font-weight: 500;
+}
+
+.finding__fix {
+  color: var(--fg-dim);
+}
+
+/* ── FileChip: mono path chip ──────────────────────────────────────────── */
+
+.chip {
+  display: inline-block;
+  background: var(--surface);
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 2px 8px;
+  color: var(--fg);
+}
+
+button.chip {
+  cursor: pointer;
+}
+
+/* ── DiffPanel: unified diff, mono 13 ──────────────────────────────────── */
+
+.diff {
+  padding: var(--gutter);
+}
+
+.diff__label {
+  margin-bottom: 8px;
+}
+
+.diff__body {
+  overflow-x: auto;
+}
+
+.diff__header {
+  color: var(--fg-dim);
+}
+
+.diff__line {
+  white-space: pre;
+}
+
+.diff__line--add {
+  color: var(--signal);
+}
+
+.diff__line--del {
+  color: var(--red);
+}
+
+.diff__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: var(--gutter);
+}
+
+/* ── EmptyState: NO SIGNAL + flat-line trace ───────────────────────────── */
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--gutter);
+  padding: calc(var(--gutter) * 2) var(--gutter);
+  text-align: center;
+}
+
+.empty__flatline {
+  width: 120px;
+  border-top: var(--hairline-w) solid var(--trace-dim);
+}
