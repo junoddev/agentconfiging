@@ -1,0 +1,19 @@
+# Codex CLI project config
+model = "gpt-5-codex"
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+model_reasoning_effort = "medium"
+
+[sandbox_workspace_write]
+network_access = false
+
+[mcp_servers.docs]
+command = "npx"
+args = ["-y", "docs-mcp-server"]
+
+[mcp_servers.docs.env]
+DOCS_ROOT = "./docs"
+
+[profiles.fast]
+model = "gpt-5-codex-mini"
+approval_policy = "never"

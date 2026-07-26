@@ -1,0 +1,6 @@
+{"type":"session_metadata","sessionId":"eeee5555-eeee-4555-8eee-555555555555","projectHash":"5f2c9d41a7b8e3061c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b","startTime":"2026-06-15T09:00:00.000Z","lastUpdated":"2026-06-15T09:06:00.000Z","summary":"dataset registry check"}
+{"type":"user","id":"m1","timestamp":"2026-06-15T09:00:01.000Z","content":[{"text":"is every dataset in data/registry.yaml actually referenced by a notebook?"}]}
+{"type":"gemini","id":"m2","timestamp":"2026-06-15T09:00:04.000Z","content":[{"text":"Checking the registry against notebook imports."}]}
+{"type":"message_update","id":"m2","timestamp":"2026-06-15T09:03:00.000Z","content":[{"text":"Checking the registry against notebook imports.\n\nTwo registry entries are unreferenced: taxi-2019 and weather-hourly. Everything else is used."}]}
+{"type":"user","id":"m3","timestamp":"2026-06-15T09:05:00.000Z","content":[{"text":"remove the stale ones"}]}
+{"type":"gemini","id":"m4","timestamp":"2026-06-15T09:06:00.000Z","content":[{"text":"Removed both entries from data/registry.yaml."}]}

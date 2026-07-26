@@ -1,0 +1,5 @@
+Mobile-app is a React Native (Expo) project.
+
+- Never edit files under ios/ or android/ directly; they are generated.
+- Use the design tokens in src/theme.ts, no inline hex colors.
+- Screens live in src/screens/, one component per file.

@@ -1,0 +1,28 @@
+{
+  "root": "/home/user/projects/legacy-api",
+  "cwdBasename": "legacy-api",
+  "files": [
+    {
+      "path": ".aider.conf.yml",
+      "size": 166,
+      "sha256": "8a3a5a508a0f736b1497f39eb4d31af3433445c62309d6fdebf9c82635891032",
+      "content": "model: sonnet\nauto-commits: false\nattribute-author: false\nread:\n  - CONVENTIONS.md\nlint-cmd: \"ruff check --fix\"\ntest-cmd: \"pytest -q\"\nauto-test: true\ndark-mode: true\n"
+    },
+    {
+      "path": ".aiderignore",
+      "size": 51,
+      "sha256": "93d05c77fb74da4a83bb1657e594e179dcab31e34b3ee7f04ea7585316acac79",
+      "content": "vendor/\nmigrations/versions/\n*.min.js\nstatic/dist/\n"
+    },
+    {
+      "path": "CONVENTIONS.md",
+      "size": 359,
+      "sha256": "928ad6a36cab1762c6a0c439cbbbb03e846dc018478acb1dccc7d2ca1d5d5293",
+      "content": "# Conventions — legacy-api\n\nFlask 2 app being strangled into services. Rules for automated edits:\n\n- Do not modify anything under `legacy/` — it is frozen for extraction.\n- New endpoints go in `services/<domain>/routes.py`.\n- Every route change needs a matching test in `tests/services/`.\n- Keep responses backward compatible; clients pin to field names.\n"
+    }
+  ],
+  "stats": {
+    "fileCount": 3,
+    "totalBytes": 576
+  }
+}

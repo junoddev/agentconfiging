@@ -1,0 +1,13 @@
+{
+  "model": "claude-sonnet-4-5",
+  "permissions": {
+    "allow": [
+      "Bash(npm test:*)",
+      "Bash(npm run build:*)",
+      "Read(src/**)"
+    ],
+    "deny": [
+      "Read(.env)"
+    ]
+  }
+}

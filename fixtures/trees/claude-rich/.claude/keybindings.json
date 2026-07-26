@@ -1,0 +1,19 @@
+{
+  "bindings": [
+    {
+      "context": "chat",
+      "key": "ctrl+j",
+      "command": "chat.insertNewline"
+    },
+    {
+      "context": "chat",
+      "key": "ctrl+g ctrl+s",
+      "command": "git.status"
+    },
+    {
+      "context": "global",
+      "key": "ctrl+t",
+      "command": "todos.toggle"
+    }
+  ]
+}

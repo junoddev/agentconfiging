@@ -1,0 +1,130 @@
+{
+  "root": "/home/user/projects/orbit",
+  "cwdBasename": "orbit",
+  "files": [
+    {
+      "path": ".claude/agents/code-reviewer.md",
+      "size": 513,
+      "sha256": "aee93e929c4abe994a2c7c0e8f7d67696a5f265f9e51927bb6e60213ede02889",
+      "content": "---\nname: code-reviewer\ndescription: Reviews diffs for saga correctness and idempotency. Use after any change to src/saga or src/steps.\ntools: Read, Grep, Glob, Bash\nmodel: opus\n---\n\nYou are the Orbit code reviewer.\n\nCheck every diff for:\n\n1. Idempotency — handlers must consult the dedup table before side effects.\n2. Compensation — every new saga step needs a compensating action.\n3. Outbox usage — no direct bus publishes outside src/emit/.\n\nReport findings as a numbered list with file:line references.\n"
+    },
+    {
+      "path": ".claude/agents/migration-writer.md",
+      "size": 500,
+      "sha256": "b67eb087134661c825ee43298d5bb740bc1456e252b380d5bd01cf724f1bf44b",
+      "content": "---\nname: migration-writer\ndescription: Writes forward-only SQL migrations from a schema-change description.\ntools: Read, Write, Bash, SchemaDiff\nmodel: sonnet\n---\n\nYou write Postgres migrations for Orbit.\n\n- Output goes to `migrations/NNNN_description.sql` (next free number).\n- Forward-only: never emit DROP COLUMN in the same release it stops being written.\n- Wrap DDL in a transaction unless it contains CREATE INDEX CONCURRENTLY.\n- Always add a corresponding entry to `migrations/CHANGELOG.md`.\n"
+    },
+    {
+      "path": ".claude/commands/fix-issue.md",
+      "size": 464,
+      "sha256": "0541f2c3c5a444f587b3a9aa9d581649d40754f92bd3167e2a4d978086b85369",
+      "content": "---\nallowed-tools: Bash(gh issue view:*), Bash(git checkout:*), Read, Edit, Write\nargument-hint: <issue-number>\ndescription: Fix a GitHub issue end to end\n---\n\n## Context\n\n- Current branch: !`git branch --show-current`\n- Issue details: !`gh issue view $ARGUMENTS`\n\n## Task\n\nFix issue #$ARGUMENTS:\n\n1. Create a branch `fix/$ARGUMENTS-short-slug`.\n2. Write a failing test that reproduces the issue, then make it pass.\n3. Summarize the change; do not commit or push.\n"
+    },
+    {
+      "path": ".claude/commands/review/security.md",
+      "size": 338,
+      "sha256": "0816fbcd014201f29b4bfdb2f48e340239ac85eb84d0424bf7ecefd8357ff207",
+      "content": "---\ndescription: Security-focused review of the working diff\nallowed-tools: Read, Grep, Bash(git diff:*)\n---\n\nReview the current diff (`git diff main...HEAD`) for:\n\n- secrets or connection strings in code or config\n- SQL built by string concatenation\n- event payload fields logged without redaction\n\nSeverity levels: block / warn / note.\n"
+    },
+    {
+      "path": ".claude/hooks/check-cmd.sh",
+      "size": 345,
+      "sha256": "e3c657051453ba1a1cd61a97bb9cd1ee45ad2390d10fedd6686e794c8e19351e",
+      "content": "#!/usr/bin/env bash\n# PreToolUse hook: block raw psql against non-test databases.\nset -euo pipefail\ninput=$(cat)\ncmd=$(printf '%s' \"$input\" | jq -r '.tool_input.command // empty')\nif [[ \"$cmd\" == *\"psql\"* && \"$cmd\" != *\"orbit_test\"* ]]; then\n  echo '{\"decision\": \"block\", \"reason\": \"psql is only allowed against orbit_test\"}'\n  exit 0\nfi\nexit 0\n"
+    },
+    {
+      "path": ".claude/hooks/notify-done.sh",
+      "size": 172,
+      "sha256": "92aaf32129ebc2e5e2aad35d63e30d66237ae24f1f9b90d9ba7ad780fbadc720",
+      "content": "#!/usr/bin/env bash\n# Stop hook: desktop notification when a long task finishes.\ncommand -v notify-send >/dev/null && notify-send \"Claude\" \"Task finished in orbit\" || true\n"
+    },
+    {
+      "path": ".claude/keybindings.json",
+      "size": 315,
+      "sha256": "f4cad52529498b3371a1271e64b6cf35c85f45beee632d8f1593e9cf79a09595",
+      "content": "{\n  \"bindings\": [\n    {\n      \"context\": \"chat\",\n      \"key\": \"ctrl+j\",\n      \"command\": \"chat.insertNewline\"\n    },\n    {\n      \"context\": \"chat\",\n      \"key\": \"ctrl+g ctrl+s\",\n      \"command\": \"git.status\"\n    },\n    {\n      \"context\": \"global\",\n      \"key\": \"ctrl+t\",\n      \"command\": \"todos.toggle\"\n    }\n  ]\n}\n"
+    },
+    {
+      "path": ".claude/memory/context.md",
+      "size": 399,
+      "sha256": "fce5f2d7dd4d7bc87aa2716f93fba3918df488169336b1d50485115b1dfb40ba",
+      "content": "---\ntype: context\nname: fulfillment-partners\ndescription: Quirks of the three fulfillment partner APIs\n---\n\n# Partner API quirks\n\n- Partner A retries webhooks up to 7 times with no idempotency key — dedup on\n  `(order_id, event_type, occurred_at)`.\n- Partner B's sandbox returns production-shaped ids; never branch on id shape.\n- Partner C rate limits at 5 rps; the step worker batches by design.\n"
+    },
+    {
+      "path": ".claude/memory/decisions.md",
+      "size": 406,
+      "sha256": "101718277c7d678890c2984fee8a726cb8dc9da2f526743dcd00e3e9d84d1775",
+      "content": "---\ntype: decision\nname: outbox-over-direct-publish\ndescription: Why all bus publishes go through the transactional outbox\n---\n\n# Decision: transactional outbox (2026-03)\n\nDirect publishes lost events when the process died between commit and publish.\nAll emits now write to the `outbox` table in the same transaction as state\nchanges; a relay drains it. Revisit only if the relay lag SLO (p99 < 2s) fails.\n"
+    },
+    {
+      "path": ".claude/rules/style.md",
+      "size": 269,
+      "sha256": "5865a15c043675024b3f151560ca0348329724dbf8bb22f4499684f5ea129ce1",
+      "content": "# Style rules\n\n- Prettier is the formatter; never hand-format.\n- Imports: node builtins, then packages, then local — separated by blank lines.\n- No default exports outside React components (we have none here).\n- Error messages are sentences without trailing periods.\n"
+    },
+    {
+      "path": ".claude/rules/testing.md",
+      "size": 281,
+      "sha256": "34ca908e49e27a8f16931142acf4165c325592c459fda2841ae38d8c5029d08a",
+      "content": "# Testing rules\n\n- Unit tests colocate as `*.test.ts`; integration tests live in `test/int/`.\n- Integration tests get a fresh schema via `test/int/setup.ts` — never share state.\n- Saga tests must cover the compensation path, not just the happy path.\n- Snapshot tests are banned.\n"
+    },
+    {
+      "path": ".claude/settings.json",
+      "size": 1519,
+      "sha256": "10c364156f0b312c8661a047ea3ba52ef730e5eaa94e14cf2f092a27260931d8",
+      "content": "{\n  \"model\": \"claude-opus-4-5\",\n  \"env\": {\n    \"NODE_OPTIONS\": \"--max-old-space-size=4096\",\n    \"ORBIT_TEST_DB\": \"postgres://localhost:5432/orbit_test\"\n  },\n  \"statusLine\": {\n    \"type\": \"command\",\n    \"command\": \".claude/statusline.sh\"\n  },\n  \"permissions\": {\n    \"defaultMode\": \"acceptEdits\",\n    \"allow\": [\n      \"Bash(npm test:*)\",\n      \"Bash(npm run build:*)\",\n      \"Bash(psql orbit_test:*)\",\n      \"Read(src/**)\",\n      \"Read(docs/**)\"\n    ],\n    \"deny\": [\n      \"Read(.env)\",\n      \"Read(secrets/**)\",\n      \"Bash(git push:*)\"\n    ],\n    \"ask\": [\n      \"Bash(npm run db:migrate:*)\"\n    ],\n    \"additionalDirectories\": [\n      \"../orbit-contracts\"\n    ]\n  },\n  \"hooks\": {\n    \"PreToolUse\": [\n      {\n        \"matcher\": \"Bash\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \".claude/hooks/check-cmd.sh\"\n          }\n        ]\n      }\n    ],\n    \"PostToolUse\": [\n      {\n        \"matcher\": \"Edit|Write\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"npx prettier --write \\\"$CLAUDE_FILE_PATHS\\\"\"\n          }\n        ]\n      }\n    ],\n    \"SessionStart\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo \\\"branch: $(git branch --show-current)\\\"\"\n          }\n        ]\n      }\n    ],\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \".claude/hooks/notify-done.sh\"\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+    },
+    {
+      "path": ".claude/settings.local.json",
+      "size": 370,
+      "sha256": "3ffad9aab007866bbd166298d60097a75c038d49e909f94c058a725243a94d0f",
+      "content": "{\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(docker compose:*)\",\n      \"WebFetch(domain:docs.example.com)\"\n    ]\n  },\n  \"enableAllProjectMcpServers\": false,\n  \"env\": {\n    \"OPENAI_API_KEY\": \"sk-FAKE00000000000000000000000000000000FAKE\",\n    \"GITHUB_TOKEN\": \"ghp_FAKE0000000000000000000000000000FAKE\",\n    \"ORBIT_BUS_URL\": \"amqp://guest:FAKEFAKE@localhost:5672\"\n  }\n}\n"
+    },
+    {
+      "path": ".claude/skills/release-notes/SKILL.md",
+      "size": 491,
+      "sha256": "08cec05d113ff6eeece653efdf0a5e7bc0b7ac4b9a627ad52b0e114cb72e3012",
+      "content": "---\nname: release-notes\ndescription: Generate release notes from merged PRs since the last tag. Use when the user asks for release notes, a changelog entry, or a deploy summary.\n---\n\n# Release notes\n\n1. Find the last tag: `git describe --tags --abbrev=0`.\n2. List merged PRs since then: `gh pr list --state merged --search \"merged:>TAG_DATE\"`.\n3. Group by label: `feature`, `fix`, `ops`.\n4. Write the notes in the house format (see reference.md) to stdout — never\n   commit them yourself.\n"
+    },
+    {
+      "path": ".claude/skills/release-notes/reference.md",
+      "size": 224,
+      "sha256": "6b18d8ad713647e2106008177c6363cc47ea00c8cdea18f99d1ea315e73d9271",
+      "content": "# House release-notes format\n\n```\n## vX.Y.Z — YYYY-MM-DD\n\n### Features\n- <one line per PR, imperative mood, PR number in parens>\n\n### Fixes\n- ...\n\n### Ops\n- ...\n```\n\nOmit empty sections. Never include internal ticket ids.\n"
+    },
+    {
+      "path": ".claude/skills/saga-audit/SKILL.md",
+      "size": 499,
+      "sha256": "f34667b080ea78009de3951762d5e4a4c60a74f6c5d82bb30044029d8376edc5",
+      "content": "---\nname: saga-audit\ndescription: Audit a saga definition for missing compensations and dedup gaps. Use when reviewing or writing saga steps.\nallowed-tools: Read, Grep, Glob\n---\n\n# Saga audit\n\nFor each step module in `src/steps/`:\n\n1. Confirm it registers a compensation in `src/saga/compensations.ts`.\n2. Confirm the handler's first await is a dedup-table check.\n3. Flag any direct import of the bus client (must go through the outbox).\n\nOutput a table: step | compensation | dedup | outbox-clean.\n"
+    },
+    {
+      "path": ".claude/statusline.sh",
+      "size": 342,
+      "sha256": "25e2b73f77d695a03e62cc21953ff70029986da3963241cfe87a04408d47fd93",
+      "content": "#!/usr/bin/env bash\n# statusLine command: model + branch + dirty marker.\ninput=$(cat)\nmodel=$(printf '%s' \"$input\" | jq -r '.model.display_name')\nbranch=$(git branch --show-current 2>/dev/null || echo \"?\")\ndirty=$(git status --porcelain 2>/dev/null | head -1 | grep -q . && echo \"*\" || echo \"\")\nprintf '[%s] %s%s' \"$model\" \"$branch\" \"$dirty\"\n"
+    },
+    {
+      "path": ".mcp.json",
+      "size": 547,
+      "sha256": "99f7d8037cc83cb288cc7afa22a08a46b9c6128c77a930e05d2840c76f408da0",
+      "content": "{\n  \"mcpServers\": {\n    \"postgres\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"@modelcontextprotocol/server-postgres\", \"postgres://localhost:5432/orbit_dev\"],\n      \"env\": {\n        \"PGOPTIONS\": \"-c statement_timeout=5000\"\n      }\n    },\n    \"bus-inspector\": {\n      \"command\": \"./tools/bus-mcp\",\n      \"args\": [\"--read-only\"],\n      \"env\": {\n        \"BUS_URL\": \"${ORBIT_BUS_URL}\"\n      }\n    },\n    \"docs\": {\n      \"type\": \"http\",\n      \"url\": \"https://mcp.example.com/docs\",\n      \"headers\": {\n        \"X-Team\": \"orbit\"\n      }\n    }\n  }\n}\n"
+    },
+    {
+      "path": "CLAUDE.md",
+      "size": 576,
+      "sha256": "adad7643f44b611c72c0eeec236838046592bdaad498932f26c93389664460c2",
+      "content": "# Orbit\n\nEvent-driven order orchestration service. TypeScript, Node 22, Postgres.\n\nSee @docs/ARCHITECTURE.md for the system overview.\n\n## Rules\n\nStyle rules are maintained in @.claude/rules/style.md and testing rules in\n@.claude/rules/testing.md — follow both.\n\nRoadmap context: @docs/ROADMAP.md\n\n## Build & Test\n\n```bash\nnpm ci\nnpm run build\nnpm test\n```\n\n## Conventions\n\n- Every event handler is idempotent; consult the dedup table first.\n- Migrations are forward-only. Never edit an applied migration.\n- Feature flags come from `src/flags.ts`; no env checks in handlers.\n"
+    },
+    {
+      "path": "docs/ARCHITECTURE.md",
+      "size": 484,
+      "sha256": "e4c7936b831d98e5373f1a9e725ec99d73d16ab0c1ef05d0210e6205075be38c",
+      "content": "# Architecture\n\nOrbit consumes order events from a message bus, orchestrates fulfillment\nsteps as a saga, and emits status events.\n\n```\nbus -> ingest -> saga engine -> step workers -> bus\n                    |\n                 postgres (saga state, dedup)\n```\n\n- `src/ingest/` — bus consumers, schema validation\n- `src/saga/` — state machine, compensation logic\n- `src/steps/` — one module per fulfillment step\n- `src/emit/` — outbound event publishing (transactional outbox)\n"
+    }
+  ],
+  "stats": {
+    "fileCount": 20,
+    "totalBytes": 9054
+  }
+}

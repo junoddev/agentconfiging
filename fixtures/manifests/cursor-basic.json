@@ -1,0 +1,34 @@
+{
+  "root": "/home/user/projects/storefront",
+  "cwdBasename": "storefront",
+  "files": [
+    {
+      "path": ".cursor/rules/api-design.mdc",
+      "size": 299,
+      "sha256": "fd518a32d0a400da716c7ea44e9688e458d87c754936b2c33615c90a97e3dc25",
+      "content": "---\ndescription: REST API design rules for route handlers\nalwaysApply: true\n---\n\n# API design\n\n- Every route validates input with zod before touching the database.\n- Errors return `{ error: { code, message } }` with a stable code slug.\n- No endpoint may return more than 100 items without a cursor.\n"
+    },
+    {
+      "path": ".cursor/rules/components.mdc",
+      "size": 252,
+      "sha256": "e0907fdedb13a52e518721b895a16147eb610fefa9dfaf4b08ffdf8eaa43e505",
+      "content": "---\ndescription: React component conventions\nglobs: *.tsx,src/components/**\nalwaysApply: false\n---\n\n# Component rules\n\n- One component per file, named export matching the filename.\n- Props interfaces are declared above the component, suffixed `Props`.\n"
+    },
+    {
+      "path": ".cursor/rules/typescript.mdc",
+      "size": 313,
+      "sha256": "8a2378cb482fc7b5c034ee7cf90ca7f9bb5366d0afc3ee08383352103ca44c36",
+      "content": "---\ndescription: TypeScript conventions for all source files\nglobs:\n  - \"src/**/*.ts\"\n  - \"src/**/*.tsx\"\nalwaysApply: false\n---\n\n# TypeScript rules\n\n- `strict` mode is on; never add `// @ts-ignore` without a linked issue.\n- Exported functions require explicit return types.\n- Use discriminated unions over enums.\n"
+    },
+    {
+      "path": ".cursorrules",
+      "size": 274,
+      "sha256": "15c84380dfa8ccb775522cbdfd364aa63f5efc453dd77eaccfdaf64eeda2d9f7",
+      "content": "You are working on Storefront, a Next.js 14 e-commerce app.\n\n- Use the app router; never add pages/ routes.\n- Prefer server components; mark client components explicitly.\n- All prices are integer cents. Never use floats for money.\n- Run `pnpm lint` before proposing a diff.\n"
+    }
+  ],
+  "stats": {
+    "fileCount": 4,
+    "totalBytes": 1138
+  }
+}

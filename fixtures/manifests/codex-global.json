@@ -1,0 +1,22 @@
+{
+  "root": "/home/user/.codex",
+  "cwdBasename": ".codex",
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "size": 283,
+      "sha256": "9f61d3ce8563b6215132d2c818d1c8e780e7781361a9fe96092ec04504754337",
+      "content": "# Global agent guidance\n\nPersonal defaults applied to every Codex session on this machine.\n\n- Prefer small, reviewable diffs; explain anything non-obvious.\n- Never run destructive git commands without asking.\n- When a repo has its own AGENTS.md, its instructions win over this file.\n"
+    },
+    {
+      "path": "config.toml",
+      "size": 381,
+      "sha256": "fac5d209262138b45b6a509b3a6e082f26d262d8b31a0a6d907d5998fd1bad57",
+      "content": "# Codex CLI project config\nmodel = \"gpt-5-codex\"\napproval_policy = \"on-request\"\nsandbox_mode = \"workspace-write\"\nmodel_reasoning_effort = \"medium\"\n\n[sandbox_workspace_write]\nnetwork_access = false\n\n[mcp_servers.docs]\ncommand = \"npx\"\nargs = [\"-y\", \"docs-mcp-server\"]\n\n[mcp_servers.docs.env]\nDOCS_ROOT = \"./docs\"\n\n[profiles.fast]\nmodel = \"gpt-5-codex-mini\"\napproval_policy = \"never\"\n"
+    }
+  ],
+  "stats": {
+    "fileCount": 2,
+    "totalBytes": 664
+  }
+}

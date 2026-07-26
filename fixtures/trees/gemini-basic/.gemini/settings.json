@@ -1,0 +1,29 @@
+{
+  "general": {
+    "vimMode": false,
+    "disableAutoUpdate": true
+  },
+  "ui": {
+    "theme": "Default"
+  },
+  "model": {
+    "name": "gemini-2.5-pro"
+  },
+  "context": {
+    "fileName": "GEMINI.md"
+  },
+  "tools": {
+    "core": ["read_file", "glob", "run_shell_command(uv run pytest)"],
+    "autoAccept": false
+  },
+  "mcpServers": {
+    "papers": {
+      "command": "uvx",
+      "args": ["papers-mcp"],
+      "timeout": 30000
+    }
+  },
+  "privacy": {
+    "usageStatisticsEnabled": false
+  }
+}

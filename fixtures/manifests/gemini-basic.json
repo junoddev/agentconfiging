@@ -1,0 +1,22 @@
+{
+  "root": "/home/user/projects/ml-notebooks",
+  "cwdBasename": "ml-notebooks",
+  "files": [
+    {
+      "path": ".gemini/settings.json",
+      "size": 499,
+      "sha256": "fe8686f26878916874814f40e71a8e4f01a6ce5bbf112aba8942babf6c8f383d",
+      "content": "{\n  \"general\": {\n    \"vimMode\": false,\n    \"disableAutoUpdate\": true\n  },\n  \"ui\": {\n    \"theme\": \"Default\"\n  },\n  \"model\": {\n    \"name\": \"gemini-2.5-pro\"\n  },\n  \"context\": {\n    \"fileName\": \"GEMINI.md\"\n  },\n  \"tools\": {\n    \"core\": [\"read_file\", \"glob\", \"run_shell_command(uv run pytest)\"],\n    \"autoAccept\": false\n  },\n  \"mcpServers\": {\n    \"papers\": {\n      \"command\": \"uvx\",\n      \"args\": [\"papers-mcp\"],\n      \"timeout\": 30000\n    }\n  },\n  \"privacy\": {\n    \"usageStatisticsEnabled\": false\n  }\n}\n"
+    },
+    {
+      "path": "GEMINI.md",
+      "size": 378,
+      "sha256": "59e529f110677e4fa201050e5ce4c17c65de0e5c06c21531d7516a9e13744bad",
+      "content": "# Gemini CLI guide — ml-notebooks\n\nResearch notebooks + a small training harness. Python, managed with uv.\n\n- Notebooks under `notebooks/` are exploratory; never refactor them.\n- Reusable code gets promoted into `mlkit/` with tests.\n- Datasets are declared in `data/registry.yaml`; do not add raw files to git.\n- Use `uv run pytest` for the harness; notebooks are not tested.\n"
+    }
+  ],
+  "stats": {
+    "fileCount": 2,
+    "totalBytes": 877
+  }
+}

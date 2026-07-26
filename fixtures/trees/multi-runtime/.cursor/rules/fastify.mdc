@@ -1,0 +1,9 @@
+---
+description: Fastify route conventions
+globs:
+  - "src/routes/**/*.ts"
+alwaysApply: false
+---
+
+- Register routes via plugins; no top-level `app.get` calls.
+- Every route schema declares `response` for 2xx and error codes.

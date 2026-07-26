@@ -1,0 +1,28 @@
+{
+  "root": "/home/user/projects/mobile-app",
+  "cwdBasename": "mobile-app",
+  "files": [
+    {
+      "path": ".continue/config.json",
+      "size": 419,
+      "sha256": "545e1b604c3be8351a1791e4e86cfc495a4f4e82c911ae79cf85f8327775403d",
+      "content": "{\n  \"models\": [\n    {\n      \"title\": \"Sonnet\",\n      \"provider\": \"anthropic\",\n      \"model\": \"claude-sonnet-4-5\"\n    }\n  ],\n  \"tabAutocompleteModel\": {\n    \"title\": \"Local qwen\",\n    \"provider\": \"ollama\",\n    \"model\": \"qwen2.5-coder:1.5b\"\n  },\n  \"customCommands\": [\n    {\n      \"name\": \"test\",\n      \"prompt\": \"Write unit tests for the selected code using jest.\",\n      \"description\": \"Generate jest tests\"\n    }\n  ]\n}\n"
+    },
+    {
+      "path": ".continue/config.yaml",
+      "size": 424,
+      "sha256": "cecd543753d65e209f23d3f9f7fd1b4bcceb2a071388adbe90bc62984688894d",
+      "content": "name: mobile-app assistant\nversion: 1.0.0\nschema: v1\n\nmodels:\n  - name: main\n    provider: anthropic\n    model: claude-sonnet-4-5\n    roles:\n      - chat\n      - edit\n  - name: autocomplete\n    provider: ollama\n    model: qwen2.5-coder:1.5b\n    roles:\n      - autocomplete\n\nrules:\n  - Use TypeScript strict mode.\n  - Match the existing navigation patterns in src/navigation/.\n\ncontext:\n  - provider: file\n  - provider: diff\n"
+    },
+    {
+      "path": ".continuerules",
+      "size": 237,
+      "sha256": "03557001e3201d24febaa90a83c087f41d8516da096450309b932823bda107d4",
+      "content": "Mobile-app is a React Native (Expo) project.\n\n- Never edit files under ios/ or android/ directly; they are generated.\n- Use the design tokens in src/theme.ts, no inline hex colors.\n- Screens live in src/screens/, one component per file.\n"
+    }
+  ],
+  "stats": {
+    "fileCount": 3,
+    "totalBytes": 1080
+  }
+}

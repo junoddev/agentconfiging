@@ -1,0 +1,21 @@
+{
+  "models": [
+    {
+      "title": "Sonnet",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-5"
+    }
+  ],
+  "tabAutocompleteModel": {
+    "title": "Local qwen",
+    "provider": "ollama",
+    "model": "qwen2.5-coder:1.5b"
+  },
+  "customCommands": [
+    {
+      "name": "test",
+      "prompt": "Write unit tests for the selected code using jest.",
+      "description": "Generate jest tests"
+    }
+  ]
+}

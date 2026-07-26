@@ -1,0 +1,9 @@
+{"type":"session_meta","timestamp":"2026-06-15T09:00:00.000Z","payload":{"id":"dddd4444-dddd-4444-8ddd-444444444444","cwd":"/home/user/projects/data-pipeline","timestamp":"2026-06-15T09:00:00.000Z","cli_version":"0.140.0","originator":"codex_cli_rs","source":"chatgpt","model_provider":"openai","base_instructions":"You are a helpful coding assistant."}}
+{"type":"turn_context","timestamp":"2026-06-15T09:00:00.400Z","payload":{"sandbox":"workspace-write","model":"gpt-5-codex","approval_policy":"on-request"}}
+{"type":"event_msg","timestamp":"2026-06-15T09:00:01.000Z","payload":{"type":"task_started"}}
+{"type":"response_item","timestamp":"2026-06-15T09:00:01.200Z","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"why is the parquet sink writing empty row groups?"}]}}
+{"type":"response_item","timestamp":"2026-06-15T09:00:03.000Z","payload":{"type":"function_call","name":"shell","arguments":"{\"command\":[\"cargo\",\"test\",\"-p\",\"sink\"]}","call_id":"call_fixture0001"}}
+{"type":"response_item","timestamp":"2026-06-15T09:00:09.000Z","payload":{"type":"function_call_output","call_id":"call_fixture0001","output":"test sink::row_group_flush ... FAILED (flushed 0 rows)"}}
+{"type":"response_item","timestamp":"2026-06-15T09:00:12.000Z","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"The flush threshold compares bytes to rows — it flushes before any rows accumulate. Fix: compare buffered_rows to max_rows_per_group."}]}}
+{"type":"event_msg","timestamp":"2026-06-15T09:00:13.000Z","payload":{"type":"task_complete","usage":{"input_tokens":2140,"output_tokens":186}}}
+{"type":"compact_marker","timestamp":"2026-06-15T09:00:14.000Z","payload":{"note":"unknown line type for reader-resilience testing"}}

@@ -1,0 +1,45 @@
+{
+  "root": "/home/user/projects/plainlib",
+  "cwdBasename": "plainlib",
+  "files": [
+    {
+      "path": ".gitignore",
+      "size": 30,
+      "sha256": "934390ee2b950fef94244fcc1ba5c0b334e15629210af8f4263dfdbd61cde657",
+      "content": "node_modules/\ncoverage/\n*.log\n"
+    },
+    {
+      "path": "README.md",
+      "size": 123,
+      "sha256": "5084a75681d9e5416b4b09f887960768273a94921cc59de7776827cad33b58e8",
+      "content": "# plainlib\n\nA tiny string utility library. No AI-agent configuration lives in this repo.\n\n```bash\nnpm install plainlib\n```\n"
+    },
+    {
+      "path": "package-lock.json",
+      "size": 203,
+      "sha256": "cdc6dd862741c745abe8552e99061c69b90c207da23433f9e1192ec41ffaffe6"
+    },
+    {
+      "path": "package.json",
+      "size": 181,
+      "sha256": "971dd12fde5a7e06a0e0397d8943ea38d5ee2059b94c3e782704917f4ac48168",
+      "content": "{\n  \"name\": \"plainlib\",\n  \"version\": \"1.4.2\",\n  \"description\": \"Tiny string utilities\",\n  \"main\": \"src/index.js\",\n  \"scripts\": {\n    \"test\": \"node --test\"\n  },\n  \"license\": \"MIT\"\n}\n"
+    },
+    {
+      "path": "src/index.js",
+      "size": 216,
+      "sha256": "16a22e8e454924270faa4945909a9b6de4cb3fefbec0460eae60db4592666b9e",
+      "content": "export function slugify(s) {\n  return s\n    .toLowerCase()\n    .replace(/[^a-z0-9]+/g, '-')\n    .replace(/^-+|-+$/g, '');\n}\n\nexport function truncate(s, n) {\n  return s.length <= n ? s : s.slice(0, n - 1) + '…';\n}\n"
+    },
+    {
+      "path": "test/index.test.js",
+      "size": 293,
+      "sha256": "44120b5da431b3d397b61485a7817155cee3011b0893b66b0d331011709f621d",
+      "content": "import { test } from 'node:test';\nimport assert from 'node:assert/strict';\nimport { slugify, truncate } from '../src/index.js';\n\ntest('slugify', () => {\n  assert.equal(slugify('Hello, World!'), 'hello-world');\n});\n\ntest('truncate', () => {\n  assert.equal(truncate('abcdef', 4), 'abc…');\n});\n"
+    }
+  ],
+  "stats": {
+    "fileCount": 6,
+    "totalBytes": 1046
+  }
+}

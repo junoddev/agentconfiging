@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "postgres": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgres://localhost:5432/orbit_dev"],
+      "env": {
+        "PGOPTIONS": "-c statement_timeout=5000"
+      }
+    },
+    "bus-inspector": {
+      "command": "./tools/bus-mcp",
+      "args": ["--read-only"],
+      "env": {
+        "BUS_URL": "${ORBIT_BUS_URL}"
+      }
+    },
+    "docs": {
+      "type": "http",
+      "url": "https://mcp.example.com/docs",
+      "headers": {
+        "X-Team": "orbit"
+      }
+    }
+  }
+}

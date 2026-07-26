@@ -1,0 +1,22 @@
+{
+  "root": "/home/user/projects/taskboard",
+  "cwdBasename": "taskboard",
+  "files": [
+    {
+      "path": ".claude/settings.json",
+      "size": 198,
+      "sha256": "09beb959221c36880a83591bd1f24b7173eecfc48c12c77bac12c4454cbefb0b",
+      "content": "{\n  \"model\": \"claude-sonnet-4-5\",\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(npm test:*)\",\n      \"Bash(npm run build:*)\",\n      \"Read(src/**)\"\n    ],\n    \"deny\": [\n      \"Read(.env)\"\n    ]\n  }\n}\n"
+    },
+    {
+      "path": "CLAUDE.md",
+      "size": 317,
+      "sha256": "9a64eba3ead03ecf81cd545921a1f59ccaa26a3fb2c422a4913e6cd5ce4ad288",
+      "content": "# Taskboard\n\nKanban board web app. TypeScript + Express + SQLite.\n\n## Build & Test\n\n```bash\nnpm install\nnpm run build\nnpm test\n```\n\n## Conventions\n\n- Use ES modules everywhere; no `require()`.\n- All API handlers live in `src/routes/` and return typed responses.\n- Never commit directly to `main`; branch per feature.\n"
+    }
+  ],
+  "stats": {
+    "fileCount": 2,
+    "totalBytes": 515
+  }
+}

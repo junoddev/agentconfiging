@@ -1,0 +1,5 @@
+{"display":"fix the flaky login test in auth.spec.ts","pastedContents":{},"timestamp":1782205200000,"project":"/home/user/projects/web.app"}
+{"display":"add a saga step for partner C refunds","pastedContents":{},"timestamp":1782208800000,"project":"/home/user/projects/orbit"}
+{"display":"why is the outbox relay lagging?","pastedContents":{},"timestamp":1782212400000,"project":"/home/user/projects/orbit"}
+{"display":"review @src/routes/checkout.ts for retry handling","pastedContents":{"1":{"id":1,"type":"text","content":"export async function chargeCard(req) { /* pasted snippet */ }"}},"timestamp":1782216000000,"project":"/home/user/projects/web-app"}
+{"display":"clean up my zsh aliases","pastedContents":{},"timestamp":1782219600000,"project":"/home/user/dotfiles"}

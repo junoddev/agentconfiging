@@ -1,0 +1,28 @@
+{
+  "root": "/home/user/projects/gateway",
+  "cwdBasename": "gateway",
+  "files": [
+    {
+      "path": ".opencode/agent/reviewer.md",
+      "size": 338,
+      "sha256": "1a7add325d4d1f0d360582ae6f8bb054598e766e267678b7ee771e4af6fe7470",
+      "content": "---\ndescription: Reviews diffs for the gateway service\nmode: subagent\nmodel: anthropic/claude-opus-4-5\ntools:\n  write: false\n  edit: false\n  bash: true\n---\n\nYou review changes to the gateway. Focus on:\n\n- request routing correctness and timeout budgets\n- backward compatibility of public config schema\n- missing metrics on new code paths\n"
+    },
+    {
+      "path": ".opencode/command/deploy.md",
+      "size": 328,
+      "sha256": "d288b600d6243a6e99be67ec5bc756d3355e892a80a3db2898d57bb0be7427cf",
+      "content": "---\ndescription: Deploy the gateway to the given environment\nagent: build\nmodel: anthropic/claude-sonnet-4-5\n---\n\nDeploy the gateway service to $ARGUMENTS.\n\nSteps:\n1. Run `make preflight` and stop on any failure.\n2. Apply the terraform plan for the target environment.\n3. Verify `/healthz` returns 200 before reporting success.\n"
+    },
+    {
+      "path": "opencode.json",
+      "size": 558,
+      "sha256": "af26fe8e32910f23e40435bc1a6a3948224a5a32c25e4868948361c5de1c2c6f",
+      "content": "{\n  \"$schema\": \"https://opencode.ai/config.json\",\n  \"model\": \"anthropic/claude-sonnet-4-5\",\n  \"small_model\": \"anthropic/claude-haiku-4-5\",\n  \"autoupdate\": false,\n  \"permission\": {\n    \"edit\": \"ask\",\n    \"bash\": {\n      \"git push\": \"deny\",\n      \"*\": \"allow\"\n    }\n  },\n  \"mcp\": {\n    \"grafana\": {\n      \"type\": \"local\",\n      \"command\": [\"npx\", \"-y\", \"grafana-mcp\"],\n      \"enabled\": true\n    }\n  },\n  \"agent\": {\n    \"review\": {\n      \"model\": \"anthropic/claude-opus-4-5\",\n      \"prompt\": \"You are the code review agent for the gateway service.\"\n    }\n  }\n}\n"
+    }
+  ],
+  "stats": {
+    "fileCount": 3,
+    "totalBytes": 1224
+  }
+}

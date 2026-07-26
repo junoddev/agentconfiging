@@ -1,0 +1,6 @@
+You are working on Storefront, a Next.js 14 e-commerce app.
+
+- Use the app router; never add pages/ routes.
+- Prefer server components; mark client components explicitly.
+- All prices are integer cents. Never use floats for money.
+- Run `pnpm lint` before proposing a diff.

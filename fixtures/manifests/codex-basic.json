@@ -1,0 +1,16 @@
+{
+  "root": "/home/user/projects/data-pipeline",
+  "cwdBasename": "data-pipeline",
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "size": 519,
+      "sha256": "36747b7733785feb3229fb598f37ee20c492c3692206fb266690da6f3b287491",
+      "content": "# Agent guide — data-pipeline\n\nBatch ETL pipeline in Rust. Reads from S3-compatible storage, writes Parquet.\n\n## Working here\n\n- `cargo build --workspace` must stay green; fix warnings, they are denied in CI.\n- Config lives in `pipeline.toml`; never hardcode bucket names.\n- Integration tests need `docker compose up -d minio` first.\n- Prefer small PRs: one transform per change.\n\n## Layout\n\n- `crates/ingest/` — source readers\n- `crates/transform/` — pure transforms (no I/O)\n- `crates/sink/` — Parquet writer\n"
+    }
+  ],
+  "stats": {
+    "fileCount": 1,
+    "totalBytes": 519
+  }
+}

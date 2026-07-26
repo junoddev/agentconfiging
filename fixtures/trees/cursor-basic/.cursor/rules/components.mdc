@@ -1,0 +1,10 @@
+---
+description: React component conventions
+globs: *.tsx,src/components/**
+alwaysApply: false
+---
+
+# Component rules
+
+- One component per file, named export matching the filename.
+- Props interfaces are declared above the component, suffixed `Props`.

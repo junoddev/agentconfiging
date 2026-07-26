@@ -1,0 +1,13 @@
+---
+description: TypeScript conventions for all source files
+globs:
+  - "src/**/*.ts"
+  - "src/**/*.tsx"
+alwaysApply: false
+---
+
+# TypeScript rules
+
+- `strict` mode is on; never add `// @ts-ignore` without a linked issue.
+- Exported functions require explicit return types.
+- Use discriminated unions over enums.

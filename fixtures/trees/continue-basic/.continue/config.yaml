@@ -1,0 +1,24 @@
+name: mobile-app assistant
+version: 1.0.0
+schema: v1
+
+models:
+  - name: main
+    provider: anthropic
+    model: claude-sonnet-4-5
+    roles:
+      - chat
+      - edit
+  - name: autocomplete
+    provider: ollama
+    model: qwen2.5-coder:1.5b
+    roles:
+      - autocomplete
+
+rules:
+  - Use TypeScript strict mode.
+  - Match the existing navigation patterns in src/navigation/.
+
+context:
+  - provider: file
+  - provider: diff

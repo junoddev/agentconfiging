@@ -1,0 +1,10 @@
+---
+description: REST API design rules for route handlers
+alwaysApply: true
+---
+
+# API design
+
+- Every route validates input with zod before touching the database.
+- Errors return `{ error: { code, message } }` with a stable code slug.
+- No endpoint may return more than 100 items without a cursor.

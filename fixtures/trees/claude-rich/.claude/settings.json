@@ -1,0 +1,77 @@
+{
+  "model": "claude-opus-4-5",
+  "env": {
+    "NODE_OPTIONS": "--max-old-space-size=4096",
+    "ORBIT_TEST_DB": "postgres://localhost:5432/orbit_test"
+  },
+  "statusLine": {
+    "type": "command",
+    "command": ".claude/statusline.sh"
+  },
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Bash(npm test:*)",
+      "Bash(npm run build:*)",
+      "Bash(psql orbit_test:*)",
+      "Read(src/**)",
+      "Read(docs/**)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(secrets/**)",
+      "Bash(git push:*)"
+    ],
+    "ask": [
+      "Bash(npm run db:migrate:*)"
+    ],
+    "additionalDirectories": [
+      "../orbit-contracts"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/check-cmd.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx prettier --write \"$CLAUDE_FILE_PATHS\""
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"branch: $(git branch --show-current)\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/notify-done.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

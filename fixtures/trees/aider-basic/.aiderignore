@@ -1,0 +1,4 @@
+vendor/
+migrations/versions/
+*.min.js
+static/dist/

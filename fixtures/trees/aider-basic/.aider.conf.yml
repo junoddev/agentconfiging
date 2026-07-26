@@ -1,0 +1,9 @@
+model: sonnet
+auto-commits: false
+attribute-author: false
+read:
+  - CONVENTIONS.md
+lint-cmd: "ruff check --fix"
+test-cmd: "pytest -q"
+auto-test: true
+dark-mode: true

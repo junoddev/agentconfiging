@@ -1,0 +1,22 @@
+{
+  "root": "/home/user/projects/billing-service",
+  "cwdBasename": "billing-service",
+  "files": [
+    {
+      "path": ".github/copilot-instructions.md",
+      "size": 468,
+      "sha256": "fbe351648406a6afe659321c54a1326fc24c769d9c6fc62be05851827393d92a",
+      "content": "# Copilot instructions for billing-service\n\nThis is a Python 3.12 FastAPI service that issues and reconciles invoices.\n\n- Use `uv` for dependency management, never pip directly.\n- All money amounts are `Decimal`, quantized to 2 places at the boundary.\n- Database access goes through `app/repo/`; handlers never import SQLAlchemy.\n- Tests use pytest with the `faker` fixtures in `tests/conftest.py`.\n- Run `make check` (ruff + mypy + pytest) before finishing any task.\n"
+    },
+    {
+      "path": ".github/instructions/api.instructions.md",
+      "size": 235,
+      "sha256": "4ef6cf206462a4f3552ed8afc3a785da7dda06e2325434277ed6bbc79f31d42e",
+      "content": "---\napplyTo: \"app/api/**/*.py\"\n---\n\n# API layer instructions\n\n- Every endpoint declares a `response_model`.\n- Pagination is cursor-based; page/offset params are forbidden.\n- Raise `BillingError` subclasses, never bare `HTTPException`.\n"
+    }
+  ],
+  "stats": {
+    "fileCount": 2,
+    "totalBytes": 703
+  }
+}
