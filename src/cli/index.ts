@@ -1,31 +1,14 @@
 #!/usr/bin/env node
-import { parseCliArgs } from './args.js';
+import { runCli } from './main.js';
 
 export { COMMANDS, parseCliArgs } from './args.js';
-export type { Command, ParsedArgs } from './args.js';
+export type { Command, ParsedArgs, ReportArgs } from './args.js';
+export { EX_USAGE, runCli } from './main.js';
+export { runReport, REPORT_HELP } from './report.js';
+export type { ReportFinding, ReportIo, ReportOptions } from './report.js';
+export { collectPathCommands } from './path-env.js';
 
-function main(): void {
-  let parsed;
-  try {
-    parsed = parseCliArgs(process.argv.slice(2));
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 1;
-    return;
-  }
-
-  switch (parsed.command) {
-    case 'report':
-      // Plain JSON to stdout for CI — never Ink (SPEC §4).
-      process.stdout.write(`${JSON.stringify({ status: 'placeholder', findings: [] })}\n`);
-      break;
-    case 'daemon':
-      console.log('agentconfiging daemon: not implemented yet');
-      break;
-    case 'launch':
-      console.log('agentconfiging: launch UI not implemented yet');
-      break;
-  }
-}
-
-main();
+process.exitCode = runCli(process.argv.slice(2), {
+  stdout: (chunk) => void process.stdout.write(chunk),
+  stderr: (chunk) => void process.stderr.write(chunk),
+});
