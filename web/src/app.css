@@ -20,7 +20,7 @@
 @import './styles/type.css';
 @import './styles/grid.css';
 
-/* ── Proof-page styles (seed of the component gallery) ─────────────────── */
+/* ── App chrome (top bar + rail, DESIGN.md §4) ─────────────────────────── */
 
 .wordmark {
   font-family: var(--font-sans);
@@ -35,41 +35,39 @@
   color: var(--fg-dim);
 }
 
+.rail__item {
+  display: block;
+  padding: 8px var(--gutter);
+}
+
+.rail__item[aria-current] {
+  color: var(--fg);
+}
+
+/* Hairline separating the numbered sections from internal rail entries. */
+.rail__break {
+  margin: var(--gutter) 0;
+}
+
+/* ── Page scaffold (shared by dashboard + gallery routes) ──────────────── */
+
+.page {
+  padding: 0 var(--gutter) var(--gutter);
+}
+
+.page__section {
+  padding: var(--gutter) 0;
+}
+
 /* Panel hosting a SweepOverlay — the sweep needs a positioned ancestor. */
 .sweep-panel {
   position: relative;
   padding: var(--gutter);
 }
 
-.rail__item {
-  display: block;
-  padding: 8px var(--gutter);
-}
+/* ── Gallery (#/gallery) — internal component spec page ────────────────── */
 
-.rail__item[aria-current='true'] {
-  color: var(--fg);
-}
-
-.gallery {
-  padding: 0 var(--gutter) var(--gutter);
-}
-
-.gallery__section {
-  padding: var(--gutter) 0;
-}
-
-.stat {
-  padding: var(--gutter);
-}
-
-.stat__delta {
-  color: var(--signal);
-}
-
-/* Severity block styles (.sev) moved to components/core/components.css —
-   FindingRow owns them now. */
-
-/* One demo block in the COMPONENTS gallery section. */
+/* One demo block: micro-label caption + the component states below it. */
 .gallery__demo {
   margin-top: var(--gutter);
 }
@@ -83,4 +81,40 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  padding: 8px 0;
+}
+
+/* Color token swatch rows (FOUNDATION section). */
+.swatch-row {
+  display: flex;
+  align-items: center;
+  gap: var(--gutter);
+  min-height: var(--row-h);
+  border-bottom: var(--hairline-w) solid var(--hairline);
+}
+
+.swatch {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+.swatch-row__name {
+  min-width: 120px;
+}
+
+.swatch-row__values {
+  color: var(--fg-dim);
+}
+
+/* Grid demo cells (FOUNDATION section). */
+.grid-demo-cell {
+  padding: var(--gutter);
+}
+
+.grid-demo-surface {
+  margin-top: var(--gutter);
+  padding: var(--gutter);
 }
