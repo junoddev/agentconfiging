@@ -1,5 +1,5 @@
 /**
- * Core barrel completeness pin. The barrel aggregates 11 sub-barrels via
+ * Core barrel completeness pin. The barrel aggregates 12 sub-barrels via
  * `export *`, and ESM SILENTLY DROPS any name exported by more than one of
  * them (ambiguous re-export). This test guards against that drift: every
  * runtime export of every sub-barrel must be present on the core barrel.
@@ -18,6 +18,7 @@ import * as history from './history/index.js';
 import * as redact from './redact/index.js';
 import * as discovery from './discovery/index.js';
 import * as runtimes from './runtimes/index.js';
+import * as registry from './registry/index.js';
 
 const barrels = {
   findings,
@@ -31,10 +32,11 @@ const barrels = {
   redact,
   discovery,
   runtimes,
+  registry,
 };
 
 describe('core barrel', () => {
-  it('re-exports every runtime export of all 11 sub-barrels (no silent ambiguous drops)', () => {
+  it('re-exports every runtime export of all 12 sub-barrels (no silent ambiguous drops)', () => {
     const names = [...new Set(Object.values(barrels).flatMap((m) => Object.keys(m)))];
     const missing = names.filter((name) => !(name in core));
     expect(missing).toEqual([]);

@@ -17,3 +17,4 @@ export * from './history/index.js';
 export * from './redact/index.js';
 export * from './discovery/index.js';
 export * from './runtimes/index.js';
+export * from './registry/index.js';
