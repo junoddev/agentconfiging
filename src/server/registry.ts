@@ -33,8 +33,11 @@
  *
  * WATCHER SEAM (agentconfig-gxo.4): a per-instance file watcher attaches in
  * `load()` (after the store is created) and detaches in `unload()`/`remove()`.
- * The store already exposes `invalidate()` for the watcher to call. The two
- * marked seams below are the only places that wiring needs to touch.
+ * The store already exposes `invalidate()` for the watcher to call. The wiring
+ * is a pluggable `InstanceLifecycle` (set via `setLifecycle`) so the registry
+ * stays free of watcher/WS details: `onLoad` fires once when a store is first
+ * created, `onUnload` fires on unload and remove. startServer installs the
+ * WatcherSupervisor here.
  */
 
 import { createHash } from 'node:crypto';
@@ -78,6 +81,16 @@ export class InvalidRootError extends Error {
 /** Store constructor, injectable so tests can count scans / stub the engine. */
 export type StoreFactory = (root: string, version: string) => ReportStore;
 
+/**
+ * Watcher lifecycle seam (agentconfig-gxo.4). `onLoad` is called once, right
+ * after an instance's store is created (so `instance.store` is set); `onUnload`
+ * is called on both unload and remove. Both must never throw.
+ */
+export interface InstanceLifecycle {
+  onLoad(instance: RegistryInstance): void;
+  onUnload(instance: RegistryInstance): void;
+}
+
 /** Hard cap on hosted instances — a sane bound, not a real-world limit. */
 export const MAX_INSTANCES = 128;
 
@@ -97,6 +110,7 @@ export class InstanceRegistry {
   readonly #byId = new Map<string, RegistryInstance>();
   readonly #byRoot = new Map<string, string>(); // realpath'd root → id
   #defaultId: string | undefined;
+  #lifecycle: InstanceLifecycle | undefined;
 
   constructor(
     version: string,
@@ -104,6 +118,14 @@ export class InstanceRegistry {
   ) {
     this.#version = version;
     this.#makeStore = makeStore;
+  }
+
+  /**
+   * Install (or clear) the watcher lifecycle seam. Idempotent; safe to call
+   * before any instance loads. See {@link InstanceLifecycle}.
+   */
+  setLifecycle(lifecycle: InstanceLifecycle | undefined): void {
+    this.#lifecycle = lifecycle;
   }
 
   /**
@@ -233,8 +255,9 @@ export class InstanceRegistry {
     if (!instance.store) {
       instance.store = this.#makeStore(instance.root, this.#version);
       instance.loaded = true;
-      // WATCHER SEAM (gxo.4): attach a per-instance watcher here and have it
-      // call `instance.store.invalidate()` on relevant fs changes.
+      // WATCHER SEAM (gxo.4): attach a per-instance watcher now that the store
+      // exists; it calls `instance.store.invalidate()` on relevant fs changes.
+      this.#lifecycle?.onLoad(instance);
     }
     return instance.store;
   }
@@ -252,6 +275,7 @@ export class InstanceRegistry {
     const instance = this.#byId.get(id);
     if (!instance) return false;
     // WATCHER SEAM (gxo.4): detach this instance's watcher before dropping.
+    this.#lifecycle?.onUnload(instance);
     instance.store = undefined;
     instance.loaded = false;
     return true;
@@ -262,6 +286,7 @@ export class InstanceRegistry {
     const instance = this.#byId.get(id);
     if (!instance) return false;
     // WATCHER SEAM (gxo.4): detach this instance's watcher before removal.
+    this.#lifecycle?.onUnload(instance);
     this.#byId.delete(id);
     this.#byRoot.delete(instance.root);
     if (this.#defaultId === id) {

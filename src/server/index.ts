@@ -32,6 +32,8 @@ import { KNOWN_DIRS } from '../core/index.js';
 import { createApp } from './app.js';
 import { handleRequest } from './bridge.js';
 import { InstanceRegistry } from './registry.js';
+import { WatcherSupervisor } from './watcher.js';
+import { WsHub, handleUpgrade } from './ws.js';
 import { defaultTrashDir } from './trash.js';
 import type { WriteScope } from './pathguard.js';
 import { LOOPBACK_HOST, resolveServerOptions } from './options.js';
@@ -50,6 +52,19 @@ export { resolveWriteTarget } from './pathguard.js';
 export type { WriteScope, Resolution } from './pathguard.js';
 export { unifiedDiff } from './diff.js';
 export { trashFile, defaultTrashDir } from './trash.js';
+export { InstanceWatcher, WatcherSupervisor, reportDiff, DEFAULT_DEBOUNCE_MS } from './watcher.js';
+export type { WatcherMessage, ReportDiff } from './watcher.js';
+export {
+  WsHub,
+  WsConnection,
+  authorizeUpgrade,
+  handleUpgrade,
+  computeAcceptKey,
+  encodeTextFrame,
+  encodeCloseFrame,
+  decodeFrames,
+  DEFAULT_MAX_CONNECTIONS,
+} from './ws.js';
 
 export interface StartServerOptions {
   /** Launch root — the DEFAULT instance, served when `?instance=` is absent. */
@@ -71,6 +86,15 @@ export interface StartServerOptions {
 export interface RunningServer {
   /** Launch URL with the session token in the fragment (see module header). */
   url: string;
+  /**
+   * Live-updates WebSocket URL (agentconfig-gxo.4): `ws://127.0.0.1:<port>/api/ws`.
+   * The UI connects with the session token as the sole `Sec-WebSocket-Protocol`
+   * subprotocol (`new WebSocket(wsUrl, [token])`) — a WS handshake can carry no
+   * Authorization header and the URL fragment never reaches the server, so the
+   * subprotocol is the token channel. The upgrade enforces the same Host/Origin/
+   * token gates as every /api request (see ws.ts).
+   */
+  wsUrl: string;
   port: number;
   token: string;
   close(): Promise<void>;
@@ -130,6 +154,18 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
   registry.seed(opts.root, { makeDefault: true });
   for (const extra of opts.instances ?? []) registry.seed(extra);
 
+  // LIVE UPDATES (agentconfig-gxo.4): the WS hub fans report/live-session
+  // pushes to connected clients; the supervisor owns one file watcher per
+  // loaded instance and pushes through the hub. Wiring it as the registry's
+  // lifecycle seam starts a watcher exactly when an instance loads and stops
+  // it on unload/remove.
+  const wsHub = new WsHub();
+  const supervisor = new WatcherSupervisor({
+    home: os.homedir(),
+    onMessage: (message) => wsHub.broadcast(message),
+  });
+  registry.setLifecycle(supervisor);
+
   // The real port exists only after listen; until then port() returns 0 and
   // the app's Host allowlist rejects everything (fail-closed).
   let boundPort = 0;
@@ -145,6 +181,27 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
 
   const server = createServer((req, res) => {
     void handleRequest(app.fetch, req, res, `http://${LOOPBACK_HOST}:${boundPort}`);
+  });
+
+  // WebSocket upgrades are handled at the transport layer (node's 'upgrade'
+  // event), NOT through Hono — hono has no WS over the node bridge. The handler
+  // gates the upgrade with the SAME Host/Origin/token checks as /api before
+  // switching protocols (see ws.ts).
+  //
+  // We track every upgraded socket ourselves: an upgraded socket is DETACHED
+  // from the http server, so `server.closeAllConnections()` never destroys it
+  // and `server.close()` would hang forever while one lingers (verified). On
+  // shutdown we destroy them directly.
+  const wsSockets = new Set<import('node:stream').Duplex>();
+  server.on('upgrade', (req, socket, head) => {
+    wsSockets.add(socket);
+    socket.on('close', () => wsSockets.delete(socket));
+    handleUpgrade(req, socket, head, {
+      tokenHash,
+      port: () => boundPort,
+      hub: wsHub,
+      path: '/api/ws',
+    });
   });
 
   // Reject only on a listen-time failure, then DETACH that handler — leaving
@@ -170,13 +227,25 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
 
   return {
     url: `http://${LOOPBACK_HOST}:${boundPort}/#token=${token}`,
+    wsUrl: `ws://${LOOPBACK_HOST}:${boundPort}/api/ws`,
     port: boundPort,
     token,
-    close: () =>
-      new Promise<void>((resolve, reject) => {
+    // Teardown order matters: stop the watchers (release every chokidar handle
+    // — no leaks on close/unload) and close the WS connections, THEN close the
+    // http server. Do the watcher/WS teardown first so no push races shutdown.
+    close: async () => {
+      await supervisor.closeAll();
+      // Send WS close frames to any graceful clients, then DIRECTLY destroy
+      // every upgraded socket — closeAllConnections() cannot reach them, and an
+      // undestroyed one keeps server.close()'s callback from ever firing.
+      wsHub.closeAll();
+      for (const socket of wsSockets) socket.destroy();
+      wsSockets.clear();
+      await new Promise<void>((resolve, reject) => {
         server.close((err) => (err ? reject(err) : resolve()));
         server.closeAllConnections();
-      }),
+      });
+    },
   };
 }
 
