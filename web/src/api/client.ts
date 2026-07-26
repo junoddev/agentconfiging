@@ -11,6 +11,7 @@
  */
 
 import type {
+  ApplyFixResponse,
   FileContent,
   HealthResponse,
   InstanceSummary,
@@ -19,13 +20,15 @@ import type {
   Report,
   ScanResponse,
   UnloadResponse,
+  WriteResponse,
 } from './types.js';
 
 export type ApiErrorKind =
   | 'unauthorized' // 401 — token missing or wrong
-  | 'forbidden' // 403 — Host/Origin gate
+  | 'forbidden' // 403 — Host/Origin gate / out-of-scope write
   | 'notfound' // 404 — unknown instance / absent file
   | 'badrequest' // 400 — validation (e.g. add/scan path is not a directory)
+  | 'conflict' // 409 — a fix precondition no longer holds (apply-fix)
   | 'network' // fetch itself threw (server down, offline)
   | 'server' // 5xx
   | 'unknown';
@@ -47,6 +50,7 @@ function kindForStatus(status: number): ApiErrorKind {
   if (status === 403) return 'forbidden';
   if (status === 404) return 'notfound';
   if (status === 400) return 'badrequest';
+  if (status === 409) return 'conflict';
   if (status >= 500) return 'server';
   return 'unknown';
 }
@@ -127,6 +131,33 @@ export class ApiClient {
    */
   scanFolder(path: string): Promise<ScanResponse> {
     return this.#send<ScanResponse>('/api/instances/scan', 'POST', { path });
+  }
+
+  /**
+   * WRITE FLOW (bead wmc.1) — write one config file through the guarded server
+   * path. `dryRun:true` returns the diff preview (no disk touch); `dryRun:false`
+   * commits. The proposed `content` is the COMPLETE replacement file body. This
+   * is the primitive editors (wmc.2-10) save through; the Findings APPLY flow
+   * uses {@link applyFix} instead (its patch is server-side, never sent here).
+   */
+  writeFile(path: string, content: string, dryRun: boolean): Promise<WriteResponse> {
+    return this.#send<WriteResponse>('/api/write', 'POST', { path, content, dryRun });
+  }
+
+  /**
+   * APPLY-FIX (bead wmc.1) — dry-run or commit a finding's machine fix. The
+   * client never holds the fix patch (stripped server-side); it names the
+   * finding and the server recomputes + guards every edit. `dryRun:true` returns
+   * the unified diff to preview; `dryRun:false` applies it. `instance` defaults
+   * to the server's default instance when omitted.
+   */
+  applyFix(
+    findingId: string,
+    opts: { dryRun: boolean; instance?: string },
+  ): Promise<ApplyFixResponse> {
+    const body: Record<string, unknown> = { findingId, dryRun: opts.dryRun };
+    if (opts.instance !== undefined) body['instance'] = opts.instance;
+    return this.#send<ApplyFixResponse>('/api/apply-fix', 'POST', body);
   }
 
   /** Free a loaded instance's engine store (●→○); the next report re-scans it. */

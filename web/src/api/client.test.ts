@@ -82,6 +82,37 @@ describe('ApiClient instance mutations', () => {
     expect(summary).toMatchObject({ id: '1', root: '/p' });
   });
 
+  it('POSTs a writeFile dry-run body and returns the preview', async () => {
+    const body = { willCreate: true, willModify: false, pathScope: 'project', diff: '+x\n' };
+    const fetchImpl = stubFetch(body);
+    const client = new ApiClient('tok', { fetchImpl });
+    const res = await client.writeFile('.gitignore', 'x\n', true);
+    const [url, init] = firstCall(fetchImpl);
+    expect(url).toBe('/api/write');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe(JSON.stringify({ path: '.gitignore', content: 'x\n', dryRun: true }));
+    expect(res).toEqual(body);
+  });
+
+  it('POSTs an applyFix body with findingId + dryRun, omitting instance when absent', async () => {
+    const body = { dryRun: true, findingId: 'f', fixKind: 'create-file', edits: [] };
+    const fetchImpl = stubFetch(body);
+    const client = new ApiClient('tok', { fetchImpl });
+    await client.applyFix('f', { dryRun: true });
+    const [url, init] = firstCall(fetchImpl);
+    expect(url).toBe('/api/apply-fix');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe(JSON.stringify({ findingId: 'f', dryRun: true }));
+  });
+
+  it('includes the instance selector in an applyFix body when given', async () => {
+    const fetchImpl = stubFetch({ committed: true, findingId: 'f', edits: [] });
+    const client = new ApiClient('tok', { fetchImpl });
+    await client.applyFix('f', { dryRun: false, instance: 'inst1' });
+    const [, init] = firstCall(fetchImpl);
+    expect(init.body).toBe(JSON.stringify({ findingId: 'f', dryRun: false, instance: 'inst1' }));
+  });
+
   it('POSTs the scan body and returns hits + stats', async () => {
     const body = {
       hits: [{ root: '/p/a', markers: ['CLAUDE.md'], runtimes: ['claude-code'] }],

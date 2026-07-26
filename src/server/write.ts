@@ -36,9 +36,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Hono } from 'hono';
-import { CAPS, redact } from '../core/index.js';
+import { CAPS, redact, type Fix } from '../core/index.js';
 import { unifiedDiff } from './diff.js';
-import { resolveWriteTarget, type WriteScope } from './pathguard.js';
+import { resolveWriteTarget, type ResolvedTarget, type WriteScope } from './pathguard.js';
+import type { InstanceRegistry } from './registry.js';
 import { trashFile } from './trash.js';
 
 export interface WriteRoutesConfig {
@@ -46,7 +47,15 @@ export interface WriteRoutesConfig {
   trashDir: string;
 }
 
-function jsonError(status: 400 | 403 | 404 | 413 | 500, message: string): Response {
+/** apply-fix needs the registry (to resolve the instance + recompute the fix)
+ *  and the base scopes (its GLOBAL entries; the PROJECT scope is derived
+ *  per-instance from the target instance's own root). */
+export interface ApplyFixRoutesConfig {
+  scopes: WriteScope[];
+  registry: InstanceRegistry;
+}
+
+function jsonError(status: 400 | 403 | 404 | 409 | 413 | 500, message: string): Response {
   return new Response(JSON.stringify({ error: message }), {
     status,
     headers: { 'content-type': 'application/json' },
@@ -78,6 +87,52 @@ async function readJsonBody(req: Request): Promise<Record<string, unknown> | und
   }
 }
 
+/** The dry-run view of a single already-resolved write: what the diff shows and
+ *  whether it creates or modifies. `refuse` marks an in-scope path that exists
+ *  but is not a regular file (a dir) — a 403, never an EISDIR. */
+interface EditPreview {
+  willCreate: boolean;
+  willModify: boolean;
+  diff: string;
+}
+
+function previewResolved(
+  resolved: ResolvedTarget,
+  content: string,
+): EditPreview | { refuse: true } {
+  const existing = statFile(resolved.absPath);
+  if (fs.existsSync(resolved.absPath) && !existing) return { refuse: true };
+  const oldContent = existing ? fs.readFileSync(resolved.absPath, 'utf-8') : '';
+  const willModify = existing !== undefined;
+  return {
+    willModify,
+    willCreate: !willModify,
+    diff: unifiedDiff(oldContent, content, resolved.relPath),
+  };
+}
+
+/**
+ * Commit a single already-resolved target through THE guarded write path (the
+ * one write primitive): mkdir the parent, then open the leaf with O_NOFOLLOW so
+ * a symlink swapped in after the guard's lstat-walk is refused atomically by the
+ * OS (ELOOP) rather than followed out of scope. Throws that ELOOP for the caller
+ * to map to a 403 — apply-fix and /api/write share this exact code so neither
+ * can drift into a second, weaker write.
+ */
+function commitResolved(resolved: ResolvedTarget, content: string): void {
+  fs.mkdirSync(path.dirname(resolved.absPath), { recursive: true });
+  const fd = fs.openSync(
+    resolved.absPath,
+    fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | O_NOFOLLOW,
+    0o644,
+  );
+  try {
+    fs.writeFileSync(fd, content, 'utf-8');
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 export function registerWriteRoutes(app: Hono, config: WriteRoutesConfig): void {
   const { scopes, trashDir } = config;
 
@@ -95,46 +150,31 @@ export function registerWriteRoutes(app: Hono, config: WriteRoutesConfig): void 
     if (!resolved.ok)
       return jsonError(resolved.status, resolved.status === 400 ? 'bad request' : 'forbidden');
 
-    const existing = statFile(resolved.absPath);
-    // In-scope path that exists but is NOT a regular file (a dir): refuse
-    // rather than EISDIR. Non-existent → this is a create.
-    if (fs.existsSync(resolved.absPath) && !existing) return jsonError(403, 'forbidden');
-
-    const oldContent = existing ? fs.readFileSync(resolved.absPath, 'utf-8') : '';
-    const willModify = existing !== undefined;
-    const willCreate = !willModify;
-    const diff = unifiedDiff(oldContent, content, resolved.relPath);
+    const preview = previewResolved(resolved, content);
+    if ('refuse' in preview) return jsonError(403, 'forbidden');
 
     if (dryRun !== false) {
-      return c.json({ diff, willCreate, willModify, pathScope: resolved.scope.kind });
+      return c.json({
+        diff: preview.diff,
+        willCreate: preview.willCreate,
+        willModify: preview.willModify,
+        pathScope: resolved.scope.kind,
+      });
     }
 
-    fs.mkdirSync(path.dirname(resolved.absPath), { recursive: true });
-    // Open with O_NOFOLLOW so a symlinked leaf (e.g. one swapped in after the
-    // guard's lstat-walk) is refused by the OS atomically rather than followed.
-    let fd: number;
     try {
-      fd = fs.openSync(
-        resolved.absPath,
-        fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | O_NOFOLLOW,
-        0o644,
-      );
+      commitResolved(resolved, content);
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === 'ELOOP') return jsonError(403, 'forbidden');
       throw err;
     }
-    try {
-      fs.writeFileSync(fd, content, 'utf-8');
-    } finally {
-      fs.closeSync(fd);
-    }
     return c.json({
       committed: true,
-      created: willCreate,
-      modified: willModify,
+      created: preview.willCreate,
+      modified: preview.willModify,
       path: resolved.relPath,
       pathScope: resolved.scope.kind,
-      diff,
+      diff: preview.diff,
     });
   });
 
@@ -210,5 +250,157 @@ export function registerWriteRoutes(app: Hono, config: WriteRoutesConfig): void 
     } finally {
       fs.closeSync(fd);
     }
+  });
+}
+
+/**
+ * ONE result row per fix edit — the dry-run preview and the commit report share
+ * this shape (commit adds `committed`, and `error` when a per-edit write failed).
+ */
+interface FixEditResult {
+  path: string;
+  pathScope: string;
+  willCreate: boolean;
+  willModify: boolean;
+  diff: string;
+  committed?: boolean;
+  error?: string;
+}
+
+/**
+ * POST /api/apply-fix {instance?, findingId, dryRun?} — the one-click APPLY for a
+ * finding's machine fix (SPEC §4.1 + §4.3, bead agentconfig-wmc.1). Registered
+ * under /api, so it INHERITS the token + Origin/CSRF gates (see app.ts).
+ *
+ * WHY A SERVER ENDPOINT: the fix's `edits[].patch` (complete replacement file
+ * content, possibly secret-bearing) is STRIPPED before any report crosses the
+ * wire ([[fix-patch-carries-content]]) — the client only ever sees hasFix/
+ * fixKind. So APPLY cannot send the patch; it names the finding and the server
+ * recomputes the fix from a fresh (cached) report, then:
+ *   - dryRun (default): returns the unified DIFF for every edit, touching NOTHING.
+ *     The diff — current on-disk content vs the fix patch — is the INTENDED and
+ *     only disclosure of patch content: the user sees exactly what they approve.
+ *   - commit: applies each edit through resolveWriteTarget + commitResolved, the
+ *     SAME guarded write path a user write takes. A fix edit path is NO more
+ *     trusted than a user edit: it must pass input discipline, scope containment,
+ *     the config allowlist, and the symlink/O_NOFOLLOW defenses. An edit that
+ *     resolves out of scope refuses the WHOLE fix (403) before any write lands.
+ *
+ * ERRORS (constant bodies, no path echo): 400 malformed; 404 unknown instance OR
+ * unknown/fixless findingId (indistinguishable — no oracle); 403 an edit path the
+ * guard refuses; 409 the fix's precondition no longer holds (a 'create-file'
+ * whose target now exists, or a 'replace-file' whose target is gone) — refused
+ * rather than clobbering / creating unexpectedly.
+ */
+export function registerApplyFixRoute(app: Hono, config: ApplyFixRoutesConfig): void {
+  const { scopes, registry } = config;
+  // Global (agent-home) scopes are instance-independent; the project scope is
+  // the TARGET instance's own root (fix edit paths are project-relative to it).
+  const globalScopes = scopes.filter((s) => s.kind === 'global');
+
+  app.post('/api/apply-fix', async (c) => {
+    const body = await readJsonBody(c.req.raw);
+    if (!body) return jsonError(400, 'bad request');
+
+    const { instance: instanceSel, findingId, dryRun } = body;
+    if (typeof findingId !== 'string' || findingId === '') return jsonError(400, 'bad request');
+    if (instanceSel !== undefined && typeof instanceSel !== 'string')
+      return jsonError(400, 'bad request');
+    if (dryRun !== undefined && typeof dryRun !== 'boolean') return jsonError(400, 'bad request');
+
+    // Resolve ONLY against registered instances — never a scan of an arbitrary
+    // path (see registry.resolve). Unknown selector → 404.
+    const instance = registry.resolve(instanceSel ?? undefined);
+    if (!instance) return jsonError(404, 'not found');
+
+    let fix: Fix | undefined;
+    let store: ReturnType<InstanceRegistry['load']>;
+    try {
+      store = registry.load(instance);
+      fix = store.fixFor('project', findingId);
+    } catch (err) {
+      console.error(`agentconfiging server: apply-fix report failed: ${String(err)}`);
+      return jsonError(500, 'apply failed');
+    }
+    // Unknown finding id AND a finding that carries no fix both land here — the
+    // same 404, no oracle for which findings exist or are fixable.
+    if (!fix) return jsonError(404, 'not found');
+
+    const instanceScopes: WriteScope[] = [
+      { root: instance.root, kind: 'project' },
+      ...globalScopes,
+    ];
+
+    // Resolve + preview EVERY edit BEFORE writing any: a single out-of-scope /
+    // non-config / oversized edit refuses the whole fix, so a multi-edit fix
+    // never leaves a partial write behind on a guard failure.
+    const resolved: { target: ResolvedTarget; patch: string; preview: EditPreview }[] = [];
+    for (const edit of fix.edits) {
+      if (Buffer.byteLength(edit.patch, 'utf-8') > CAPS.maxFileBytes)
+        return jsonError(400, 'bad request');
+      const target = resolveWriteTarget(edit.path, instanceScopes);
+      if (!target.ok)
+        return jsonError(target.status, target.status === 400 ? 'bad request' : 'forbidden');
+      const preview = previewResolved(target, edit.patch);
+      if ('refuse' in preview) return jsonError(403, 'forbidden');
+
+      // Honor the Fix.kind PRECONDITION (src/core findings.ts): 'create-file'
+      // requires the target to be absent; 'replace-file' requires it to exist.
+      // A fix patch is the COMPLETE file body, so a 'create-file' whose target
+      // already exists would silently CLOBBER it — refuse instead. This also
+      // catches an analyzer that emitted a create-file for a file the ENGINE
+      // could not see (e.g. `.gitignore`, which the scanner never collects) but
+      // that is present on disk: applying it would destroy real content.
+      const precondition = fix.kind === 'create-file' ? preview.willCreate : preview.willModify;
+      if (!precondition) return jsonError(409, 'conflict');
+
+      resolved.push({ target, patch: edit.patch, preview });
+    }
+
+    const rows = (): FixEditResult[] =>
+      resolved.map(({ target, preview }) => ({
+        path: target.relPath,
+        pathScope: target.scope.kind,
+        willCreate: preview.willCreate,
+        willModify: preview.willModify,
+        diff: preview.diff,
+      }));
+
+    if (dryRun !== false) {
+      return c.json({ dryRun: true, findingId, fixKind: fix.kind, edits: rows() });
+    }
+
+    // COMMIT: apply each through the guarded write path. Best-effort with clear
+    // per-edit reporting — true cross-file atomicity is not achievable, so a
+    // mid-sequence failure (e.g. a TOCTOU symlink swap → ELOOP) is recorded and
+    // stops further writes rather than being masked.
+    const edits: FixEditResult[] = [];
+    let allOk = true;
+    for (const { target, patch, preview } of resolved) {
+      const row: FixEditResult = {
+        path: target.relPath,
+        pathScope: target.scope.kind,
+        willCreate: preview.willCreate,
+        willModify: preview.willModify,
+        diff: preview.diff,
+      };
+      try {
+        commitResolved(target, patch);
+        row.committed = true;
+      } catch (err) {
+        allOk = false;
+        row.committed = false;
+        row.error = (err as NodeJS.ErrnoException).code === 'ELOOP' ? 'forbidden' : 'write failed';
+        edits.push(row);
+        break;
+      }
+      edits.push(row);
+    }
+
+    // The applied fix changes disk → drop the cached report so the immediate
+    // refetch re-scans and the resolved finding disappears (the watcher will
+    // also invalidate + push, but this makes the APPLY→refetch loop deterministic).
+    store.invalidate('project');
+    return c.json({ committed: allOk, findingId, edits });
   });
 }

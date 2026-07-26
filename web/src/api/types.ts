@@ -134,6 +134,50 @@ export interface HealthResponse {
 }
 
 /**
+ * POST /api/write payload (src/server/write.ts). `dryRun:true` returns the
+ * preview (no disk touch); `dryRun:false` reports the commit. `diff` is unified
+ * diff TEXT — parse it (write/parseDiff) and render only as text nodes.
+ */
+export interface WriteResponse {
+  /** Present on a commit; absent on a dry-run. */
+  committed?: true;
+  created?: boolean;
+  modified?: boolean;
+  willCreate?: boolean;
+  willModify?: boolean;
+  path?: string;
+  pathScope: string;
+  diff: string;
+}
+
+/**
+ * One edit row in an apply-fix response (src/server/write.ts). `diff` is the
+ * INTENDED disclosure of the fix's patch content — the preview the user approves
+ * — carried as unified diff TEXT. `committed`/`error` are present only on a
+ * commit response.
+ */
+export interface FixEdit {
+  path: string;
+  pathScope: string;
+  willCreate: boolean;
+  willModify: boolean;
+  diff: string;
+  committed?: boolean;
+  error?: string;
+}
+
+/** POST /api/apply-fix payload (dry-run OR commit; src/server/write.ts). */
+export interface ApplyFixResponse {
+  /** True on a dry-run response; absent on a commit response. */
+  dryRun?: true;
+  /** True when every edit committed; present only on a commit response. */
+  committed?: boolean;
+  findingId: string;
+  fixKind?: FixKind;
+  edits: FixEdit[];
+}
+
+/**
  * One `[REDACTED:*]` mark's offsets over a served file's `content`
  * (src/core/redact.ts `RedactionSpan`). `[start, end)` index into the REDACTED
  * text; `id` names the catalogue pattern that fired (e.g. 'openai', 'github').

@@ -21,6 +21,7 @@ import {
   scanProject,
   toReportFinding,
   type DetectedAgent,
+  type Fix,
   type ManifestStats,
   type ReportFinding,
   type ScanOptions,
@@ -46,6 +47,14 @@ export class ReportStore {
   readonly #version: string;
   readonly #scanOptions: ScanOptions;
   readonly #cache = new Map<ReportScope, ServedReport>();
+  /**
+   * Per-scope map of finding id → fix payload. SERVER-INTERNAL by design: it
+   * holds the `fix.edits[].patch` (complete replacement file content, possibly
+   * secret-bearing) that {@link toReportFinding} strips from `#cache`. It is
+   * NEVER serialized to a client except through the guarded apply-fix diff
+   * preview (agentconfig-wmc.1) — see {@link fixFor}.
+   */
+  readonly #fixes = new Map<ReportScope, Map<string, Fix>>();
 
   /**
    * `scanOptions` overrides the engine walk bounds (agentconfig-gxo.6);
@@ -69,22 +78,40 @@ export class ReportStore {
       const hit = this.#cache.get(scope);
       if (hit) return hit;
     }
-    const report = this.#build();
-    this.#cache.set(scope, report);
-    return report;
+    return this.#build(scope);
   }
 
-  /** Drop cached reports (one scope, or all). Watcher-bead hook. */
+  /**
+   * The fix payload for a finding id in `scope`, or undefined when the id is
+   * unknown OR the finding carries no fix (the caller cannot tell which — no
+   * oracle). SERVER-INTERNAL: the returned patch content only ever reaches a
+   * client through the apply-fix DIFF PREVIEW (agentconfig-wmc.1), never a bulk
+   * serialization. Computes the report on first access, mirroring {@link get}.
+   */
+  fixFor(scope: ReportScope, findingId: string, opts: { fresh?: boolean } = {}): Fix | undefined {
+    if (opts.fresh || !this.#fixes.has(scope)) this.#build(scope);
+    return this.#fixes.get(scope)?.get(findingId);
+  }
+
+  /** Drop cached reports + fixes (one scope, or all). Watcher-bead hook. */
   invalidate(scope?: ReportScope): void {
-    if (scope) this.#cache.delete(scope);
-    else this.#cache.clear();
+    if (scope) {
+      this.#cache.delete(scope);
+      this.#fixes.delete(scope);
+    } else {
+      this.#cache.clear();
+      this.#fixes.clear();
+    }
   }
 
-  #build(): ServedReport {
+  /** Scan + analyze once, populating BOTH the served-report cache and the
+   *  (server-internal) fix cache from the single computation, then return the
+   *  served report. */
+  #build(scope: ReportScope): ServedReport {
     const manifest = scanProject(this.#root, this.#scanOptions);
     const agents = detect(manifest);
     const { findings } = buildReport(manifest, agents);
-    return {
+    const report: ServedReport = {
       version: this.#version,
       generatedAt: new Date().toISOString(),
       root: manifest.root,
@@ -94,5 +121,10 @@ export class ReportStore {
       findings: findings.map(toReportFinding),
       stats: manifest.stats,
     };
+    const fixes = new Map<string, Fix>();
+    for (const finding of findings) if (finding.fix) fixes.set(finding.id, finding.fix);
+    this.#cache.set(scope, report);
+    this.#fixes.set(scope, fixes);
+    return report;
   }
 }

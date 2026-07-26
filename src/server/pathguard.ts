@@ -70,6 +70,28 @@ export type Resolution = ResolvedTarget | RejectedTarget;
 const MAX_PATH_LEN = 4096;
 const MAX_SEGMENT_LEN = 255;
 
+/**
+ * Additive extension to the core write-allowlist (scanner.isWritableConfigPath),
+ * kept here in src/server rather than src/core (which is import-only from the
+ * server): project-root config files that carry MACHINE FIXES (SPEC §4.1) but
+ * are not part of the ENGINE's scan-collection set. `.gitignore` is the
+ * settings-local-committed fix target — a well-known, safe, project-root file
+ * with no allowed extension, so the scanner never collects it, yet applying its
+ * fix must write it. Project scope only, root only; every other guard (scope
+ * containment, traversal, symlink/O_NOFOLLOW) still applies unchanged.
+ */
+const ADDITIONAL_WRITABLE_ROOT_FILES: ReadonlySet<string> = new Set(['.gitignore']);
+
+/**
+ * The write allowlist the guard enforces: the core engine's include rules PLUS
+ * the server-side additions above. A fix edit path is checked here identically
+ * to a user write — an analyzer-emitted fix is no more trusted than a user edit.
+ */
+function isWritableTarget(rel: string, kind: 'project' | 'global'): boolean {
+  if (isWritableConfigPath(rel, kind)) return true;
+  return kind === 'project' && !rel.includes('/') && ADDITIONAL_WRITABLE_ROOT_FILES.has(rel);
+}
+
 const bad = (status: 400 | 403): RejectedTarget => ({ ok: false, status });
 
 /** Segment-aware containment: `child` is `parent` or strictly nested under it. */
@@ -163,7 +185,7 @@ export function resolveWriteTarget(requestedPath: unknown, scopes: WriteScope[])
     // tail; lstat still sees it. ANY symlink here would be followed OUT of
     // scope on the subsequent open, so refuse.
     if (tailHasSymlink(anc.real, anc.tail)) return bad(403);
-    if (!isWritableConfigPath(rel, scope.kind)) return bad(403);
+    if (!isWritableTarget(rel, scope.kind)) return bad(403);
     return { ok: true, absPath: realTarget, relPath: rel, scope };
   }
   return bad(403);

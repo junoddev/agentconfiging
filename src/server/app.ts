@@ -57,7 +57,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { DiscoveryError, discoverProjects } from '../core/index.js';
 import { InstanceRegistry, InvalidRootError } from './registry.js';
-import { registerWriteRoutes } from './write.js';
+import { registerApplyFixRoute, registerWriteRoutes } from './write.js';
 import type { WriteScope } from './pathguard.js';
 
 export interface AppConfig {
@@ -340,6 +340,11 @@ export function createApp(config: AppConfig): Hono {
   // WRITE API (gxo.3): POST /api/write, POST /api/delete, GET /api/file. These
   // register under /api, so they inherit the token + Origin/CSRF gates above.
   registerWriteRoutes(app, { scopes: config.scopes ?? [], trashDir: config.trashDir ?? '' });
+
+  // APPLY-FIX (wmc.1): POST /api/apply-fix — one-click machine-fix apply. Also
+  // under /api (inherits the same gates); recomputes the fix per-instance and
+  // writes every edit through the SAME guarded write path as /api/write.
+  registerApplyFixRoute(app, { scopes: config.scopes ?? [], registry });
 
   // Unknown /api paths (any method): 404 JSON, no static fallback.
   app.all('/api/*', () => jsonError(404, 'not found'));

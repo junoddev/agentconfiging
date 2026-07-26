@@ -1,0 +1,30 @@
+/* Write flow (bead wmc.1): the dry-run diff preview + commit/discard controls
+   the Findings APPLY and every editor save (wmc.2-10) reuse. Signal Grid tokens
+   only — no new colors, no motion. DiffPanel owns the diff body styling; this
+   file owns only the flow's status line + action row spacing. */
+
+.write-flow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gutter);
+  padding: 4px 0 12px;
+}
+
+.write-flow__status {
+  margin: 0;
+  color: var(--fg-dim);
+}
+
+.write-flow__status--error {
+  color: var(--warn);
+}
+
+.write-flow__status--ok {
+  color: var(--signal);
+}
+
+.write-flow__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gutter);
+}

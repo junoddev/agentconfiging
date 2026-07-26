@@ -27,7 +27,13 @@ import {
 } from 'react';
 import { ApiClient, ApiError } from '../api/client.js';
 import { bootstrapToken } from '../api/token.js';
-import type { FileContent, InstanceSummary, Report } from '../api/types.js';
+import type {
+  ApplyFixResponse,
+  FileContent,
+  InstanceSummary,
+  Report,
+  WriteResponse,
+} from '../api/types.js';
 import { WsClient, type WsState } from '../ws/client.js';
 import {
   appReducer,
@@ -50,6 +56,14 @@ export interface AppStateValue extends AppState {
   /** Fetch one in-scope config file's REDACTED content for the artifact browser
    *  (delegates to the token-bearing client). Rejects when unauthenticated. */
   getFile: (path: string) => Promise<FileContent>;
+  /**
+   * WRITE FLOW (bead wmc.1) — the seam the reusable `useWriteFlow` hook drives.
+   * `applyFix` dry-runs/commits a finding's machine fix against the CURRENT
+   * instance; `writeFile` writes an editor's proposed content. Both reject when
+   * unauthenticated. After a commit, callers refetch() to pull the fresh report.
+   */
+  applyFix: (findingId: string, opts: { dryRun: boolean }) => Promise<ApplyFixResponse>;
+  writeFile: (path: string, content: string, dryRun: boolean) => Promise<WriteResponse>;
 }
 
 /**
@@ -168,6 +182,24 @@ export function AppStateProvider({ children, deps }: AppStateProviderProps) {
     [client],
   );
 
+  const applyFix = useCallback(
+    (findingId: string, opts: { dryRun: boolean }): Promise<ApplyFixResponse> => {
+      if (!client) return Promise.reject(new ApiError(401, 'unauthorized', 'no session'));
+      // Target the instance currently in view; undefined ⇒ server default.
+      const instance = currentIdRef.current;
+      return client.applyFix(findingId, { dryRun: opts.dryRun, ...(instance ? { instance } : {}) });
+    },
+    [client],
+  );
+
+  const writeFile = useCallback(
+    (filePath: string, content: string, dryRun: boolean): Promise<WriteResponse> => {
+      if (!client) return Promise.reject(new ApiError(401, 'unauthorized', 'no session'));
+      return client.writeFile(filePath, content, dryRun);
+    },
+    [client],
+  );
+
   // Boot: no deps ⇒ unauthorized; otherwise load instances + default report and
   // open the socket. Cleanup closes the socket so no handle leaks.
   useEffect(() => {
@@ -223,8 +255,10 @@ export function AppStateProvider({ children, deps }: AppStateProviderProps) {
       refetch,
       clearError,
       getFile,
+      applyFix,
+      writeFile,
     }),
-    [state, selectInstance, refetch, clearError, getFile],
+    [state, selectInstance, refetch, clearError, getFile, applyFix, writeFile],
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

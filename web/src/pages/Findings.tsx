@@ -3,6 +3,7 @@ import type { Severity } from '../api/types.js';
 import { EmptyState, FindingRow, severityClass } from '../components/core/index.js';
 import { routeHash } from '../routes.js';
 import { useReport } from '../state/index.js';
+import { WriteFlow, useWriteFlow } from '../write/index.js';
 import {
   SEVERITY_ORDER,
   countBySeverity,
@@ -14,28 +15,43 @@ import {
 import './findings.css';
 
 /**
- * Findings page (rail `03 FINDINGS`, route `#/findings`, bead c6p.5). Renders the
- * content-free report findings — already severity-sorted server-side, order
- * preserved — as timetable FindingRows, with per-severity filter chips and the
- * APPLY affordance in STUB form.
+ * Findings page (rail `03 FINDINGS`, route `#/findings`, bead c6p.5 + wmc.1).
+ * Renders the content-free report findings — already severity-sorted server-side,
+ * order preserved — as timetable FindingRows, with per-severity filter chips and
+ * one-click APPLY.
  *
- * APPLY is a stub by design: clicking [APPLY] does NOT write. The finding never
- * carries a patch body (stripped server-side; the client only sees `hasFix`), so
- * the button reveals an honest "diff preview · E5" note instead of faking a
- * write. The real flow (dry-run diff → commit via /api/write) is bead E5.
+ * APPLY drives the reusable write flow (bead wmc.1): clicking [APPLY] opens the
+ * mandatory DIFF PREVIEW (the fix's server-computed dry-run diff — the client
+ * never holds the patch body, only sees `hasFix`), [COMMIT] applies it through
+ * the guarded write path and refetches the report so the finding drops out live,
+ * [DISCARD] cancels. Errors (an out-of-scope fix, a vanished finding, network)
+ * surface as terse in-panel messages, never a crash.
  *
  * All finding strings (title / detail / suggestion) come from adversarially
  * parsed config and are rendered as TEXT NODES only — never as HTML.
  */
 export function Findings() {
   const { report, loading, error } = useReport();
+  const flow = useWriteFlow();
 
   // Which severity bands are visible. All on by default; a chip toggles its band.
   const [active, setActive] = useState<Set<Severity>>(() => new Set(SEVERITY_ORDER));
-  // The finding whose [APPLY] is currently expanded to its E5 stub note (or null).
-  const [pendingApply, setPendingApply] = useState<string | null>(null);
+  // The finding whose APPLY diff-preview is currently expanded (or null). One
+  // write flow is shared; opening a different finding supersedes the previous.
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const findings = report?.findings ?? [];
+
+  function onApply(id: string) {
+    // Toggle: re-clicking the open finding discards its preview.
+    if (openId === id) {
+      flow.cancel();
+      setOpenId(null);
+      return;
+    }
+    setOpenId(id);
+    flow.begin({ kind: 'fix', findingId: id });
+  }
 
   // Counts are over the FULL set so the chips report totals, not the filtered view.
   const counts = useMemo(() => countBySeverity(findings), [findings]);
@@ -118,11 +134,7 @@ export function Findings() {
                 severity={rowSeverity(f.severity)}
                 title={f.title}
                 fix={f.suggestion}
-                onApply={
-                  hasApplicableFix(f)
-                    ? () => setPendingApply((cur) => (cur === f.id ? null : f.id))
-                    : undefined
-                }
+                onApply={hasApplicableFix(f) ? () => onApply(f.id) : undefined}
               />
               <div className="findings__meta">
                 {/* Group the finding under its agent (route text — never HTML). */}
@@ -134,11 +146,7 @@ export function Findings() {
                 </a>
                 {f.detail !== '' && <span className="findings__detail">{f.detail}</span>}
               </div>
-              {pendingApply === f.id && (
-                <p className="findings__apply-stub mono-data" role="status">
-                  APPLY → diff preview · lands in E5
-                </p>
-              )}
+              {openId === f.id && <WriteFlow flow={flow} />}
             </li>
           ))}
         </ol>

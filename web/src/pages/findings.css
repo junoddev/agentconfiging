@@ -67,10 +67,3 @@
   font-size: var(--size-body);
   line-height: var(--leading-body);
 }
-
-/* APPLY stub: the affordance fires, but the write flow (dry-run diff → commit
-   via /api/write) is bead E5. This note is the honest placeholder. */
-.findings__apply-stub {
-  padding: 4px 8px 12px;
-  color: var(--warn);
-}
