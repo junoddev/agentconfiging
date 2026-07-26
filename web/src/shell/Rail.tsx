@@ -15,13 +15,26 @@ interface RailItem {
   route: Route;
 }
 
-/** Primary E4 sections, in rail order. */
+/** Primary E4 inspector sections, in rail order. */
 const PRIMARY: RailItem[] = [
   { index: '01', label: 'SIGNAL', route: { name: 'overview' } },
   { index: '02', label: 'AGENTS', route: { name: 'agents' } },
   { index: '03', label: 'FINDINGS', route: { name: 'findings' } },
   { index: '04', label: 'ARTIFACTS', route: { name: 'artifacts' } },
   { index: '05', label: 'INSTANCES', route: { name: 'instances' } },
+];
+
+/** E5 config editors, shown below a hairline as a second rail group. */
+const EDITORS: RailItem[] = [
+  { index: '06', label: 'SETTINGS', route: { name: 'settings' } },
+  { index: '07', label: 'INSTRUCTIONS', route: { name: 'instructions' } },
+  { index: '08', label: 'SKILLS', route: { name: 'skills' } },
+  { index: '09', label: 'HOOKS', route: { name: 'hooks' } },
+  { index: '10', label: 'RULES', route: { name: 'rules' } },
+  { index: '11', label: 'MEMORY', route: { name: 'memory' } },
+  { index: '12', label: 'MCP', route: { name: 'mcp' } },
+  { index: '13', label: 'KEYBINDINGS', route: { name: 'keybindings' } },
+  { index: '14', label: 'SYNC', route: { name: 'sync' } },
 ];
 
 /** Which rail item owns the active route (agent detail lights up AGENTS). */
@@ -48,6 +61,8 @@ export function Rail({ route }: { route: Route }) {
   return (
     <nav className="rail" aria-label="Sections">
       {PRIMARY.map((item) => railItem(item, active))}
+      <hr className="rule-h rail__break" />
+      {EDITORS.map((item) => railItem(item, active))}
       <hr className="rule-h rail__break" />
       {railItem({ index: '00', label: 'GALLERY', route: { name: 'gallery' } }, active)}
     </nav>

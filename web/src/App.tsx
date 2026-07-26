@@ -7,6 +7,15 @@ import { Artifacts } from './pages/Artifacts.js';
 import { Findings } from './pages/Findings.js';
 import { Instances } from './pages/Instances.js';
 import { Overview } from './pages/Overview.js';
+import { Settings } from './pages/Settings.js';
+import { Instructions } from './pages/Instructions.js';
+import { Skills } from './pages/Skills.js';
+import { Hooks } from './pages/Hooks.js';
+import { Rules } from './pages/Rules.js';
+import { Memory } from './pages/Memory.js';
+import { Mcp } from './pages/Mcp.js';
+import { Keybindings } from './pages/Keybindings.js';
+import { Sync } from './pages/Sync.js';
 import { parseRoute, type Route } from './routes.js';
 import { Rail } from './shell/Rail.js';
 import { TopBar, type Theme } from './shell/TopBar.js';
@@ -39,6 +48,24 @@ function renderRoute(route: Route) {
       return <Artifacts />;
     case 'instances':
       return <Instances />;
+    case 'settings':
+      return <Settings />;
+    case 'instructions':
+      return <Instructions />;
+    case 'skills':
+      return <Skills />;
+    case 'hooks':
+      return <Hooks />;
+    case 'rules':
+      return <Rules />;
+    case 'memory':
+      return <Memory />;
+    case 'mcp':
+      return <Mcp />;
+    case 'keybindings':
+      return <Keybindings />;
+    case 'sync':
+      return <Sync />;
     case 'gallery':
       return <GalleryPage />;
   }

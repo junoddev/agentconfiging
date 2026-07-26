@@ -2,11 +2,40 @@
  *  Inspector routes plus the internal component gallery. `agent/:kind` carries a
  *  param, so a Route is a small discriminated union rather than a bare string. */
 
-/** Every routable page. `overview` is the default (rail item `01 SIGNAL`). */
+/** Every routable page. `overview` is the default (rail item `01 SIGNAL`).
+ *  The E5 editor routes (settings…sync) are write-back config editors. */
 export type RouteName =
-  'overview' | 'agents' | 'agent' | 'findings' | 'artifacts' | 'instances' | 'gallery';
+  | 'overview'
+  | 'agents'
+  | 'agent'
+  | 'findings'
+  | 'artifacts'
+  | 'instances'
+  | 'settings'
+  | 'instructions'
+  | 'skills'
+  | 'hooks'
+  | 'rules'
+  | 'memory'
+  | 'mcp'
+  | 'keybindings'
+  | 'sync'
+  | 'gallery';
 
 export type Route = { name: Exclude<RouteName, 'agent'> } | { name: 'agent'; kind: string };
+
+/** The E5 editor route names, in rail order — simple (no-param) routes. */
+export const EDITOR_ROUTES = [
+  'settings',
+  'instructions',
+  'skills',
+  'hooks',
+  'rules',
+  'memory',
+  'mcp',
+  'keybindings',
+  'sync',
+] as const;
 
 /** Strip a leading '#', returning the path portion of a hash. */
 function hashPath(hash: string): string {
@@ -26,6 +55,9 @@ export function parseRoute(hash: string): Route {
   if (path === '/findings') return { name: 'findings' };
   if (path === '/artifacts') return { name: 'artifacts' };
   if (path === '/instances') return { name: 'instances' };
+  for (const name of EDITOR_ROUTES) {
+    if (path === `/${name}`) return { name };
+  }
   const agent = /^\/agent\/([^/]+)$/.exec(path);
   if (agent) return { name: 'agent', kind: decodeURIComponent(agent[1] as string) };
   return { name: 'overview' };

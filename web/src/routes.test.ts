@@ -34,9 +34,26 @@ describe('parseRoute', () => {
   });
 
   it('routes unknown hashes to overview', () => {
-    expect(parseRoute('#/settings')).toEqual({ name: 'overview' });
+    expect(parseRoute('#/nope')).toEqual({ name: 'overview' });
     expect(parseRoute('#foundation')).toEqual({ name: 'overview' });
     expect(parseRoute('#/agent/')).toEqual({ name: 'overview' });
+  });
+
+  it('parses the E5 editor routes', () => {
+    for (const name of [
+      'settings',
+      'instructions',
+      'skills',
+      'hooks',
+      'rules',
+      'memory',
+      'mcp',
+      'keybindings',
+      'sync',
+    ] as const) {
+      expect(parseRoute(`#/${name}`)).toEqual({ name });
+      expect(routeHash({ name })).toBe(`#/${name}`);
+    }
   });
 
   it('accepts hashes without the leading #', () => {
