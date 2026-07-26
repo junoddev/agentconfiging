@@ -18,3 +18,26 @@ export { verifyEntry, sha256Hex } from './verify.js';
 export type { VerifyResult, ChecksumMismatch } from './verify.js';
 
 export { loadSeed, loadSeedIndex } from './loader.js';
+
+export {
+  RegistryClient,
+  RegistryFetchError,
+  RegistryVerificationError,
+  mergeCatalog,
+  assertFetchableUrl,
+  resolveRegistryCacheDir,
+  DEFAULT_REGISTRY_URL,
+  DEFAULT_TTL_MS,
+  DEFAULT_TIMEOUT_MS,
+  DEFAULT_MAX_INDEX_BYTES,
+  DEFAULT_MAX_FILE_BYTES,
+} from './client.js';
+export type {
+  RegistryClientOptions,
+  RegistryFs,
+  HttpFetch,
+  HttpResponse,
+  CatalogResult,
+  OverlaySource,
+  ResolvedFile,
+} from './client.js';

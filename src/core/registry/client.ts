@@ -1,0 +1,428 @@
+/**
+ * Registry client (SPEC §4.5, agentconfig-0zm.2) — fetch + cache + checksum.
+ *
+ * This is the I/O-BEARING registry module (like scanner.ts is the I/O-bearing
+ * engine module): it does network (fetch the external index + payloads) and
+ * filesystem (a local cache). Every I/O seam — fetch, fs, and the clock — is
+ * INJECTABLE so the resolution logic is unit-testable with zero real I/O. The
+ * trust boundary itself stays in the pure foundation (parseRegistryIndex,
+ * verifyEntry): the client never re-implements validation, it only decides
+ * WHERE bytes come from and re-runs the validators on everything.
+ *
+ * Registry content — fetched OR cached — is UNTRUSTED input. The cache file is
+ * a local file that could be tampered, so it is validated on read exactly like
+ * the wire. Nothing is ever executed; payloads are only hashed and compared.
+ *
+ * Resolution order for the effective catalog (SPEC §4.5, seed/README):
+ *   1. Fresh cache — if a cached index is within the TTL, use it (no network).
+ *   2. Fetch — otherwise fetch the external index over HTTPS, validate it, and
+ *      write it to the cache.
+ *   3. Stale cache — if the fetch fails/offline, fall back to the last cached
+ *      index even if stale (better than nothing).
+ *   4. Seed — if there is no cache at all, the in-package seed is the offline
+ *      floor (loadSeedIndex, always available, zero I/O).
+ * The seed is ALWAYS the base layer; the resolved overlay (fetch or cache) is
+ * merged on top, keyed by (kind, name), overlay superseding seed.
+ *
+ * Security model:
+ *   - HTTPS only. Actual fetches reject any non-https scheme (the validator
+ *     already restricts entry urls to http(s); the client tightens that to
+ *     https, allowing http only for localhost when explicitly opted in for
+ *     local testing).
+ *   - Checksum. url-bearing payloads are verified against the entry's sha256
+ *     at fetch time (sha256Hex); a mismatch REJECTS the file. Content-bearing
+ *     entries carrying a sha that does not match their bytes are dropped from
+ *     the validated overlay (verifyEntry) so a tampered index/cache cannot
+ *     smuggle content.
+ *   - Size caps. Index and payload downloads are byte-capped (content-length
+ *     header + measured body) so a hostile endpoint cannot exhaust memory.
+ *   - Timeouts. Every fetch is bounded by an AbortController timeout so a slow
+ *     or hanging endpoint cannot stall the client.
+ *   - Bounded fetch surface: only the configured registry url and entry urls
+ *     from a validated index (themselves capped + timed). NOTE: a compromised
+ *     registry could point an entry url at an internal host (metadata IP, LAN,
+ *     localhost) — a blind GET. Exfil is not possible: a payload is used only
+ *     if its body hashes to the entry's declared sha256. Accepted risk for a
+ *     local dev tool; an internal-host block is a documented follow-up (0zm.7).
+ *   - Content-addressed payload cache. Payloads are cached under their sha256
+ *     (a safe, self-verifying cache key); a cached payload whose bytes no
+ *     longer hash to its key is ignored and re-fetched.
+ */
+
+import path from 'node:path';
+import fsp from 'node:fs/promises';
+import os from 'node:os';
+
+import type { RegistryEntry, RegistryFile, RegistryIndex } from './schema.js';
+import { parseRegistryIndex } from './validate.js';
+import { verifyEntry, sha256Hex } from './verify.js';
+import { loadSeedIndex } from './loader.js';
+
+/** Documented placeholder for the external registry (the repo does not exist
+ * yet, so this fails to resolve in practice — the client falls back to seed). */
+export const DEFAULT_REGISTRY_URL = 'https://registry.agentconfig.ing/index.json';
+
+/** Cache freshness window: a cached index younger than this skips the network. */
+export const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+/** Per-request timeout; a fetch that has not settled by now is aborted. */
+export const DEFAULT_TIMEOUT_MS = 10_000;
+
+/** Byte cap on the index download (roomier than the payload cap). */
+export const DEFAULT_MAX_INDEX_BYTES = 5_000_000;
+
+/** Byte cap on one payload download — matches the schema's inlined-content cap. */
+export const DEFAULT_MAX_FILE_BYTES = 1_000_000;
+
+/** Cache-envelope schema version (the wrapper around the cached index). */
+const CACHE_VERSION = 1;
+
+/** Minimal structural subset of the fetch Response the client consumes. */
+export interface HttpResponse {
+  readonly ok: boolean;
+  readonly status: number;
+  readonly headers: { get(name: string): string | null };
+  text(): Promise<string>;
+}
+
+/** Injectable fetch — `globalThis.fetch` satisfies this by structure. */
+export type HttpFetch = (url: string, init: { signal: AbortSignal }) => Promise<HttpResponse>;
+
+/** Injectable filesystem seam — only the three operations the cache needs. */
+export interface RegistryFs {
+  /** Read a file as utf8; rejects when the file is absent. */
+  readFile(filePath: string): Promise<string>;
+  /** Write a file as utf8 (parent dir already ensured via mkdir). */
+  writeFile(filePath: string, data: string): Promise<void>;
+  /** Create a directory recursively (idempotent). */
+  mkdir(dirPath: string): Promise<void>;
+}
+
+/** Which overlay layer resolved the catalog (for diagnostics/tests). */
+export type OverlaySource = 'fetch' | 'cache' | 'none';
+
+export interface CatalogResult {
+  /** Seed merged with the resolved overlay, keyed by (kind, name). */
+  entries: RegistryEntry[];
+  /** The layer that supplied the overlay (or 'none' → seed-only). */
+  overlaySource: OverlaySource;
+}
+
+/** A fully resolved, checksum-verified file ready for the install flow. */
+export interface ResolvedFile {
+  path: string;
+  content: string;
+}
+
+export interface RegistryClientOptions {
+  /** External index url. Defaults to DEFAULT_REGISTRY_URL. */
+  registryUrl?: string;
+  /** Cache directory. Defaults to the XDG state registry-cache dir. */
+  cacheDir?: string;
+  /** Fetch seam. Defaults to global fetch. */
+  fetch?: HttpFetch;
+  /** Filesystem seam. Defaults to node:fs/promises. */
+  fs?: RegistryFs;
+  /** Clock seam (epoch ms). Defaults to Date.now. */
+  now?: () => number;
+  /** Cache freshness window in ms. */
+  ttlMs?: number;
+  /** Per-fetch timeout in ms. */
+  timeoutMs?: number;
+  /** Byte cap on the index download. */
+  maxIndexBytes?: number;
+  /** Byte cap on one payload download. */
+  maxFileBytes?: number;
+  /** Allow http (not https) only for localhost — local registry testing. */
+  allowInsecureLocalhost?: boolean;
+}
+
+/** A fetch/scheme/size/timeout failure — always caught and degraded to a
+ * fallback for the index; surfaced to the caller for payload resolution. */
+export class RegistryFetchError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RegistryFetchError';
+  }
+}
+
+/** A checksum mismatch on a fetched or inlined payload — the file is rejected. */
+export class RegistryVerificationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RegistryVerificationError';
+  }
+}
+
+/**
+ * Cache directory for the fetched registry. Mirrors the workspace.ts / logs.ts
+ * convention (AGENTCONFIGING_STATE_DIR override → $XDG_STATE_HOME →
+ * ~/.local/state), then `agentconfiging/registry-cache`. Re-implemented here
+ * rather than imported so src/core never depends on src/cli.
+ */
+export function resolveRegistryCacheDir(
+  env: Record<string, string | undefined>,
+  homeDir: string,
+): string {
+  const override = env['AGENTCONFIGING_STATE_DIR'];
+  let stateDir: string;
+  if (override !== undefined && override.trim() !== '') {
+    stateDir = path.resolve(override);
+  } else {
+    const xdg = env['XDG_STATE_HOME'];
+    const stateHome =
+      xdg !== undefined && xdg.trim() !== '' ? xdg : path.join(homeDir, '.local', 'state');
+    stateDir = path.join(stateHome, 'agentconfiging');
+  }
+  return path.join(stateDir, 'registry-cache');
+}
+
+/** Enforce https-only fetches (http allowed only for localhost when opted in). */
+export function assertFetchableUrl(rawUrl: string, allowInsecureLocalhost: boolean): void {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    throw new RegistryFetchError(`invalid url: ${rawUrl}`);
+  }
+  if (url.protocol === 'https:') return;
+  if (url.protocol === 'http:' && allowInsecureLocalhost && isLocalhost(url.hostname)) return;
+  throw new RegistryFetchError(`refusing non-https url: ${rawUrl}`);
+}
+
+function isLocalhost(host: string): boolean {
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+}
+
+/**
+ * Merge a seed entry list with an overlay, keyed by (kind, name). Seed entries
+ * form the base; an overlay entry supersedes the seed entry with the same key.
+ * Pure — no I/O — so the merge is independently testable.
+ */
+export function mergeCatalog(seed: RegistryEntry[], overlay: RegistryEntry[]): RegistryEntry[] {
+  const byKey = new Map<string, RegistryEntry>();
+  for (const entry of seed) byKey.set(`${entry.kind}/${entry.name}`, entry);
+  for (const entry of overlay) byKey.set(`${entry.kind}/${entry.name}`, entry);
+  return [...byKey.values()];
+}
+
+const defaultFs: RegistryFs = {
+  readFile: (filePath) => fsp.readFile(filePath, 'utf8'),
+  writeFile: async (filePath, data) => {
+    await fsp.writeFile(filePath, data, 'utf8');
+  },
+  mkdir: async (dirPath) => {
+    await fsp.mkdir(dirPath, { recursive: true });
+  },
+};
+
+const defaultFetch: HttpFetch = (url, init) => fetch(url, init);
+
+const SHA256_HEX = /^[0-9a-f]{64}$/;
+
+export class RegistryClient {
+  private readonly registryUrl: string;
+  private readonly cacheDir: string;
+  private readonly fetchFn: HttpFetch;
+  private readonly fs: RegistryFs;
+  private readonly now: () => number;
+  private readonly ttlMs: number;
+  private readonly timeoutMs: number;
+  private readonly maxIndexBytes: number;
+  private readonly maxFileBytes: number;
+  private readonly allowInsecureLocalhost: boolean;
+
+  constructor(options: RegistryClientOptions = {}) {
+    this.registryUrl = options.registryUrl ?? DEFAULT_REGISTRY_URL;
+    this.cacheDir = options.cacheDir ?? resolveRegistryCacheDir(process.env, os.homedir());
+    this.fetchFn = options.fetch ?? defaultFetch;
+    this.fs = options.fs ?? defaultFs;
+    this.now = options.now ?? Date.now;
+    this.ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.maxIndexBytes = options.maxIndexBytes ?? DEFAULT_MAX_INDEX_BYTES;
+    this.maxFileBytes = options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
+    this.allowInsecureLocalhost = options.allowInsecureLocalhost ?? false;
+  }
+
+  private get cacheFile(): string {
+    return path.join(this.cacheDir, 'index.json');
+  }
+
+  private payloadFile(sha256: string): string {
+    return path.join(this.cacheDir, 'payloads', sha256);
+  }
+
+  /** Effective catalog: seed merged with the resolved overlay (see module doc). */
+  async loadCatalog(): Promise<CatalogResult> {
+    const seed = loadSeedIndex().entries;
+    const overlay = await this.loadOverlay();
+    const overlayEntries = overlay.index ? overlay.index.entries : [];
+    return { entries: mergeCatalog(seed, overlayEntries), overlaySource: overlay.source };
+  }
+
+  /** Convenience: just the merged, validated catalog entries. */
+  async getCatalog(): Promise<RegistryEntry[]> {
+    return (await this.loadCatalog()).entries;
+  }
+
+  /**
+   * Resolve every file of an entry to verified bytes. Content-bearing files are
+   * re-verified against their sha256; url-bearing files are fetched over HTTPS
+   * (or served from the content-addressed cache) and verified. Any mismatch or
+   * fetch failure throws — a rejected payload must never be installed.
+   */
+  async fetchEntryFiles(entry: RegistryEntry): Promise<ResolvedFile[]> {
+    const resolved: ResolvedFile[] = [];
+    for (const file of entry.files) {
+      resolved.push({ path: file.path, content: await this.resolveFile(file) });
+    }
+    return resolved;
+  }
+
+  private async resolveFile(file: RegistryFile): Promise<string> {
+    if (typeof file.content === 'string') {
+      if (sha256Hex(file.content) !== file.sha256) {
+        throw new RegistryVerificationError(`inlined content checksum mismatch for ${file.path}`);
+      }
+      return file.content;
+    }
+    if (typeof file.url !== 'string') {
+      throw new RegistryVerificationError(`file ${file.path} has no payload`);
+    }
+
+    const cached = await this.readPayloadCache(file.sha256);
+    if (cached !== null) return cached;
+
+    const body = await this.httpGet(file.url, this.maxFileBytes);
+    const actual = sha256Hex(body);
+    if (actual !== file.sha256) {
+      throw new RegistryVerificationError(
+        `payload checksum mismatch for ${file.path}: expected ${file.sha256} got ${actual}`,
+      );
+    }
+    await this.writePayloadCache(file.sha256, body);
+    return body;
+  }
+
+  /** Resolution order: fresh cache → fetch → stale cache → seed-only (none). */
+  private async loadOverlay(): Promise<{ source: OverlaySource; index: RegistryIndex | null }> {
+    const cached = await this.readCache();
+    if (cached && this.isFresh(cached.fetchedAt)) {
+      return { source: 'cache', index: cached.index };
+    }
+    const fetched = await this.tryFetchIndex();
+    if (fetched) {
+      await this.writeCache(fetched);
+      return { source: 'fetch', index: fetched };
+    }
+    if (cached) return { source: 'cache', index: cached.index };
+    return { source: 'none', index: null };
+  }
+
+  private isFresh(fetchedAt: number): boolean {
+    const age = this.now() - fetchedAt;
+    return age >= 0 && age < this.ttlMs;
+  }
+
+  /** Fetch + validate the external index; any failure degrades to null. */
+  private async tryFetchIndex(): Promise<RegistryIndex | null> {
+    try {
+      const body = await this.httpGet(this.registryUrl, this.maxIndexBytes);
+      return this.validateIndex(JSON.parse(body));
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Run untrusted JSON through the trust boundary: strict shape validation
+   * (parseRegistryIndex) then drop any entry whose inlined content fails its
+   * checksum (verifyEntry). url-bearing entries are kept (verified at fetch).
+   */
+  private validateIndex(json: unknown): RegistryIndex {
+    const { index } = parseRegistryIndex(json);
+    const entries = index.entries.filter((entry) => verifyEntry(entry).ok);
+    return { version: index.version, entries };
+  }
+
+  private async readCache(): Promise<{ fetchedAt: number; index: RegistryIndex } | null> {
+    let raw: string;
+    try {
+      raw = await this.fs.readFile(this.cacheFile);
+    } catch {
+      return null; // no cache yet / unreadable
+    }
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed === null || typeof parsed !== 'object') return null;
+      const fetchedAt = (parsed as { fetchedAt?: unknown }).fetchedAt;
+      if (typeof fetchedAt !== 'number' || !Number.isFinite(fetchedAt)) return null;
+      const index = this.validateIndex((parsed as { index?: unknown }).index);
+      return { fetchedAt, index };
+    } catch {
+      return null; // corrupt JSON or a top-level shape parseRegistryIndex rejects
+    }
+  }
+
+  private async writeCache(index: RegistryIndex): Promise<void> {
+    try {
+      await this.fs.mkdir(path.dirname(this.cacheFile));
+      const payload = JSON.stringify({ version: CACHE_VERSION, fetchedAt: this.now(), index });
+      await this.fs.writeFile(this.cacheFile, payload);
+    } catch {
+      // A read-only/failed cache write is non-fatal — the overlay is still usable.
+    }
+  }
+
+  private async readPayloadCache(sha256: string): Promise<string | null> {
+    if (!SHA256_HEX.test(sha256)) return null;
+    try {
+      const body = await this.fs.readFile(this.payloadFile(sha256));
+      // The cache file is untrusted: only trust it if it still hashes to its key.
+      return sha256Hex(body) === sha256 ? body : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async writePayloadCache(sha256: string, body: string): Promise<void> {
+    if (!SHA256_HEX.test(sha256)) return;
+    try {
+      await this.fs.mkdir(path.join(this.cacheDir, 'payloads'));
+      await this.fs.writeFile(this.payloadFile(sha256), body);
+    } catch {
+      // Non-fatal — a failed payload cache write just means we re-fetch next time.
+    }
+  }
+
+  /** HTTPS GET with scheme guard, timeout, and a byte cap on the body. */
+  private async httpGet(url: string, maxBytes: number): Promise<string> {
+    assertFetchableUrl(url, this.allowInsecureLocalhost);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      const res = await this.fetchFn(url, { signal: controller.signal });
+      if (!res.ok) throw new RegistryFetchError(`HTTP ${res.status} for ${url}`);
+      return await readCapped(res, maxBytes, url);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+}
+
+/** Read a response body, rejecting anything larger than `maxBytes`. */
+async function readCapped(res: HttpResponse, maxBytes: number, url: string): Promise<string> {
+  const declared = res.headers.get('content-length');
+  if (declared !== null) {
+    const n = Number(declared);
+    if (Number.isFinite(n) && n > maxBytes) {
+      throw new RegistryFetchError(`response for ${url} exceeds ${maxBytes} bytes`);
+    }
+  }
+  const body = await res.text();
+  if (Buffer.byteLength(body, 'utf8') > maxBytes) {
+    throw new RegistryFetchError(`response for ${url} exceeds ${maxBytes} bytes`);
+  }
+  return body;
+}
