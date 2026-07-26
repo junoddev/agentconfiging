@@ -1,11 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Button } from './components/core/index.js';
-import { LiveDot } from './components/signal/index.js';
+import { EmptyState } from './components/core/index.js';
 import { GalleryPage } from './gallery/GalleryPage.js';
-import { HomePage } from './HomePage.js';
-import { parseRoute, routeHash, type Route } from './routes.js';
-
-type Theme = 'paper' | 'ink';
+import { AgentDetail } from './pages/AgentDetail.js';
+import { Agents } from './pages/Agents.js';
+import { Artifacts } from './pages/Artifacts.js';
+import { Findings } from './pages/Findings.js';
+import { Instances } from './pages/Instances.js';
+import { Overview } from './pages/Overview.js';
+import { parseRoute, type Route } from './routes.js';
+import { Rail } from './shell/Rail.js';
+import { TopBar, type Theme } from './shell/TopBar.js';
+import { useAppState } from './state/index.js';
 
 /** Current hash route, kept in sync with `hashchange`. */
 function useRoute(): Route {
@@ -18,53 +23,62 @@ function useRoute(): Route {
   return route;
 }
 
-/** App shell: top bar + rail chrome (DESIGN.md §4) around a hash-route
- *  switch. `#/gallery` is the internal component gallery; the default
- *  route is a placeholder until the real dashboard (E4). */
+/** Route → page component. Each page is a c6p.2-6 stub for now; swapping a stub
+ *  never touches this switch beyond the import. */
+function renderRoute(route: Route) {
+  switch (route.name) {
+    case 'overview':
+      return <Overview />;
+    case 'agents':
+      return <Agents />;
+    case 'agent':
+      return <AgentDetail kind={route.kind} />;
+    case 'findings':
+      return <Findings />;
+    case 'artifacts':
+      return <Artifacts />;
+    case 'instances':
+      return <Instances />;
+    case 'gallery':
+      return <GalleryPage />;
+  }
+}
+
+/** App shell (DESIGN §4): top bar + left rail chrome around a hash-route switch.
+ *  Data comes from the AppStateProvider; the shell renders an honest error state
+ *  (never a crash) when the session token is missing/rejected. */
 export function App() {
-  // Seed from the OS preference so a system-dark user lands on Ink instead
-  // of always being pinned to Paper; the toggle flips explicitly thereafter.
+  // Seed theme from the OS preference; the toggle flips explicitly thereafter.
   const [theme, setTheme] = useState<Theme>(() =>
     window.matchMedia('(prefers-color-scheme: dark)').matches ? 'ink' : 'paper',
   );
   const route = useRoute();
+  const app = useAppState();
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
 
+  const unauthorized = app.error?.kind === 'unauthorized';
+
   return (
     <div className="layout-shell">
-      <header className="topbar">
-        <span className="wordmark">AGENTCONFIG</span>
-        <span className="mono-data topbar__path">~/projects/agentconfig</span>
-        {/* No watcher yet (E4) — the dot honestly reads OFFLINE. */}
-        <LiveDot connected={false} />
-        <Button
-          label={theme === 'paper' ? 'ink' : 'paper'}
-          onClick={() => setTheme(theme === 'paper' ? 'ink' : 'paper')}
-        />
-      </header>
-
-      <nav className="rail" aria-label="Sections">
-        <a
-          className="micro-label rail__item"
-          href={routeHash('home')}
-          aria-current={route === 'home' ? 'page' : undefined}
-        >
-          01 SIGNAL
-        </a>
-        <hr className="rule-h rail__break" />
-        <a
-          className="micro-label rail__item"
-          href={routeHash('gallery')}
-          aria-current={route === 'gallery' ? 'page' : undefined}
-        >
-          00 GALLERY
-        </a>
-      </nav>
-
-      {route === 'gallery' ? <GalleryPage /> : <HomePage />}
+      <TopBar
+        theme={theme}
+        onToggleTheme={() => setTheme(theme === 'paper' ? 'ink' : 'paper')}
+        projectPath={app.currentInstance?.root}
+        wsState={app.wsState}
+      />
+      <Rail route={route} />
+      {unauthorized ? (
+        <main className="layout-main page">
+          <section className="page__section">
+            <EmptyState instruction="reopen agentconfig from the CLI — session token missing" />
+          </section>
+        </main>
+      ) : (
+        renderRoute(route)
+      )}
     </div>
   );
 }

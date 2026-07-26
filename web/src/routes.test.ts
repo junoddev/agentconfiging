@@ -2,38 +2,66 @@ import { describe, expect, it } from 'vitest';
 import { parseRoute, routeHash, type Route } from './routes.js';
 
 describe('parseRoute', () => {
-  it('defaults to home for empty and root hashes', () => {
-    expect(parseRoute('')).toBe('home');
-    expect(parseRoute('#')).toBe('home');
-    expect(parseRoute('#/')).toBe('home');
+  it('defaults to overview for empty and root hashes', () => {
+    expect(parseRoute('')).toEqual({ name: 'overview' });
+    expect(parseRoute('#')).toEqual({ name: 'overview' });
+    expect(parseRoute('#/')).toEqual({ name: 'overview' });
+  });
+
+  it('routes the E4 top-level pages', () => {
+    expect(parseRoute('#/agents')).toEqual({ name: 'agents' });
+    expect(parseRoute('#/findings')).toEqual({ name: 'findings' });
+    expect(parseRoute('#/artifacts')).toEqual({ name: 'artifacts' });
+    expect(parseRoute('#/instances')).toEqual({ name: 'instances' });
+  });
+
+  it('routes agent detail with its kind param', () => {
+    expect(parseRoute('#/agent/claude-code')).toEqual({ name: 'agent', kind: 'claude-code' });
+  });
+
+  it('decodes an encoded agent kind', () => {
+    expect(parseRoute('#/agent/foo%2Fbar')).toEqual({ name: 'agent', kind: 'foo/bar' });
   });
 
   it('routes #/gallery and gallery sub-paths to the gallery', () => {
-    expect(parseRoute('#/gallery')).toBe('gallery');
-    expect(parseRoute('#/gallery/foundation')).toBe('gallery');
+    expect(parseRoute('#/gallery')).toEqual({ name: 'gallery' });
+    expect(parseRoute('#/gallery/foundation')).toEqual({ name: 'gallery' });
   });
 
   it('does not match gallery-prefixed but distinct paths', () => {
-    expect(parseRoute('#/galleryx')).toBe('home');
-    expect(parseRoute('#/gal')).toBe('home');
+    expect(parseRoute('#/galleryx')).toEqual({ name: 'overview' });
+    expect(parseRoute('#/gal')).toEqual({ name: 'overview' });
   });
 
-  it('routes unknown hashes to home', () => {
-    expect(parseRoute('#/settings')).toBe('home');
-    expect(parseRoute('#foundation')).toBe('home');
+  it('routes unknown hashes to overview', () => {
+    expect(parseRoute('#/settings')).toEqual({ name: 'overview' });
+    expect(parseRoute('#foundation')).toEqual({ name: 'overview' });
+    expect(parseRoute('#/agent/')).toEqual({ name: 'overview' });
   });
 
   it('accepts hashes without the leading #', () => {
-    expect(parseRoute('/gallery')).toBe('gallery');
-    expect(parseRoute('/')).toBe('home');
+    expect(parseRoute('/gallery')).toEqual({ name: 'gallery' });
+    expect(parseRoute('/')).toEqual({ name: 'overview' });
   });
 });
 
 describe('routeHash', () => {
   it('round-trips every route through parseRoute', () => {
-    const routes: Route[] = ['home', 'gallery'];
+    const routes: Route[] = [
+      { name: 'overview' },
+      { name: 'agents' },
+      { name: 'findings' },
+      { name: 'artifacts' },
+      { name: 'instances' },
+      { name: 'gallery' },
+      { name: 'agent', kind: 'claude-code' },
+    ];
     for (const route of routes) {
-      expect(parseRoute(routeHash(route))).toBe(route);
+      expect(parseRoute(routeHash(route))).toEqual(route);
     }
+  });
+
+  it('encodes an agent kind with a slash', () => {
+    expect(routeHash({ name: 'agent', kind: 'foo/bar' })).toBe('#/agent/foo%2Fbar');
   });
 });

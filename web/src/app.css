@@ -123,6 +123,21 @@
   color: var(--fg);
 }
 
+/* Two-digit rail numeral (doubles as the Cmd+1..9 shortcut label). */
+.rail__index {
+  font-family: var(--font-mono);
+  color: var(--fg-dim);
+}
+
+.rail__item[aria-current] .rail__index {
+  color: var(--signal);
+}
+
+/* Cost-widget placeholder slot (E7 fills it); reserves no width until then. */
+.topbar__cost {
+  display: none;
+}
+
 /* Hairline separating the numbered sections from internal rail entries. */
 .rail__break {
   margin: var(--gutter) 0;
