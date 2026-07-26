@@ -1,5 +1,7 @@
-/** Public surface of the CATALOG install/remove flow (bead agentconfig-0zm.4). */
+/** Public surface of the CATALOG browse + install/remove experience (beads
+ *  agentconfig-0zm.4 install flow, 0zm.3 browse: shelves, search, quick-add). */
 export { CatalogCard, type CatalogCardProps } from './CatalogCard.js';
+export { QuickAdd, type QuickAddProps } from './QuickAdd.js';
 export {
   useCatalogFlow,
   type CatalogAction,
@@ -8,3 +10,21 @@ export {
   type CatalogFlowPhase,
   type InstallFilePreview,
 } from './useCatalogFlow.js';
+export {
+  DEFAULT_SHELVES,
+  EMPTY_FILTER,
+  INSTALLABLE_KINDS,
+  TEMPLATE_TAG,
+  entryMatchesQuery,
+  filterEntries,
+  installedByKey,
+  installedCount,
+  isInstalled,
+  kindsPresent,
+  quickAddCandidates,
+  shelveEntries,
+  templateCount,
+  type CatalogFilter,
+  type Shelf,
+  type ShelfSpec,
+} from './logic.js';

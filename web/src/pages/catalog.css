@@ -14,7 +14,135 @@
 }
 
 .catalog__summary {
-  margin-bottom: var(--gutter);
+  margin-bottom: 0;
+}
+
+/* ── Controls: search + filter chips ──────────────────────────────────────── */
+
+.catalog__controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.catalog__search {
+  width: 100%;
+  max-width: 480px;
+  padding: 6px 8px;
+  color: var(--fg);
+  background: transparent;
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+.catalog__search::placeholder {
+  color: var(--fg-dim);
+}
+
+.catalog__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.catalog-chip {
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  background: transparent;
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.catalog-chip[aria-pressed='true'] {
+  color: var(--bg);
+  background: var(--fg);
+  border-color: var(--fg);
+}
+
+.catalog-chip--clear {
+  color: var(--red);
+}
+
+/* ── Quick-add strip ──────────────────────────────────────────────────────── */
+
+.catalog__quickadd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px var(--gutter);
+}
+
+.catalog__quickadd-label {
+  color: var(--fg-dim);
+  letter-spacing: var(--tracking-micro);
+}
+
+.quickadd,
+.quickadd--open {
+  display: contents;
+}
+
+.quickadd--open {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-basis: 100%;
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: var(--gutter);
+}
+
+.quickadd__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px var(--gutter);
+}
+
+.quickadd__title {
+  color: var(--fg-dim);
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+}
+
+.quickadd__search {
+  flex: 1 1 160px;
+  min-width: 120px;
+  padding: 4px 8px;
+  color: var(--fg);
+  background: transparent;
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+.quickadd__count {
+  color: var(--fg-dim);
+}
+
+/* ── Shelves ──────────────────────────────────────────────────────────────── */
+
+.catalog__shelf-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.catalog__shelf-title {
+  color: var(--fg);
+  letter-spacing: var(--tracking-micro);
+  margin: 0;
+}
+
+.catalog__shelf-count {
+  color: var(--fg-dim);
+}
+
+.catalog__shelf-note {
+  color: var(--fg-dim);
+  margin: 4px 0 var(--gutter);
 }
 
 .catalog__list {
