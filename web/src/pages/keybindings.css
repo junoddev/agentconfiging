@@ -1,0 +1,181 @@
+/* Keybindings editor (#/keybindings, bead wmc.9). Chassis only — Signal Grid
+   tokens, hairlines, mono. Nothing animates; combo/command/condition values are
+   adversarial config data rendered as text nodes, never markup. */
+
+.kb__count {
+  margin-left: 8px;
+  color: var(--fg-dim);
+}
+
+.kb__path {
+  margin: 4px 0 0;
+  color: var(--fg-dim);
+}
+
+.kb__editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gutter);
+}
+
+.kb__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.kb__note {
+  margin: 4px 0 12px;
+  max-width: 70ch;
+  color: var(--fg-dim);
+}
+
+.kb__ro {
+  color: var(--warn);
+}
+
+/* ── Card grid ─────────────────────────────────────────────────────────────── */
+
+.kb__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--gutter);
+}
+
+.kb-card {
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: var(--gutter);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.kb-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: var(--hairline-w) solid var(--hairline);
+}
+
+.kb-card__combo {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.kb-card__step-wrap {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.kb-card__step {
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 0 4px;
+  font-weight: 600;
+}
+
+.kb-card__then {
+  color: var(--fg-dim);
+}
+
+.kb-card__chordtag {
+  color: var(--signal);
+  border: var(--hairline-w) solid var(--signal);
+  border-radius: var(--radius);
+  padding: 0 3px;
+}
+
+.kb-card__actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.kb-card__row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.kb-card__key {
+  color: var(--fg-dim);
+}
+
+.kb-card__val {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.kb-card__extra {
+  color: var(--fg-dim);
+}
+
+/* ── Add/edit form ─────────────────────────────────────────────────────────── */
+
+.kb-form {
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: var(--gutter);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.kb-form__title {
+  color: var(--fg-dim);
+  padding-bottom: 8px;
+  border-bottom: var(--hairline-w) solid var(--hairline);
+}
+
+.kb-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kb-form__input {
+  background: var(--bg);
+  color: var(--fg);
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  font-size: var(--size-data);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.kb-form__input:focus {
+  outline: none;
+  border-color: var(--fg);
+}
+
+.kb-form__steps {
+  margin: 0;
+  color: var(--signal);
+}
+
+.kb-form__hint {
+  margin: 0;
+  color: var(--warn);
+}
+
+.kb-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .kb__cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -1,0 +1,241 @@
+/* Rules editor (#/rules, bead agentconfig-wmc.6). Chassis only — Signal Grid
+   tokens, hairlines, mono. Unifies .claude/rules/*.md and .cursor/rules/*.mdc.
+   All rule content (globs, description, body) is adversarial config data
+   rendered as text nodes, never markup; nothing here animates. */
+
+.rules {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr);
+  gap: var(--gutter);
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .rules {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.rules__count {
+  margin-left: 8px;
+  color: var(--fg-dim);
+}
+
+/* ── Grouped rule list ─────────────────────────────────────────────────── */
+
+.rules__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gutter);
+  max-height: 72vh;
+  overflow-y: auto;
+}
+
+.rules__group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.rules__group-label {
+  color: var(--fg-dim);
+  letter-spacing: var(--tracking-micro);
+}
+
+.rules__none {
+  color: var(--fg-dim);
+}
+
+.rules__list .chip {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rules__list [aria-current] .chip {
+  background: var(--fg);
+  border-color: var(--fg);
+  color: var(--bg);
+}
+
+/* ── Editor pane ───────────────────────────────────────────────────────── */
+
+.rules__editor {
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: var(--gutter);
+  min-height: 240px;
+}
+
+.rules__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px var(--gutter);
+  padding-bottom: 8px;
+  margin-bottom: var(--gutter);
+  border-bottom: var(--hairline-w) solid var(--hairline);
+}
+
+.rules__scope {
+  color: var(--fg-dim);
+}
+
+.rules__path {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 auto;
+}
+
+.rules__path-input {
+  background: var(--bg);
+  color: var(--fg);
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+}
+
+.rules__path-input:focus-visible {
+  outline: none;
+  border-color: var(--signal);
+}
+
+.rules__redact {
+  color: var(--warn);
+  border: var(--hairline-w) solid var(--warn);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  margin-bottom: var(--gutter);
+}
+
+.rules__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: var(--gutter);
+}
+
+.rules__toolbar-spacer {
+  flex: 1;
+}
+
+.rules__raw {
+  width: 100%;
+  min-height: 320px;
+  resize: vertical;
+  background: var(--bg);
+  color: var(--fg);
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: var(--gutter);
+  white-space: pre;
+  overflow: auto;
+  tab-size: 2;
+}
+
+.rules__raw:focus-visible {
+  outline: none;
+  border-color: var(--signal);
+}
+
+.rules__source {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
+.rules__redact-mark {
+  background: none;
+  color: var(--warn);
+  font-weight: 600;
+  border: var(--hairline-w) solid var(--warn);
+  border-radius: var(--radius);
+  padding: 0 2px;
+}
+
+/* ── Path-filter badges ────────────────────────────────────────────────── */
+
+.rules__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: var(--gutter);
+}
+
+.rules__filters-label {
+  color: var(--fg-dim);
+}
+
+.rules__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rules__badge {
+  border: var(--hairline-w) solid var(--signal);
+  color: var(--signal);
+  border-radius: var(--radius);
+  padding: 2px 6px;
+  word-break: break-all;
+}
+
+.rules__badge--always {
+  border-color: var(--hairline);
+  color: var(--fg-dim);
+}
+
+.rules__desc {
+  margin: 0 0 var(--gutter);
+  color: var(--fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── Safe markdown preview — light structure over text nodes only. ─────── */
+
+.rules__preview {
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.rules__md > * {
+  margin: 0 0 var(--gutter);
+}
+
+.rules__md-h {
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.rules__md-code {
+  margin: 0 0 var(--gutter);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+  background: var(--surface);
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 8px;
+}
+
+.rules__md-quote {
+  color: var(--fg-dim);
+  border-left: 2px solid var(--hairline);
+  padding-left: 8px;
+}
+
+.rules__md-list {
+  margin: 0 0 var(--gutter);
+  padding-left: 20px;
+}
+
+.rules__md-para {
+  white-space: pre-wrap;
+}
