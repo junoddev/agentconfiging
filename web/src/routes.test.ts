@@ -13,6 +13,8 @@ describe('parseRoute', () => {
     expect(parseRoute('#/findings')).toEqual({ name: 'findings' });
     expect(parseRoute('#/artifacts')).toEqual({ name: 'artifacts' });
     expect(parseRoute('#/instances')).toEqual({ name: 'instances' });
+    expect(parseRoute('#/catalog')).toEqual({ name: 'catalog' });
+    expect(routeHash({ name: 'catalog' })).toBe('#/catalog');
   });
 
   it('routes agent detail with its kind param', () => {

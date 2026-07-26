@@ -20,6 +20,7 @@ export type RouteName =
   | 'mcp'
   | 'keybindings'
   | 'sync'
+  | 'catalog'
   | 'gallery';
 
 export type Route = { name: Exclude<RouteName, 'agent'> } | { name: 'agent'; kind: string };
@@ -55,6 +56,7 @@ export function parseRoute(hash: string): Route {
   if (path === '/findings') return { name: 'findings' };
   if (path === '/artifacts') return { name: 'artifacts' };
   if (path === '/instances') return { name: 'instances' };
+  if (path === '/catalog') return { name: 'catalog' };
   for (const name of EDITOR_ROUTES) {
     if (path === `/${name}`) return { name };
   }

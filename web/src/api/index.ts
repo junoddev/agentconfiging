@@ -2,9 +2,16 @@
 export { ApiClient, ApiError, type ApiClientOptions, type ApiErrorKind } from './client.js';
 export { bootstrapToken, parseTokenHash, type ParsedToken } from './token.js';
 export type {
+  CatalogEntryMeta,
+  CatalogFileRow,
+  CatalogInstallResponse,
+  CatalogRemoveFile,
+  CatalogRemoveResponse,
+  CatalogResponse,
   Confidence,
   DetectedAgent,
   FileContent,
+  InstalledRecord,
   FixKind,
   HealthResponse,
   InstanceSummary,

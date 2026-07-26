@@ -12,6 +12,9 @@
 
 import type {
   ApplyFixResponse,
+  CatalogInstallResponse,
+  CatalogRemoveResponse,
+  CatalogResponse,
   FileContent,
   HealthResponse,
   InstanceSummary,
@@ -207,6 +210,37 @@ export class ApiClient {
     if (opts.targets !== undefined) body['targets'] = opts.targets;
     if (opts.instance !== undefined) body['instance'] = opts.instance;
     return this.#send<SyncResponse>('/api/sync', 'POST', body);
+  }
+
+  /**
+   * CATALOG (bead 0zm.4) — the registry install/remove flow. `getCatalog` lists
+   * entry METADATA (never file bodies) plus the resolved instance's installed
+   * records. `installEntry`/`removeEntry` mirror the write flow: `dryRun:true`
+   * returns the per-file diff / trash preview (no disk touch); `dryRun:false`
+   * commits through the guarded server path. `instance` defaults to the server's
+   * default instance. Registry content is untrusted — render every field as text.
+   */
+  getCatalog(instance?: string): Promise<CatalogResponse> {
+    const qs = instance ? `?instance=${encodeURIComponent(instance)}` : '';
+    return this.#get<CatalogResponse>(`/api/catalog${qs}`);
+  }
+
+  installEntry(
+    entryKey: string,
+    opts: { dryRun: boolean; instance?: string },
+  ): Promise<CatalogInstallResponse> {
+    const body: Record<string, unknown> = { entryKey, dryRun: opts.dryRun };
+    if (opts.instance !== undefined) body['instance'] = opts.instance;
+    return this.#send<CatalogInstallResponse>('/api/catalog/install', 'POST', body);
+  }
+
+  removeEntry(
+    entryKey: string,
+    opts: { dryRun: boolean; instance?: string },
+  ): Promise<CatalogRemoveResponse> {
+    const body: Record<string, unknown> = { entryKey, dryRun: opts.dryRun };
+    if (opts.instance !== undefined) body['instance'] = opts.instance;
+    return this.#send<CatalogRemoveResponse>('/api/catalog/remove', 'POST', body);
   }
 
   async #get<T>(path: string): Promise<T> {

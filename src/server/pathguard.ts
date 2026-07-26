@@ -84,6 +84,20 @@ const MAX_SEGMENT_LEN = 255;
 const ADDITIONAL_WRITABLE_ROOT_FILES: ReadonlySet<string> = new Set(['.gitignore']);
 
 /**
+ * agentconfig's OWN provenance bookkeeping file (SPEC §4.5, bead
+ * agentconfig-0zm.4). The catalog install/remove flow records every installed
+ * entry — source, version, and the exact files written — into this manifest so
+ * REMOVE trashes only what agentconfig installed and UPGRADE stays traceable.
+ * It is written THROUGH the one guarded write primitive like any other write
+ * (never a second, weaker one), so it must clear the config allowlist; but it is
+ * a FIXED, server-controlled path (never derived from untrusted registry input),
+ * so allowing this one exact project-scope path widens nothing an attacker
+ * controls. Every other guard (traversal, symlink/O_NOFOLLOW, containment) still
+ * applies. Project scope only.
+ */
+export const PROVENANCE_MANIFEST_REL = '.agentconfig/provenance.json';
+
+/**
  * Additive extension for the INSTRUCTION SYNC engine (E5, bead agentconfig-wmc.10).
  * The sync engine regenerates each runtime's PRIMARY instruction file from a
  * designated source of truth. Long-tail runtimes (Cline, Windsurf, Zed, Amazon Q,
@@ -114,8 +128,21 @@ const SYNC_TARGET_FILES: ReadonlySet<string> = new Set(
  * the server-side additions above. A fix or sync edit path is checked here
  * identically to a user write — an engine-emitted path is no more trusted than a
  * user edit.
+ *
+ * The provenance manifest is a RESERVED path: it is writable ONLY when the caller
+ * is agentconfig's own provenance writer (which passes `allowProvenanceManifest`).
+ * Every UNTRUSTED caller — user writes, fix/sync edits, and CATALOG ENTRY FILES —
+ * resolves without that flag, so a hostile registry entry can NEVER target the
+ * manifest and forge an install record (which REMOVE would then trust to trash a
+ * victim's never-installed file). The manifest allowlist can never be claimed by
+ * generic entry-file resolution.
  */
-function isWritableTarget(rel: string, kind: 'project' | 'global'): boolean {
+function isWritableTarget(
+  rel: string,
+  kind: 'project' | 'global',
+  allowProvenanceManifest: boolean,
+): boolean {
+  if (rel === PROVENANCE_MANIFEST_REL) return kind === 'project' && allowProvenanceManifest;
   if (isWritableConfigPath(rel, kind)) return true;
   if (kind !== 'project') return false;
   if (!rel.includes('/') && ADDITIONAL_WRITABLE_ROOT_FILES.has(rel)) return true;
@@ -188,7 +215,22 @@ function inputIsClean(p: string): boolean {
   return true;
 }
 
-export function resolveWriteTarget(requestedPath: unknown, scopes: WriteScope[]): Resolution {
+/** Options for {@link resolveWriteTarget}. */
+export interface ResolveOptions {
+  /**
+   * Permit resolving the RESERVED provenance manifest path. Set ONLY by
+   * agentconfig's own provenance writer (src/server/provenance.ts). Untrusted
+   * callers must never pass this — leaving it false keeps the manifest
+   * unreachable to user/fix/sync/catalog-entry paths.
+   */
+  allowProvenanceManifest?: boolean;
+}
+
+export function resolveWriteTarget(
+  requestedPath: unknown,
+  scopes: WriteScope[],
+  opts: ResolveOptions = {},
+): Resolution {
   if (typeof requestedPath !== 'string') return bad(400);
   if (!inputIsClean(requestedPath)) return bad(400);
 
@@ -217,7 +259,7 @@ export function resolveWriteTarget(requestedPath: unknown, scopes: WriteScope[])
     // tail; lstat still sees it. ANY symlink here would be followed OUT of
     // scope on the subsequent open, so refuse.
     if (tailHasSymlink(anc.real, anc.tail)) return bad(403);
-    if (!isWritableTarget(rel, scope.kind)) return bad(403);
+    if (!isWritableTarget(rel, scope.kind, opts.allowProvenanceManifest ?? false)) return bad(403);
     return { ok: true, absPath: realTarget, relPath: rel, scope };
   }
   return bad(403);

@@ -1,0 +1,113 @@
+/* Catalog (#/catalog, bead 0zm.4). Chassis only — Signal-Grid tokens, hairlines,
+   mono. Registry text (names/descriptions/paths/diffs) is adversarial data
+   rendered as text nodes / by DiffPanel, never markup. Nothing here animates. */
+
+.catalog__sub {
+  margin-left: 8px;
+  color: var(--fg-dim);
+}
+
+.catalog__lede,
+.catalog__summary {
+  color: var(--fg-dim);
+  margin-top: 6px;
+}
+
+.catalog__summary {
+  margin-bottom: var(--gutter);
+}
+
+.catalog__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gutter);
+}
+
+/* ── Card ───────────────────────────────────────────────────────────────── */
+
+.catalog-card {
+  padding: var(--gutter);
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.catalog-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px var(--gutter);
+}
+
+.catalog-card__badge {
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 1px 6px;
+}
+
+.catalog-card__name {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.catalog-card__installed {
+  margin-left: auto;
+  color: var(--signal);
+  letter-spacing: var(--tracking-micro);
+}
+
+.catalog-card__desc {
+  color: var(--fg);
+  margin: 0;
+}
+
+.catalog-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px var(--gutter);
+  color: var(--fg-dim);
+}
+
+.catalog-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gutter);
+}
+
+.catalog-card__msg--ok {
+  color: var(--signal);
+}
+
+.catalog-card__msg--error {
+  color: var(--red);
+}
+
+.catalog-card__preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.catalog-card__prov {
+  color: var(--signal);
+}
+
+.catalog-card__trash {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--fg-dim);
+  word-break: break-all;
+}

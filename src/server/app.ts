@@ -55,11 +55,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import { DiscoveryError, discoverProjects } from '../core/index.js';
+import { DiscoveryError, discoverProjects, RegistryClient } from '../core/index.js';
 import { InstanceRegistry, InvalidRootError } from './registry.js';
 import { registerApplyFixRoute, registerWriteRoutes } from './write.js';
 import { registerStorageRoutes } from './storage.js';
 import { registerSyncRoute } from './sync.js';
+import { registerCatalogRoutes, type CatalogSource } from './catalog.js';
 import type { WriteScope } from './pathguard.js';
 
 export interface AppConfig {
@@ -88,6 +89,13 @@ export interface AppConfig {
   scopes?: WriteScope[];
   /** Where deletes are moved (never hard-unlinked). Required once scopes exist. */
   trashDir?: string;
+  /**
+   * CATALOG source (bead 0zm.4): the registry client the install/remove flow
+   * reads the merged catalog + checksum-verified file bytes from. Defaults to a
+   * production RegistryClient (seed floor + fetched overlay). Injectable so tests
+   * can fire hostile catalog shapes at the real install path.
+   */
+  catalogClient?: CatalogSource;
 }
 
 const MIME: Record<string, string> = {
@@ -363,6 +371,18 @@ export function createApp(config: AppConfig): Hono {
   // token + Origin/CSRF gates); every generated target is written through the
   // SAME guarded write path as /api/write, so a sync can never escape scope.
   registerSyncRoute(app, { scopes: config.scopes ?? [], registry });
+
+  // CATALOG (0zm.4): GET /api/catalog + POST /api/catalog/install|remove — the
+  // registry install/remove flow. Also under /api (inherits the token +
+  // Origin/CSRF gates); registry content is UNTRUSTED — every entry file path is
+  // path-guarded and every file's content is checksum-verified BEFORE any write,
+  // provenance is recorded to a manifest, and remove trashes only recorded files.
+  registerCatalogRoutes(app, {
+    scopes: config.scopes ?? [],
+    registry,
+    client: config.catalogClient ?? new RegistryClient(),
+    trashDir: config.trashDir ?? '',
+  });
 
   // Unknown /api paths (any method): 404 JSON, no static fallback.
   app.all('/api/*', () => jsonError(404, 'not found'));

@@ -280,6 +280,92 @@ export interface SyncResponse {
 }
 
 /**
+ * One catalog entry as SERVED by GET /api/catalog (src/server/catalog.ts). This
+ * is METADATA ONLY — never file CONTENT (bodies can be large; the install flow
+ * fetches + verifies them on demand and discloses them solely as the dry-run
+ * diff). `key` is `<kind>/<name>`; `files` are the project-relative install
+ * destinations. `description`/`name`/`source`/`tags`/paths are UNTRUSTED registry
+ * text — render as text nodes only, never HTML.
+ */
+export interface CatalogEntryMeta {
+  key: string;
+  kind: string;
+  name: string;
+  description: string;
+  version: string;
+  source: string;
+  tags: string[];
+  files: string[];
+}
+
+/**
+ * One installed entry's provenance record for the resolved instance
+ * (src/server/provenance.ts, `InstallRecord`). Present for entries agentconfig
+ * installed; drives the INSTALL vs REMOVE affordance and the installed badge.
+ */
+export interface InstalledRecord {
+  key: string;
+  kind: string;
+  name: string;
+  source: string;
+  version: string;
+  installedAt: string;
+  files: string[];
+}
+
+/** GET /api/catalog payload — entry metadata + this instance's installed records. */
+export interface CatalogResponse {
+  entries: CatalogEntryMeta[];
+  installed: InstalledRecord[];
+}
+
+/**
+ * One file row in an install response (src/server/catalog.ts). `diff` is the
+ * INTENDED disclosure of the (provenance-stamped, checksum-verified) content the
+ * user approves — unified diff TEXT. `committed`/`error` appear only on a commit.
+ */
+export interface CatalogFileRow {
+  path: string;
+  pathScope: string;
+  willCreate: boolean;
+  willModify: boolean;
+  diff: string;
+  committed?: boolean;
+  error?: string;
+}
+
+/** POST /api/catalog/install payload (dry-run OR commit; src/server/catalog.ts). */
+export interface CatalogInstallResponse {
+  dryRun?: true;
+  committed?: boolean;
+  entryKey: string;
+  files: CatalogFileRow[];
+  /** The provenance manifest that would be / was updated (dry-run only). */
+  provenance?: { path: string; note: string };
+}
+
+/** One file row in a remove response (src/server/catalog.ts). */
+export interface CatalogRemoveFile {
+  path: string;
+  /** True on a dry-run for a present recorded file. */
+  willTrash?: boolean;
+  /** True on a commit once trashed (recoverable). */
+  trashed?: boolean;
+  /** Where the file was moved (recover from here). */
+  trashedTo?: string;
+  /** A recorded file already gone / no longer in scope — reported, never trashed. */
+  missing?: boolean;
+}
+
+/** POST /api/catalog/remove payload (dry-run OR commit; src/server/catalog.ts). */
+export interface CatalogRemoveResponse {
+  dryRun?: true;
+  committed?: boolean;
+  entryKey: string;
+  files: CatalogRemoveFile[];
+}
+
+/**
  * Server→client WebSocket push messages (src/server/watcher.ts,
  * `WatcherMessage`). A `report` push means the instance's config changed on disk
  * → the UI should refetch; `live-session` is a growing-session pulse.
