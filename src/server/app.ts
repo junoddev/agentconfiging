@@ -61,6 +61,7 @@ import { registerApplyFixRoute, registerWriteRoutes } from './write.js';
 import { registerStorageRoutes } from './storage.js';
 import { registerSyncRoute } from './sync.js';
 import { registerCatalogRoutes, type CatalogSource } from './catalog.js';
+import { registerMarketplaceRoutes, type ClaudeExec } from './marketplace.js';
 import type { WriteScope } from './pathguard.js';
 
 export interface AppConfig {
@@ -96,6 +97,14 @@ export interface AppConfig {
    * can fire hostile catalog shapes at the real install path.
    */
   catalogClient?: CatalogSource;
+  /**
+   * MARKETPLACE (bead 0zm.5): how the plugin-marketplace routes reach the
+   * `claude` CLI. Defaults to the real subprocess (execFile, fixed command, arg
+   * array, no shell, timeout). Injectable so tests fire a FAKE exec — a valid
+   * listing, hostile JSON, an ENOENT, a timeout — at the parse + validation path
+   * with no real CLI present.
+   */
+  marketplaceExec?: ClaudeExec;
 }
 
 const MIME: Record<string, string> = {
@@ -383,6 +392,15 @@ export function createApp(config: AppConfig): Hono {
     client: config.catalogClient ?? new RegistryClient(),
     trashDir: config.trashDir ?? '',
   });
+
+  // MARKETPLACE (0zm.5): GET /api/marketplace + /installed + POST /install — the
+  // Claude Code plugin-marketplace surface. Also under /api (inherits the token +
+  // Origin/CSRF gates); it SHELLS OUT to the `claude` CLI via execFile (fixed
+  // command, arg array, NO shell), validates any install name (strict charset +
+  // allowlist from the listing) before it is ever passed as an arg, times out
+  // every spawn, degrades gracefully when the CLI is absent, and parses the CLI's
+  // UNTRUSTED output defensively. See src/server/marketplace.ts.
+  registerMarketplaceRoutes(app, { exec: config.marketplaceExec });
 
   // Unknown /api paths (any method): 404 JSON, no static fallback.
   app.all('/api/*', () => jsonError(404, 'not found'));

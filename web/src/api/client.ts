@@ -17,8 +17,11 @@ import type {
   CatalogResponse,
   FileContent,
   HealthResponse,
+  InstalledPluginsResponse,
+  InstallPluginResponse,
   InstanceSummary,
   InstancesResponse,
+  MarketplaceResponse,
   RemoveResponse,
   Report,
   ScanResponse,
@@ -241,6 +244,31 @@ export class ApiClient {
     const body: Record<string, unknown> = { entryKey, dryRun: opts.dryRun };
     if (opts.instance !== undefined) body['instance'] = opts.instance;
     return this.#send<CatalogRemoveResponse>('/api/catalog/remove', 'POST', body);
+  }
+
+  /**
+   * MARKETPLACE (bead 0zm.5) — the Claude Code plugin marketplace. The server
+   * shells out to the `claude` CLI; when that CLI is ABSENT the response is
+   * `{ available:false, reason }` (a 200, not an error) so the page shows a clear
+   * empty state. Every plugin field is UNTRUSTED subprocess output — render as
+   * text nodes only.
+   */
+  getMarketplace(): Promise<MarketplaceResponse> {
+    return this.#get<MarketplaceResponse>('/api/marketplace');
+  }
+
+  /** The installed Claude Code plugins (version/scope/date). */
+  getInstalledPlugins(): Promise<InstalledPluginsResponse> {
+    return this.#get<InstalledPluginsResponse>('/api/marketplace/installed');
+  }
+
+  /**
+   * One-click install. `name` is validated SERVER-side against the marketplace
+   * listing (allowlist) and a strict charset before it is ever passed to the
+   * `claude` CLI as a positional arg — never interpolated into a shell.
+   */
+  installPlugin(name: string): Promise<InstallPluginResponse> {
+    return this.#send<InstallPluginResponse>('/api/marketplace/install', 'POST', { name });
   }
 
   async #get<T>(path: string): Promise<T> {

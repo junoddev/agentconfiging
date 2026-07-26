@@ -52,6 +52,14 @@ export { registerStorageRoutes } from './storage.js';
 export type { StorageRoutesConfig } from './storage.js';
 export { registerCatalogRoutes, stampProvenance } from './catalog.js';
 export type { CatalogRoutesConfig, CatalogSource } from './catalog.js';
+export { registerMarketplaceRoutes, parseAvailable, parseInstalled } from './marketplace.js';
+export type {
+  MarketplaceRoutesConfig,
+  ClaudeExec,
+  ExecResult,
+  MarketplacePlugin,
+  InstalledPlugin,
+} from './marketplace.js';
 export { readManifest, parseManifest, upsertInstall, removeInstall } from './provenance.js';
 export type { InstallRecord, ProvenanceManifest } from './provenance.js';
 export { resolveWriteTarget } from './pathguard.js';

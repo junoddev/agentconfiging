@@ -17,6 +17,7 @@ import { Mcp } from './pages/Mcp.js';
 import { Keybindings } from './pages/Keybindings.js';
 import { Sync } from './pages/Sync.js';
 import { Catalog } from './pages/Catalog.js';
+import { Marketplace } from './pages/Marketplace.js';
 import { parseRoute, type Route } from './routes.js';
 import { Rail } from './shell/Rail.js';
 import { TopBar, type Theme } from './shell/TopBar.js';
@@ -69,6 +70,8 @@ function renderRoute(route: Route) {
       return <Sync />;
     case 'catalog':
       return <Catalog />;
+    case 'marketplace':
+      return <Marketplace />;
     case 'gallery':
       return <GalleryPage />;
   }

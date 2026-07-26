@@ -366,6 +366,53 @@ export interface CatalogRemoveResponse {
 }
 
 /**
+ * One plugin from the Claude Code MARKETPLACE (src/server/marketplace.ts, bead
+ * 0zm.5). This is the UNTRUSTED output of the `claude` CLI subprocess — other
+ * people's plugin metadata. Every field (`name`/`description`/`source`/`id`/
+ * `marketplace`) is text; render as text nodes only, never HTML. `installCount`
+ * is present only when the CLI reports one.
+ */
+export interface MarketplacePlugin {
+  /** `pluginId`, e.g. `foo@claude-plugins-official` — the install allowlist key. */
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  installCount?: number;
+  source: string;
+  marketplace: string;
+}
+
+/** One installed Claude Code plugin (src/server/marketplace.ts). Text only. */
+export interface InstalledPlugin {
+  id: string;
+  name: string;
+  version: string;
+  scope: string;
+  installedAt: string;
+  source: string;
+}
+
+/**
+ * GET /api/marketplace payload. A discriminated union on `available`: the
+ * `claude` CLI may be ABSENT (or error/timeout) → `{ available:false, reason }`,
+ * which the UI renders as a clear empty state rather than a failure. When present
+ * it carries the browsable `plugins` plus the `installed` set.
+ */
+export type MarketplaceResponse =
+  | { available: true; plugins: MarketplacePlugin[]; installed: InstalledPlugin[] }
+  | { available: false; reason: string };
+
+/** GET /api/marketplace/installed payload. */
+export type InstalledPluginsResponse =
+  { available: true; installed: InstalledPlugin[] } | { available: false; reason: string };
+
+/** POST /api/marketplace/install payload — the one-click install result. */
+export type InstallPluginResponse =
+  | { available: true; installed: boolean; name: string; message: string }
+  | { available: false; reason: string };
+
+/**
  * Server→client WebSocket push messages (src/server/watcher.ts,
  * `WatcherMessage`). A `report` push means the instance's config changed on disk
  * → the UI should refetch; `live-session` is a growing-session pulse.

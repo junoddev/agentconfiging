@@ -1,0 +1,140 @@
+/* Marketplace (#/marketplace, bead 0zm.5). Chassis only — Signal-Grid tokens,
+   hairlines, mono. Plugin text (names/descriptions/sources) is the `claude` CLI's
+   UNTRUSTED output, rendered as text nodes. Nothing here animates. */
+
+.mkt__lede,
+.mkt__summary,
+.mkt__reason {
+  color: var(--fg-dim);
+  margin-top: 6px;
+}
+
+.mkt__summary {
+  margin-bottom: 0;
+}
+
+/* ── Controls ─────────────────────────────────────────────────────────────── */
+
+.mkt__controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mkt__search {
+  width: 100%;
+  max-width: 480px;
+  padding: 6px 8px;
+  color: var(--fg);
+  background: transparent;
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+.mkt__search::placeholder {
+  color: var(--fg-dim);
+}
+
+.mkt__shelf-title {
+  color: var(--fg);
+  letter-spacing: var(--tracking-micro);
+  margin: 0 0 var(--gutter);
+}
+
+/* ── Installed list ───────────────────────────────────────────────────────── */
+
+.mkt-installed__head,
+.mkt-installed__row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1.5fr;
+  gap: var(--gutter);
+  align-items: baseline;
+  padding: 4px 0;
+}
+
+.mkt-installed__head {
+  color: var(--fg-dim);
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+  border-bottom: var(--hairline-w) solid var(--hairline);
+}
+
+.mkt-installed__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mkt-installed__row {
+  border-bottom: var(--hairline-w) solid var(--hairline);
+  word-break: break-word;
+}
+
+/* ── Cards ────────────────────────────────────────────────────────────────── */
+
+.mkt__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gutter);
+}
+
+.mkt-card {
+  padding: var(--gutter);
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mkt-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px var(--gutter);
+}
+
+.mkt-card__name {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.mkt-card__installed {
+  margin-left: auto;
+  color: var(--signal);
+  letter-spacing: var(--tracking-micro);
+}
+
+.mkt-card__desc {
+  color: var(--fg);
+  margin: 0;
+}
+
+.mkt-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px var(--gutter);
+  color: var(--fg-dim);
+}
+
+.mkt-card__source {
+  word-break: break-all;
+}
+
+.mkt-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gutter);
+}
+
+.mkt-card__msg--ok {
+  color: var(--signal);
+}
+
+.mkt-card__msg--error {
+  color: var(--red);
+}
