@@ -39,7 +39,8 @@ console — deep ink-blue, never pure black).
 
 Rules: no gradients, no shadows (elevation = hairline + surface shift), no border
 radius above 2px. Severity is the only place color appears in text.
-`::selection` inverts to `--fg` on `--signal`.
+`::selection` inverts to `--bg` on `--signal` (`--fg` fails contrast on the signal
+color in both themes — ~1.02:1 in Ink; amended 2026-07-26 during 4f8.1).
 
 ## 3. Typography
 

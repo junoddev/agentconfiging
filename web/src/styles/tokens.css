@@ -1,0 +1,98 @@
+/* Signal Grid — design tokens (docs/DESIGN.md §2–§4).
+   Two first-class themes: Paper (light, default) and Ink (dark).
+   Theme resolution:
+     1. `:root` defaults to Paper.
+     2. `@media (prefers-color-scheme: dark)` applies Ink when no explicit
+        `data-theme` attribute pins the theme.
+     3. `[data-theme='ink']` / `[data-theme='paper']` on <html> always win.
+   Hex values mirror the DESIGN.md table exactly (vitest-checked via tokens.ts). */
+
+:root {
+  /* §2 Color — Paper (light) */
+  color-scheme: light;
+  --bg: #fafaf7;
+  --surface: #ffffff;
+  --fg: #141519;
+  --fg-dim: #5c5f6a;
+  --hairline: #d9d9d2;
+  --signal: #2e7d32;
+  --warn: #8a6100;
+  --red: #e63329;
+  --trace-dim: rgba(46, 125, 50, 0.25);
+
+  /* §2 Shape — no radius above 2px, borders always 1px */
+  --radius: 2px;
+  --hairline-w: 1px;
+
+  /* §3 Typography */
+  --font-sans: 'Archivo', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* §3 Scale (px): 96 / 64 (stats) · 28 (page title) · 18 (section) ·
+     15 (body) · 13 (mono data) · 11 (micro-labels).
+     Baseline grid 8px; paired line-heights snap to it. */
+  --baseline: 8px;
+  --size-stat-xl: 96px;
+  --leading-stat-xl: 96px;
+  --size-stat: 64px;
+  --leading-stat: 64px;
+  --size-title: 28px;
+  --leading-title: 32px;
+  --size-section: 18px;
+  --leading-section: 24px;
+  --size-body: 15px;
+  --leading-body: 24px;
+  --size-data: 13px;
+  --leading-data: 16px;
+  --size-micro: 11px;
+  --leading-micro: 16px;
+  --tracking-heading: -0.01em;
+  --tracking-micro: 0.08em;
+
+  /* §4 Grid & layout */
+  --page-max: 1440px;
+  --gutter: 24px;
+  --rail-w: 220px;
+  --topbar-h: 48px;
+  --row-h: 40px;
+
+  /* Motion hook point (§5): signal-layer code multiplies durations by this.
+     prefers-reduced-motion zeroes it; nothing else in the chassis animates. */
+  --motion: 1;
+}
+
+/* System dark preference → Ink, unless the app pinned a theme explicitly. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='paper']) {
+    color-scheme: dark;
+    --bg: #0b0e17;
+    --surface: #121627;
+    --fg: #e8eaf2;
+    --fg-dim: #9aa1b5;
+    --hairline: #232a3e;
+    --signal: #b4ff39;
+    --warn: #ffc53d;
+    --red: #ff4d3d;
+    --trace-dim: rgba(180, 255, 57, 0.22);
+  }
+}
+
+/* Explicit Ink — wins over the media query (same specificity, later source). */
+:root[data-theme='ink'] {
+  color-scheme: dark;
+  --bg: #0b0e17;
+  --surface: #121627;
+  --fg: #e8eaf2;
+  --fg-dim: #9aa1b5;
+  --hairline: #232a3e;
+  --signal: #b4ff39;
+  --warn: #ffc53d;
+  --red: #ff4d3d;
+  --trace-dim: rgba(180, 255, 57, 0.22);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion: 0;
+  }
+}

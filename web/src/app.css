@@ -1,33 +1,108 @@
-* {
-  box-sizing: border-box;
-}
+/* Self-hosted fonts (DESIGN.md §3): Archivo 500/600/700, IBM Plex Mono
+   400/500/600. Latin + latin-ext subsets; vite bundles the woff2 files —
+   the built app never fetches Google Fonts. */
+@import '@fontsource/archivo/latin-500.css';
+@import '@fontsource/archivo/latin-600.css';
+@import '@fontsource/archivo/latin-700.css';
+@import '@fontsource/archivo/latin-ext-500.css';
+@import '@fontsource/archivo/latin-ext-600.css';
+@import '@fontsource/archivo/latin-ext-700.css';
+@import '@fontsource/ibm-plex-mono/latin-400.css';
+@import '@fontsource/ibm-plex-mono/latin-500.css';
+@import '@fontsource/ibm-plex-mono/latin-600.css';
+@import '@fontsource/ibm-plex-mono/latin-ext-400.css';
+@import '@fontsource/ibm-plex-mono/latin-ext-500.css';
+@import '@fontsource/ibm-plex-mono/latin-ext-600.css';
 
-body {
-  margin: 0;
-  background: var(--color-bg);
-  color: var(--color-text);
+/* Signal Grid foundation */
+@import './styles/tokens.css';
+@import './styles/base.css';
+@import './styles/type.css';
+@import './styles/grid.css';
+
+/* ── Proof-page styles (seed of the component gallery) ─────────────────── */
+
+.wordmark {
   font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: var(--size-data);
+  letter-spacing: 0.12em;
 }
 
-.app {
-  max-width: 60rem;
-  margin: 0 auto;
-  padding: var(--space-4) var(--space-3);
+.topbar__path {
+  flex: 1;
+  text-align: center;
+  color: var(--fg-dim);
 }
 
-.app__title {
-  margin: 0;
-  font-size: 2rem;
-  letter-spacing: -0.02em;
+/* LIVE dot: 8px square (not a circle — Swiss), --signal. Static here;
+   the pulse belongs to the signal-layer bead. */
+.live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: var(--signal);
 }
 
-.app__title-accent {
-  color: var(--color-accent);
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.app__status {
-  margin-top: var(--space-2);
-  color: var(--color-text-muted);
+/* Bracket button: rectangular, 2px radius, mono all-caps, hairline outline. */
+.btn-outline {
   font-family: var(--font-mono);
-  font-size: 0.875rem;
+  font-size: var(--size-micro);
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+  background: none;
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.rail__item {
+  display: block;
+  padding: 8px var(--gutter);
+}
+
+.rail__item[aria-current='true'] {
+  color: var(--fg);
+}
+
+.gallery {
+  padding: 0 var(--gutter) var(--gutter);
+}
+
+.gallery__section {
+  padding: var(--gutter) 0;
+}
+
+.stat {
+  padding: var(--gutter);
+}
+
+.stat__delta {
+  color: var(--signal);
+}
+
+/* Severity block: 8px colored square (DESIGN.md §6 FindingRow). */
+.sev {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+}
+
+.sev--ok {
+  background: var(--signal);
+}
+
+.sev--warn {
+  background: var(--warn);
+}
+
+.sev--error {
+  background: var(--red);
 }

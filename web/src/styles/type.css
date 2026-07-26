@@ -1,0 +1,57 @@
+/* Signal Grid — type primitives (docs/DESIGN.md §3).
+   Plain classes only; components compose these later. */
+
+/* Micro-label: 11px all-caps, +0.08em tracking, --fg-dim — the timetable
+   voice. Mono, per the rail spec ("mono micro-labels"). */
+.micro-label {
+  font-family: var(--font-mono);
+  font-size: var(--size-micro);
+  line-height: var(--leading-micro);
+  font-weight: 500;
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+
+/* Giant numerals: 64–96px Archivo 700, tabular lining figures.
+   Stat blocks only — the numeral is the hero. */
+.numeral-giant {
+  font-family: var(--font-sans);
+  font-size: var(--size-stat-xl);
+  line-height: var(--leading-stat-xl);
+  font-weight: 700;
+  letter-spacing: var(--tracking-heading);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.numeral-giant--sm {
+  font-size: var(--size-stat);
+  line-height: var(--leading-stat);
+}
+
+/* Mono data: 13px — all file paths, keys, values, timestamps, table numerals. */
+.mono-data {
+  font-family: var(--font-mono);
+  font-size: var(--size-data);
+  line-height: var(--leading-data);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* Page title: 28px Archivo 600, tight tracking. */
+.title-page {
+  font-family: var(--font-sans);
+  font-size: var(--size-title);
+  line-height: var(--leading-title);
+  font-weight: 600;
+  letter-spacing: var(--tracking-heading);
+}
+
+/* Section header: 18px Archivo 600. */
+.title-section {
+  font-family: var(--font-sans);
+  font-size: var(--size-section);
+  line-height: var(--leading-section);
+  font-weight: 600;
+  letter-spacing: var(--tracking-heading);
+}

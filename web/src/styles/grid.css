@@ -1,0 +1,92 @@
+/* Signal Grid — layout primitives (docs/DESIGN.md §4).
+   Visible grid: 1px hairline column rules where content regions meet,
+   full-bleed horizontal rules between sections. Printed-timetable page. */
+
+/* App shell: 48px top bar spanning full width, 220px left rail, main area. */
+.layout-shell {
+  display: grid;
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  grid-template-rows: var(--topbar-h) minmax(0, 1fr);
+  grid-template-areas:
+    'topbar topbar'
+    'rail main';
+  min-height: 100vh;
+}
+
+.topbar {
+  grid-area: topbar;
+  display: flex;
+  align-items: center;
+  gap: var(--gutter);
+  height: var(--topbar-h);
+  padding: 0 var(--gutter);
+  border-bottom: var(--hairline-w) solid var(--hairline);
+}
+
+.rail {
+  grid-area: rail;
+  border-right: var(--hairline-w) solid var(--hairline);
+  padding: var(--gutter) 0;
+}
+
+.layout-main {
+  grid-area: main;
+  min-width: 0;
+}
+
+/* 12-column content grid: max 1440px, 24px gutters. */
+.grid-page {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--gutter);
+  max-width: var(--page-max);
+  margin-inline: auto;
+}
+
+/* Visible column rule on the left edge of a content region. */
+.col-rule {
+  border-left: var(--hairline-w) solid var(--hairline);
+}
+
+/* Full-bleed horizontal section rule (put on an <hr> or empty div). */
+.rule-h {
+  border: 0;
+  border-top: var(--hairline-w) solid var(--hairline);
+  margin: 0;
+  width: 100%;
+}
+
+/* Density row: 40px, hairline-separated. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--gutter);
+  min-height: var(--row-h);
+  border-bottom: var(--hairline-w) solid var(--hairline);
+}
+
+/* Hairline-ruled table: no zebra striping, ever. */
+.table-hairline {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table-hairline th,
+.table-hairline td {
+  height: var(--row-h);
+  padding: 0 var(--gutter);
+  text-align: left;
+  border-bottom: var(--hairline-w) solid var(--hairline);
+  vertical-align: middle;
+}
+
+.table-hairline th {
+  font-weight: 500;
+}
+
+/* Elevation = hairline + surface shift. No shadows, no gradients. */
+.surface {
+  background: var(--surface);
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+}
