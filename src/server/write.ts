@@ -68,7 +68,7 @@ function jsonError(status: 400 | 403 | 404 | 409 | 413 | 500, message: string): 
 const O_NOFOLLOW = fs.constants.O_NOFOLLOW ?? 0;
 
 /** Existing regular file at `abs`? (a symlink here was already realpath'd). */
-function statFile(abs: string): fs.Stats | undefined {
+export function statFile(abs: string): fs.Stats | undefined {
   try {
     const st = fs.statSync(abs);
     return st.isFile() ? st : undefined;
@@ -90,13 +90,13 @@ async function readJsonBody(req: Request): Promise<Record<string, unknown> | und
 /** The dry-run view of a single already-resolved write: what the diff shows and
  *  whether it creates or modifies. `refuse` marks an in-scope path that exists
  *  but is not a regular file (a dir) — a 403, never an EISDIR. */
-interface EditPreview {
+export interface EditPreview {
   willCreate: boolean;
   willModify: boolean;
   diff: string;
 }
 
-function previewResolved(
+export function previewResolved(
   resolved: ResolvedTarget,
   content: string,
 ): EditPreview | { refuse: true } {
@@ -119,7 +119,7 @@ function previewResolved(
  * to map to a 403 — apply-fix and /api/write share this exact code so neither
  * can drift into a second, weaker write.
  */
-function commitResolved(resolved: ResolvedTarget, content: string): void {
+export function commitResolved(resolved: ResolvedTarget, content: string): void {
   fs.mkdirSync(path.dirname(resolved.absPath), { recursive: true });
   const fd = fs.openSync(
     resolved.absPath,

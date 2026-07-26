@@ -18,5 +18,8 @@ export type {
   StorageEntry,
   StorageHome,
   StorageReport,
+  SyncResponse,
+  SyncStatus,
+  SyncTarget,
   WsMessage,
 } from './types.js';

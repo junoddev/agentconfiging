@@ -59,6 +59,7 @@ import { DiscoveryError, discoverProjects } from '../core/index.js';
 import { InstanceRegistry, InvalidRootError } from './registry.js';
 import { registerApplyFixRoute, registerWriteRoutes } from './write.js';
 import { registerStorageRoutes } from './storage.js';
+import { registerSyncRoute } from './sync.js';
 import type { WriteScope } from './pathguard.js';
 
 export interface AppConfig {
@@ -356,6 +357,12 @@ export function createApp(config: AppConfig): Hono {
     registry,
     trashDir: config.trashDir ?? '',
   });
+
+  // INSTRUCTION SYNC (wmc.10): POST /api/sync — regenerate every runtime's
+  // instruction file from a designated source of truth. Under /api (inherits the
+  // token + Origin/CSRF gates); every generated target is written through the
+  // SAME guarded write path as /api/write, so a sync can never escape scope.
+  registerSyncRoute(app, { scopes: config.scopes ?? [], registry });
 
   // Unknown /api paths (any method): 404 JSON, no static fallback.
   app.all('/api/*', () => jsonError(404, 'not found'));

@@ -43,6 +43,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { isWritableConfigPath } from '../core/scanner.js';
+import { listSyncTargets } from '../core/runtimes/index.js';
 
 export interface WriteScope {
   /** Canonical (realpath'd) absolute scope root. */
@@ -83,13 +84,42 @@ const MAX_SEGMENT_LEN = 255;
 const ADDITIONAL_WRITABLE_ROOT_FILES: ReadonlySet<string> = new Set(['.gitignore']);
 
 /**
+ * Additive extension for the INSTRUCTION SYNC engine (E5, bead agentconfig-wmc.10).
+ * The sync engine regenerates each runtime's PRIMARY instruction file from a
+ * designated source of truth. Long-tail runtimes (Cline, Windsurf, Zed, Amazon Q,
+ * Junie, Roo, Qodo, Aider) keep those files at paths the scanner's config
+ * allowlist does not collect — e.g. `.clinerules`, `.windsurfrules`, `.rules`,
+ * `.amazonq/rules/project.md`, `best_practices.md`, `CONVENTIONS.md`,
+ * `.junie/guidelines.md`, `.roo/rules/project.md` — so a sync TARGET would be
+ * refused as not-a-known-config-path even though writing it is the whole point.
+ *
+ * This set is derived at load time from the RUNTIME_FORMATS table (the single
+ * source of runtime knowledge), so it CANNOT drift from what the engine writes:
+ * exactly each runtime's `scaffoldPath` plus every concrete (non-directory)
+ * instruction location. These are static literals from the table — never user
+ * input. A sync target is still no more trusted than a user write: it must clear
+ * the FULL guard (scope containment, traversal, symlink/O_NOFOLLOW) and match one
+ * of these paths EXACTLY (segment-exact, post-canonicalization). Project scope
+ * only; a directory prefix is never opened wholesale.
+ */
+const SYNC_TARGET_FILES: ReadonlySet<string> = new Set(
+  listSyncTargets().flatMap((rt) => [
+    rt.scaffoldPath,
+    ...rt.instructionPaths.filter((p) => !p.endsWith('/')),
+  ]),
+);
+
+/**
  * The write allowlist the guard enforces: the core engine's include rules PLUS
- * the server-side additions above. A fix edit path is checked here identically
- * to a user write — an analyzer-emitted fix is no more trusted than a user edit.
+ * the server-side additions above. A fix or sync edit path is checked here
+ * identically to a user write — an engine-emitted path is no more trusted than a
+ * user edit.
  */
 function isWritableTarget(rel: string, kind: 'project' | 'global'): boolean {
   if (isWritableConfigPath(rel, kind)) return true;
-  return kind === 'project' && !rel.includes('/') && ADDITIONAL_WRITABLE_ROOT_FILES.has(rel);
+  if (kind !== 'project') return false;
+  if (!rel.includes('/') && ADDITIONAL_WRITABLE_ROOT_FILES.has(rel)) return true;
+  return SYNC_TARGET_FILES.has(rel);
 }
 
 const bad = (status: 400 | 403): RejectedTarget => ({ ok: false, status });

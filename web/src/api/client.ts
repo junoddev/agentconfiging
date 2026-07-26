@@ -21,6 +21,7 @@ import type {
   ScanResponse,
   StorageCleanupResponse,
   StorageReport,
+  SyncResponse,
   UnloadResponse,
   WriteResponse,
 } from './types.js';
@@ -188,6 +189,24 @@ export class ApiClient {
     const body: Record<string, unknown> = { home, name };
     if (instance !== undefined) body['instance'] = instance;
     return this.#send<StorageCleanupResponse>('/api/storage/cleanup', 'POST', body);
+  }
+
+  /**
+   * INSTRUCTION SYNC (bead wmc.10) — regenerate other runtimes' instruction
+   * files from a designated source of truth. `dryRun:true` returns per-target
+   * unified diffs + sync status (no disk touch); `dryRun:false` writes each
+   * writable, non-in-sync target through the guarded server write path. Omitting
+   * `targets` plans EVERY sync target (first-class + long-tail); passing ids
+   * narrows it. `instance` defaults to the server's default instance.
+   */
+  syncInstructions(
+    sourcePath: string,
+    opts: { dryRun: boolean; targets?: string[]; instance?: string },
+  ): Promise<SyncResponse> {
+    const body: Record<string, unknown> = { sourcePath, dryRun: opts.dryRun };
+    if (opts.targets !== undefined) body['targets'] = opts.targets;
+    if (opts.instance !== undefined) body['instance'] = opts.instance;
+    return this.#send<SyncResponse>('/api/sync', 'POST', body);
   }
 
   async #get<T>(path: string): Promise<T> {

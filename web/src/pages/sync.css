@@ -1,0 +1,123 @@
+/* Instruction sync (#/sync, bead wmc.10). Chassis only — Signal-Grid tokens,
+   hairlines, mono. Nothing here animates; every diff/path is adversarial data
+   rendered by DiffPanel / text nodes, never markup. */
+
+.sync__sub {
+  margin-left: 8px;
+  color: var(--fg-dim);
+}
+
+.sync__lede {
+  color: var(--fg-dim);
+  margin-top: 6px;
+}
+
+/* ── Source of truth picker ─────────────────────────────────────────────── */
+
+.sync__source {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sync__source-label {
+  color: var(--fg-dim);
+  letter-spacing: var(--tracking-micro);
+}
+
+.sync__source-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gutter);
+}
+
+/* ── Plan summary + actions ─────────────────────────────────────────────── */
+
+.sync__summary {
+  color: var(--fg-dim);
+  margin-bottom: var(--gutter);
+}
+
+.sync__commit-msg {
+  color: var(--signal);
+  margin-bottom: var(--gutter);
+}
+
+.sync__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gutter);
+  margin-bottom: var(--gutter);
+}
+
+/* ── Target rows ────────────────────────────────────────────────────────── */
+
+.sync__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gutter);
+}
+
+.sync__row {
+  padding: var(--gutter);
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sync__row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px var(--gutter);
+}
+
+.sync__pick {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.sync__path {
+  color: var(--fg);
+  word-break: break-all;
+}
+
+.sync__badge {
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+}
+
+.sync__badge--signal {
+  color: var(--signal);
+}
+
+.sync__badge--warn {
+  color: var(--warn);
+}
+
+.sync__badge--dim {
+  color: var(--fg-dim);
+}
+
+.sync__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px var(--gutter);
+  color: var(--fg-dim);
+}
+
+.sync__note {
+  color: var(--warn);
+}
+
+.sync__err {
+  color: var(--red);
+}

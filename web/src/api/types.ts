@@ -242,6 +242,43 @@ export interface StorageCleanupResponse {
   trashedTo: string;
 }
 
+/** Per-target freshness in a sync plan (src/core/sync). `unwritable` marks a
+ *  target the guard refuses — reported, never written. */
+export type SyncStatus = 'new' | 'changed' | 'in-sync' | 'unwritable';
+
+/**
+ * One target row in a sync response (src/server/sync.ts). `diff` is the INTENDED
+ * disclosure of the regenerated file — the preview the user approves — carried as
+ * unified diff TEXT (empty when in-sync/unwritable). `runtimeIds`/`displayNames`
+ * list every runtime that reads `path` (shared-file runtimes collapse to one
+ * row). `committed`/`error` are present only on a commit response.
+ */
+export interface SyncTarget {
+  runtimeIds: string[];
+  displayNames: string[];
+  path: string;
+  pathScope?: string;
+  status: SyncStatus;
+  willCreate?: boolean;
+  willModify?: boolean;
+  diff: string;
+  lossy: boolean;
+  note?: string;
+  committed?: boolean;
+  error?: string;
+}
+
+/** POST /api/sync payload (dry-run OR commit; src/server/sync.ts). */
+export interface SyncResponse {
+  /** True on a dry-run response; absent on a commit response. */
+  dryRun?: true;
+  /** True when every writable, non-in-sync target committed; commit responses only. */
+  committed?: boolean;
+  /** Scope-relative source path the plan regenerated from. */
+  source: string;
+  targets: SyncTarget[];
+}
+
 /**
  * Server→client WebSocket push messages (src/server/watcher.ts,
  * `WatcherMessage`). A `report` push means the instance's config changed on disk
