@@ -23,6 +23,8 @@ describe('REDACTION_PATTERNS ordering', () => {
     const ids = REDACTION_PATTERNS.map((p) => p.id);
     expect(ids.indexOf('anthropic')).toBeLessThan(ids.indexOf('openai'));
     expect(ids[ids.length - 1]).toBe('kv_secret');
+    // url_credentials sits just before the kv catch-all (np8.10).
+    expect(ids[ids.length - 2]).toBe('url_credentials');
   });
 });
 
@@ -208,6 +210,138 @@ describe('documented divergences from upstream (see patterns.ts header)', () => 
   });
 });
 
+describe('url_credentials (np8.10)', () => {
+  it('redacts only the password segment, keeping scheme/user/host visible', () => {
+    const result = redact('bus: amqp://guest:FAKEFAKE@localhost:5672 up');
+    expect(result.text).toBe(`bus: amqp://guest:${markFor('url_credentials')}@localhost:5672 up`);
+    expect(result.spans.map((s) => s.id)).toEqual(['url_credentials']);
+    expectSpansCoverMarks(result);
+  });
+
+  it('covers postgres and https credentialed URLs', () => {
+    const pg = redact('postgres://app:s3cr3t!@db.internal:5432/prod');
+    expect(pg.text).toBe(`postgres://app:${markFor('url_credentials')}@db.internal:5432/prod`);
+
+    const https = redact('git clone https://ci-bot:tokenvalue123@example.com/org/repo.git');
+    expect(https.text).toBe(
+      `git clone https://ci-bot:${markFor('url_credentials')}@example.com/org/repo.git`,
+    );
+  });
+
+  it('password segment ends at the FIRST @ (unencoded @ tails stay visible)', () => {
+    // RFC userinfo requires percent-encoding `@`; this pins the documented
+    // "first ':' after '//'+userinfo up to the first '@'" semantics.
+    const { text } = redact('amqp://u:pa@ss@host');
+    expect(text).toBe(`amqp://u:${markFor('url_credentials')}@ss@host`);
+  });
+
+  it('leaves credential-free URLs untouched (ports, paths, bare userinfo)', () => {
+    for (const input of [
+      'https://example.com/path',
+      'https://example.com:8080/path', // port is not a password (@ never follows)
+      'https://user@example.com', // userinfo without password has no ':'
+      'https://example.com/a:b@c', // ':' only appears in the path (blocked by '/')
+      'see a:b@c for details', // no scheme://
+    ]) {
+      expect(redact(input), input).toEqual({ text: input, spans: [] });
+    }
+  });
+
+  it('loses the overlap watermark to kv_secret when the key itself is secret-named', () => {
+    // kv starts earlier (at the key) and redacts the WHOLE value — strictly
+    // more than the password-only substitution. Ordering comment in
+    // patterns.ts documents this.
+    const { text, spans } = redact('DB_PASSWORD=postgres://app:hunter2@db/prod');
+    expect(text).toBe(`DB_PASSWORD="${markFor('kv_secret')}"`);
+    expect(spans.map((s) => s.id)).toEqual(['kv_secret']);
+  });
+});
+
+describe('catalogue upgrades (np8.11)', () => {
+  it('redacts fine-grained github_pat_ tokens', () => {
+    const FAKE = 'github_pat_11AAAAAAAAAAAAAAAAAAAA_' + 'B'.repeat(59);
+    const { text, spans } = redact(`pat ${FAKE} end`);
+    expect(text).toBe(`pat ${markFor('github')} end`);
+    expect(spans.map((s) => s.id)).toEqual(['github']);
+    expectSpansCoverMarks(redact(FAKE));
+  });
+
+  it('ignores short github_pat_ prose (below the 22-char run)', () => {
+    const input = 'see github_pat_docs for details';
+    expect(redact(input)).toEqual({ text: input, spans: [] });
+  });
+
+  it('kv_secret unquoted values run to whitespace/EOL — no partial-redaction leak', () => {
+    // Upstream redacted only `p` and printed `@ssw0rd!FAKE` after the mark
+    // (output looked redacted but leaked the tail — dangerous polarity).
+    const result = redact('PASSWORD=p@ssw0rd!FAKE');
+    expect(result.text).toBe(`PASSWORD="${markFor('kv_secret')}"`);
+    expect(result.text).not.toContain('ssw0rd');
+    expectSpansCoverMarks(result);
+
+    const env = redact('export DB_PASSWORD=p@ss:w0rd/x\nHOST=db\n');
+    expect(env.text).toBe(`export DB_PASSWORD="${markFor('kv_secret')}"\nHOST=db\n`);
+  });
+
+  it('sk- left boundary kills mid-word prose false positives', () => {
+    // Previously: 'ri[REDACTED:openai]' / 'di[REDACTED:openai]'.
+    const input = 'risk-assessment-methodology and disk-encryption-standards';
+    expect(redact(input)).toEqual({ text: input, spans: [] });
+    // Same boundary on the anthropic pattern.
+    const glued = 'disk-ant-00000000000000000000';
+    expect(redact(glued)).toEqual({ text: glued, spans: [] });
+  });
+
+  it('sk- keys after =, :, quotes, whitespace, and start-of-string still redact', () => {
+    const KEY = 'sk-abcdefghijklmnopqrst1234';
+    // Non-secret key names so the kv catch-all stays out of the way.
+    expect(redact(KEY).text).toBe(markFor('openai'));
+    expect(redact(`use ${KEY} here`).text).toBe(`use ${markFor('openai')} here`);
+    expect(redact(`"${KEY}"`).text).toBe(`"${markFor('openai')}"`);
+    expect(redact(`foo: ${KEY}`).spans.map((s) => s.id)).toContain('openai');
+    expect(redact(`x=${KEY}`).spans.map((s) => s.id)).toContain('openai');
+  });
+
+  it('exempts keybinding entries under the exact key name "key"', () => {
+    // The 3 FP shapes from the claude-rich keybindings fixture.
+    for (const input of ['"key": "ctrl+j"', '"key": "ctrl+g ctrl+s"', '"key": "ctrl+t"']) {
+      expect(redact(input), input).toEqual({ text: input, spans: [] });
+      expect(containsSecrets(input), input).toBe(false);
+    }
+  });
+
+  it('keeps the safe-direction bias around the "key" exemption', () => {
+    // Long opaque value under bare `key` still redacts.
+    expect(redact('"key": "aVeryLongSecretValue123"').text).toBe(
+      `"key": "${markFor('kv_secret')}"`,
+    );
+    expect(redact('KEY=abcdef1234opaque').text).toBe(`KEY="${markFor('kv_secret')}"`);
+    // Compound key names are exempt from the exemption.
+    expect(redact('"api_key": "ctrl+k"').text).toBe(`"api_key": "${markFor('kv_secret')}"`);
+    // A provider-shaped secret under bare `key` is long and not
+    // chord-shaped, so the exemption never applies — kv still redacts it
+    // (and provider patterns scan the value independently regardless).
+    const withProvider = redact('"key": "sk-abcdefghijklmnopqrst1234"');
+    expect(withProvider.spans.map((s) => s.id)).toEqual(['kv_secret']);
+  });
+
+  it('leaves the claude-rich keybindings fixture entirely untouched', () => {
+    const raw = fixture('trees/claude-rich/.claude/keybindings.json');
+    expect(containsSecrets(raw)).toBe(false);
+    expect(redact(raw)).toEqual({ text: raw, spans: [] });
+  });
+
+  it('redacts Slack xox tokens', () => {
+    for (const FAKE of ['xoxb-1234567890-FAKEFAKE1234', 'xoxp-9876543210-FAKEFAKE5678']) {
+      const { text, spans } = redact(`slack ${FAKE}\n`);
+      expect(text, FAKE).toBe(`slack ${markFor('slack')}\n`);
+      expect(spans.map((s) => s.id), FAKE).toEqual(['slack']);
+    }
+    // Below the 10-char run bound: not a token.
+    expect(redact('xoxb-short').spans).toEqual([]);
+  });
+});
+
 describe('pathological input timing (regression guards, generous CI margins)', () => {
   const elapsed = (fn: () => void): number => {
     const t0 = performance.now();
@@ -231,6 +365,15 @@ describe('pathological input timing (regression guards, generous CI margins)', (
       'eyJ'.repeat(n / 3), // jwt prefix repeats
       'Bearer ' + 'a'.repeat(n), // bearer + long run
       'token:"' + 'a'.repeat(n), // unterminated quoted value
+      // np8.10/np8.11 adversarial shapes:
+      'a://u:' + ':'.repeat(n), // url_credentials: long ':' run, no '@'
+      'a://u:p' + '@'.repeat(n), // url_credentials: '@' flood after one match
+      '@'.repeat(n), // pure '@' flood (no scheme anywhere)
+      'x://a:b@'.repeat(n / 8), // dense url_credentials matches
+      'github_pat_'.repeat(Math.ceil(n / 11)), // github_pat_ prefix spam
+      'xoxb-'.repeat(Math.ceil(n / 5)), // slack prefix spam
+      'PASSWORD=' + '!'.repeat(n), // widened unquoted kv value long run
+      'key: ' + 'a+'.repeat(n / 2), // chord-shape check on a huge bare-`key` value
     ];
     for (const input of cases) {
       expect(elapsed(() => redact(input)), input.slice(0, 16)).toBeLessThan(500);
@@ -267,10 +410,14 @@ describe('claude-rich fixtures', () => {
     expect(result.text).toContain(`"GITHUB_TOKEN": "${markFor('kv_secret')}"`);
     expectSpansCoverMarks(result);
 
-    // Known catalogue gap, documented on purpose: URL-embedded credentials
-    // (amqp://user:pass@host) are NOT covered by the ported patterns —
-    // ORBIT_BUS_URL does not match the secret-key regex either.
-    expect(result.text).toContain('amqp://guest:FAKEFAKE@localhost:5672');
+    // np8.10: URL-embedded credentials are now covered — the amqp password
+    // is redacted while scheme/user/host stay visible (ORBIT_BUS_URL still
+    // does not match the kv secret-key regex, so url_credentials is the
+    // pattern that fires). Previously pinned as an unredacted gap.
+    expect(result.text).not.toContain('FAKEFAKE');
+    expect(result.text).toContain(
+      `"ORBIT_BUS_URL": "amqp://guest:${markFor('url_credentials')}@localhost:5672"`,
+    );
   });
 
   it('redacts the same content embedded in the claude-rich manifest fixture', () => {
@@ -283,7 +430,9 @@ describe('claude-rich fixtures', () => {
     const result = redact(settings!.content);
     expect(result.text).not.toContain('sk-FAKE');
     expect(result.text).not.toContain('ghp_FAKE');
-    expect(result.spans.length).toBeGreaterThanOrEqual(2);
+    // np8.10: the amqp URL password is the third redaction.
+    expect(result.text).not.toContain('FAKEFAKE');
+    expect(result.spans.length).toBeGreaterThanOrEqual(3);
     expectSpansCoverMarks(result);
   });
 });

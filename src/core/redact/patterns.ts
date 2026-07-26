@@ -18,16 +18,23 @@
  * OpenAI `sk-…` catch-all so e.g. an Anthropic `sk-ant-…` key is tagged as
  * anthropic (and not double-matched).
  *
- *   1. anthropic          sk-ant-[A-Za-z0-9_-]{20,}
- *   2. github             gh[pousr]_[A-Za-z0-9]{36,255}
- *   3. aws_access_key     (AKIA|ASIA|AROA)[0-9A-Z]{16}
- *   4. jwt                eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+
- *   5. bearer             Bearer\s+[A-Za-z0-9_-]{20,}
- *   6. openai             sk-(?!ant-)[A-Za-z0-9_-]{20,}    ← excludes sk-ant-…
- *   7. kv_secret          (key)(sep)(value)  where key ∈ /token|secret|key|password/i
+ *   1. anthropic        (?<![A-Za-z0-9])sk-ant-[A-Za-z0-9_-]{20,}
+ *   2. github           gh[pousr]_[A-Za-z0-9]{36,255} | github_pat_[A-Za-z0-9_]{22,255}
+ *   3. slack            xox[baprs]-[A-Za-z0-9-]{10,250}
+ *   4. aws_access_key   (AKIA|ASIA|AROA)[0-9A-Z]{16}
+ *   5. jwt              eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+
+ *   6. bearer           Bearer\s+[A-Za-z0-9_-]{20,}
+ *   7. openai           (?<![A-Za-z0-9])sk-(?!ant-)[A-Za-z0-9_-]{20,}
+ *   8. url_credentials  scheme://user:PASSWORD@ — redacts the password only
+ *   9. kv_secret        (key)(sep)(value)  where key ∈ /token|secret|key|password/i
  *
  * The KV pattern is the catch-all and runs LAST so a value that already
  * matched a provider-specific pattern doesn't get re-mangled.
+ * url_credentials sits just before it: when a secret-named key's value IS a
+ * credentialed URL, the kv match starts earlier (at the key) and wins the
+ * overlap watermark — redacting the whole value, which is strictly more; for
+ * every other context (non-secret key names like ORBIT_BUS_URL, prose,
+ * shell history) url_credentials is the only pattern that fires.
  *
  * --- Deliberate divergences from upstream ---
  *
@@ -80,18 +87,72 @@
  *
  * 5. Cosmetic: `\-` at the end of character classes written as a plain `-`
  *    (`[A-Za-z0-9_-]` instead of upstream's `[A-Za-z0-9_\-]`) to satisfy
- *    eslint no-useless-escape. Identical semantics. The kv_secret VALUE
- *    class keeps the escaped form (`[A-Za-z0-9_\-./+=]`) because a bare `-`
- *    before `.` would be an invalid descending range.
+ *    eslint no-useless-escape. Identical semantics. (The kv_secret VALUE
+ *    class divergence is item 8 below.)
+ *
+ * 6. openai / anthropic left boundary (redacts-LESS): `(?<![A-Za-z0-9])`
+ *    before `sk-`. Upstream matched `sk-` mid-word, so prose like
+ *    `risk-assessment-methodology` or `disk-encryption-standards` became
+ *    `ri[REDACTED:openai]` / `di[REDACTED:openai]`, mangling rendered
+ *    CLAUDE.md. Real keys follow `=`, `:`, quotes, whitespace, or start of
+ *    text — none of which are alphanumeric — so `key=sk-…`, `"sk-…"` and
+ *    ` sk-…` all still redact. `_` is deliberately NOT in the lookbehind
+ *    (an underscore-glued `FOO_sk-…` still redacts — safe direction).
+ *
+ * 7. github pattern extended with fine-grained PATs (redacts-MORE):
+ *    `github_pat_[A-Za-z0-9_]{22,255}`. Upstream's `gh[pousr]_` alternative
+ *    cannot match the `github_pat_` prefix at all, so fine-grained tokens
+ *    leaked entirely. Real fine-grained PATs are `github_pat_` + 22 base62
+ *    chars + `_` + 59 more; requiring 22+ of `[A-Za-z0-9_]` catches both
+ *    halves as one match while ignoring short prose like `github_pat_docs`.
+ *
+ * 8. kv_secret unquoted VALUE class widened (redacts-MORE):
+ *    `[A-Za-z0-9_\-./+=]+` → `[^\s"'#]+` (run to whitespace/EOL, still
+ *    excluding quotes and `#` comment starts like upstream's class did).
+ *    Upstream stopped at the first char outside its narrow class, so
+ *    `PASSWORD=p@ssw0rd!FAKE` redacted only `p` and PRINTED the rest —
+ *    output that LOOKS redacted but leaks the tail (dangerous polarity).
+ *    Side effect (accepted): unquoted values now swallow trailing
+ *    punctuation up to whitespace (`token: abc,` consumes the comma).
+ *
+ * 9. url_credentials pattern (redacts-MORE, not in upstream): passwords
+ *    embedded in URLs (`amqp://user:pass@host`, `postgres://…`,
+ *    `https://user:token@…`) leaked entirely — the host key (e.g.
+ *    ORBIT_BUS_URL) rarely matches the kv secret-key regex. Redacts ONLY
+ *    the password segment — between the first `:` after `//`+userinfo and
+ *    the `@` — keeping scheme/user/host visible. ReDoS hygiene: userinfo
+ *    `{1,64}` and password `{1,256}` bounds, all classes exclude the chars
+ *    that delimit them (userinfo can't contain `:`, password can't contain
+ *    `@`), scheme bounded `{0,31}` — no nested quantifiers, no ambiguity,
+ *    and an `@`-less scan fails after at most one bounded backtrack chain
+ *    per `://` occurrence. Quotes are excluded from userinfo/password so a
+ *    quoted URL value never swallows its closing quote.
+ *
+ * 10. kv_secret keybinding exemption (redacts-LESS, deliberately narrow):
+ *    `/key/i` in SECRET_KEY makes keybindings.json entries like
+ *    `"key": "ctrl+k"` redact (3 FP hits in the claude-rich fixture). Rule:
+ *    when the key name is EXACTLY `key` (case-insensitive) the value is
+ *    skipped only if it cannot plausibly be a secret — shorter than 8 chars
+ *    OR shaped like a key chord (short alnum tokens joined by `+`/space,
+ *    e.g. `ctrl+g ctrl+s`). Everything else about `key` still redacts
+ *    (`"key": "aVeryLongSecret123"` stays covered), compound names
+ *    (`api_key`, `KEY_ID`) are exempt from the exemption, and provider
+ *    patterns still scan the value independently — safe-direction bias.
+ *
+ * 11. slack pattern (redacts-MORE, not in upstream):
+ *    `xox[baprs]-[A-Za-z0-9-]{10,250}` — bot/user/app/refresh/session
+ *    tokens. Single bounded character class, no ambiguity.
  */
 
 export type RedactionPatternId =
   | 'anthropic'
   | 'github'
+  | 'slack'
   | 'aws_access_key'
   | 'jwt'
   | 'bearer'
   | 'openai'
+  | 'url_credentials'
   | 'kv_secret';
 
 export interface RedactionReplacement {
@@ -154,27 +215,65 @@ function prefixed(id: RedactionPatternId, pattern: RegExp, prefix: string): Reda
 
 const SECRET_KEY = /(token|secret|key|password)/i;
 
+// Divergence 10: values under the EXACT key name `key` that look like key
+// chords (short alnum tokens joined by `+` or space) are keybindings, not
+// secrets. Bounded tokens ({1,10}) and repeats ({1,7}) — real secrets with
+// `+` (e.g. base64) have long runs that fail the token bound.
+const KEYBINDING_SHAPE = /^[A-Za-z][A-Za-z0-9]{0,9}(?:[+ ][A-Za-z0-9]{1,10}){1,7}$/;
+
+// URL-embedded credentials (divergence 9). Group 1 is the kept prefix
+// `scheme://user:`; the password run up to `@` is what gets replaced. The
+// trailing `@` is consumed by the match and re-emitted by build() so the
+// host stays visible.
+const URL_CRED_MARK = markFor('url_credentials');
+const URL_CRED_ENTRY: RedactionPattern = {
+  id: 'url_credentials',
+  pattern: /([A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/[^\s:@/"']{1,64}:)[^\s@/"']{1,256}@/g,
+  mark: URL_CRED_MARK,
+  build(match) {
+    // match[1] = `scheme://user:` — kept verbatim, only the password is marked.
+    const prefix = match[1] ?? '';
+    const replacement = `${prefix}${URL_CRED_MARK}@`;
+    return {
+      replacement,
+      redactStart: prefix.length,
+      redactEnd: prefix.length + URL_CRED_MARK.length,
+    };
+  },
+};
+
 // KV catch-all. The visible-mark span here is the trailing `"[REDACTED:kv_secret]"`
 // (the value substitution, including its quotes); the key/separator are kept
 // verbatim so the user can see WHICH key was redacted.
 //
 // Deliberate divergences from upstream (see header): the leading
 // `(?<![A-Za-z_])` boundary + the `{0,127}` key bound (quadratic-scan
-// mitigation) and the disjoint quoted-value alternatives
+// mitigation), the disjoint quoted-value alternatives
 // `(?:\\.|(?!\4|\\).)*` (ReDoS fix — upstream's `(?!\4).` second branch
-// could also consume a backslash).
+// could also consume a backslash), the widened unquoted value class
+// `[^\s"'#]+` (partial-redaction leak fix, item 8), and the exact-`key`
+// keybinding exemption in build() (item 10).
 const KV_MARK = markFor('kv_secret');
 const KV_ENTRY: RedactionPattern = {
   id: 'kv_secret',
   pattern:
-    /(?<![A-Za-z_])(["']?)([A-Za-z_][A-Za-z0-9_-]{0,127})\1(\s*[:=]\s*)(?:(["'])((?:\\.|(?!\4|\\).)*)\4|([A-Za-z0-9_\-./+=]+))/g,
+    /(?<![A-Za-z_])(["']?)([A-Za-z_][A-Za-z0-9_-]{0,127})\1(\s*[:=]\s*)(?:(["'])((?:\\.|(?!\4|\\).)*)\4|([^\s"'#]+))/g,
   mark: KV_MARK,
   build(match) {
-    // match[0] = whole; match[1]=kq, match[2]=key, match[3]=sep
+    // match[0] = whole; match[1]=kq, match[2]=key, match[3]=sep,
+    // match[5]=quoted value (inner), match[6]=unquoted value
     const kq = match[1] ?? '';
     const key = match[2] ?? '';
     const sep = match[3] ?? '';
     if (!SECRET_KEY.test(key)) return null;
+    // Divergence 10: bare `key` holding a short value or a key chord is a
+    // keybinding entry, not a secret. Compound names (api_key, …) and
+    // long/opaque values still redact; provider patterns still scan the
+    // value independently.
+    if (key.toLowerCase() === 'key') {
+      const value = match[5] ?? match[6] ?? '';
+      if (value.length < 8 || KEYBINDING_SHAPE.test(value)) return null;
+    }
     const replacement = `${kq}${key}${kq}${sep}"${KV_MARK}"`;
     // Span covers the trailing "[REDACTED:kv_secret]" portion (with surrounding quotes).
     return {
@@ -186,21 +285,30 @@ const KV_ENTRY: RedactionPattern = {
 };
 
 export const REDACTION_PATTERNS: readonly RedactionPattern[] = [
-  // 1. Anthropic — must precede the OpenAI sk- pattern.
-  whole('anthropic', /sk-ant-[A-Za-z0-9_-]{20,}/g),
-  // 2. GitHub tokens (ghp_, gho_, ghu_, ghs_, ghr_).
-  whole('github', /gh[pousr]_[A-Za-z0-9]{36,255}/g),
-  // 3. AWS access keys (long-lived AKIA, temporary ASIA, role AROA).
+  // 1. Anthropic — must precede the OpenAI sk- pattern. Left boundary is
+  //    divergence 6 (prose FP fix, shared with openai).
+  whole('anthropic', /(?<![A-Za-z0-9])sk-ant-[A-Za-z0-9_-]{20,}/g),
+  // 2. GitHub tokens: classic (ghp_, gho_, ghu_, ghs_, ghr_) plus
+  //    fine-grained github_pat_ (divergence 7).
+  whole('github', /gh[pousr]_[A-Za-z0-9]{36,255}|github_pat_[A-Za-z0-9_]{22,255}/g),
+  // 3. Slack tokens (divergence 11, not in upstream).
+  whole('slack', /xox[baprs]-[A-Za-z0-9-]{10,250}/g),
+  // 4. AWS access keys (long-lived AKIA, temporary ASIA, role AROA).
   whole('aws_access_key', /\b(?:AKIA|ASIA|AROA)[0-9A-Z]{16}\b/g),
-  // 4. JWT-shaped tokens (header.payload.signature, base64url chunks).
+  // 5. JWT-shaped tokens (header.payload.signature, base64url chunks).
   //    Divergence from upstream (see header): left boundary added so
   //    `eyJeyJ…` repeats don't rescan quadratically.
   whole('jwt', /(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g),
-  // 5. Bearer tokens.
+  // 6. Bearer tokens.
   prefixed('bearer', /Bearer\s+[A-Za-z0-9_-]{20,}/g, 'Bearer '),
-  // 6. OpenAI sk- — explicitly exclude sk-ant- via negative lookahead so
+  // 7. OpenAI sk- — explicitly exclude sk-ant- via negative lookahead so
   //    Anthropic keys are tagged anthropic (and not silently downgraded).
-  whole('openai', /sk-(?!ant-)[A-Za-z0-9_-]{20,}/g),
-  // 7. KV catch-all — runs last.
+  //    Left boundary is divergence 6 (risk-/disk- prose FP fix).
+  whole('openai', /(?<![A-Za-z0-9])sk-(?!ant-)[A-Za-z0-9_-]{20,}/g),
+  // 8. URL-embedded credentials (divergence 9) — before the KV catch-all;
+  //    when a secret-named key's value is a credentialed URL the kv match
+  //    starts earlier and wins the overlap watermark (redacts strictly more).
+  URL_CRED_ENTRY,
+  // 9. KV catch-all — runs last.
   KV_ENTRY,
 ];
