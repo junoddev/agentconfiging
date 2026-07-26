@@ -79,6 +79,33 @@ export const ADDITIONAL_KNOWN_FILES: ReadonlySet<string> = new Set([
   '.github/copilot-instructions.md',
 ]);
 
+/**
+ * Documented addition to the verbatim include rules (bead agentconfig-np8.13;
+ * same additive pattern as ADDITIONAL_KNOWN_FILES above — the ported tables
+ * stay byte-identical, extensions live beside them and merge at match time).
+ *
+ * The copilot detector's extract() enriches from
+ * '.github/instructions/*.instructions.md' — the newer path-scoped Copilot
+ * format (canonical copilot-basic fixture: '.github/instructions/api.instructions.md').
+ * Unlike ADDITIONAL_KNOWN_FILES this is a GLOB, not an exact path, so it cannot
+ * be an exact-set entry. It is also NOT covered by KNOWN_DIRS: '.github/copilot'
+ * only matches '.github/copilot/...', not this sibling '.github/instructions/'
+ * subtree. Without this rule copilot still detects (its match triggers are
+ * collected), but the scoped instruction files' content never reaches
+ * parsers/analyzers on a real scan.
+ *
+ * Scoped narrowly to avoid over-collecting the rest of '.github/': only paths
+ * directly under '.github/instructions/' ending in '.instructions.md' match.
+ * '.github/workflows/*.yml', '.github/ISSUE_TEMPLATE/*', and arbitrary
+ * '.github/foo.md' stay excluded.
+ */
+const SCOPED_INSTRUCTIONS_PREFIX = '.github/instructions/';
+const SCOPED_INSTRUCTIONS_SUFFIX = '.instructions.md';
+
+function isAdditionalScopedInstruction(norm: string): boolean {
+  return norm.startsWith(SCOPED_INSTRUCTIONS_PREFIX) && norm.endsWith(SCOPED_INSTRUCTIONS_SUFFIX);
+}
+
 export const KNOWN_DIRS: readonly string[] = [
   '.claude',
   '.cursor',
@@ -189,12 +216,14 @@ function isKnownRootFile(norm: string): boolean {
 
 /**
  * Project-scope include rule: known root file, documented additional known
- * file (agentconfig-np8.12), or under a known dir with an allowed ext.
+ * file (agentconfig-np8.12), documented scoped-instruction glob
+ * (agentconfig-np8.13), or under a known dir with an allowed ext.
  */
 function shouldIncludeProjectFile(relPath: string): boolean {
   const norm = normalizeRel(relPath);
   if (isKnownRootFile(norm)) return true;
   if (ADDITIONAL_KNOWN_FILES.has(norm)) return true;
+  if (isAdditionalScopedInstruction(norm)) return true;
   if (!isUnderKnownDir(norm)) return false;
   return hasAllowedExt(norm);
 }

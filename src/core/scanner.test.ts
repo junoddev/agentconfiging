@@ -82,6 +82,27 @@ describe('scanProject', () => {
     }
   });
 
+  it('collects .github/instructions/*.instructions.md, not the rest of .github (agentconfig-np8.13)', () => {
+    const root = makeTempDir();
+    write(root, '.github/instructions/api.instructions.md', '# api rules\n');
+    write(root, '.github/instructions/db.instructions.md', '# db rules\n');
+    // Must NOT be over-collected:
+    write(root, '.github/instructions/readme.md', 'not an instructions file\n');
+    write(root, '.github/workflows/ci.yml', 'on: push\n');
+    write(root, '.github/random.md', 'arbitrary .github markdown\n');
+    write(root, '.github/ISSUE_TEMPLATE/bug.md', 'bug template\n');
+
+    const manifest = scanProject(root);
+    expect(manifest.files.map((f) => f.path)).toEqual([
+      '.github/instructions/api.instructions.md',
+      '.github/instructions/db.instructions.md',
+    ]);
+    for (const file of manifest.files) {
+      expect(file.content).toBeTruthy();
+      expect(file.truncated).toBeUndefined();
+    }
+  });
+
   it('keeps the ported tables byte-identical (additions live in ADDITIONAL_KNOWN_FILES only)', () => {
     // KNOWN_FILES is lifted verbatim from markdowning's scanner and must
     // never absorb the documented additions (agentconfig-np8.12).
