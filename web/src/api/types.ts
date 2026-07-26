@@ -420,3 +420,105 @@ export type InstallPluginResponse =
 export type WsMessage =
   | { type: 'report'; instance: string; changed: string[] }
   | { type: 'live-session'; instance: string; sessionId: string };
+
+/**
+ * DASHBOARD STATS (bead 7yb.2). These MIRROR the server's serialized shapes
+ * (src/core/stats/types.ts + src/server/stats-routes.ts). Every value is an
+ * aggregate NUMBER or achievement METADATA — the server derives them by counting
+ * messages / reasoning about timestamps, never by reading message content. The
+ * only session-derived STRINGS (session titles, cwds) are adversarial log text;
+ * render them as text nodes only.
+ */
+
+/** Message tallies by role across the scanned sessions. */
+export interface MessageCounts {
+  total: number;
+  user: number;
+  assistant: number;
+}
+
+/** Daily activity streaks (consecutive UTC days). */
+export interface StreakStats {
+  current: number;
+  longest: number;
+}
+
+/** One heatmap cell: a UTC calendar day and its activity event count. */
+export interface HeatmapCell {
+  /** UTC `YYYY-MM-DD`. */
+  date: string;
+  count: number;
+}
+
+/** XP + level derived from lifetime activity. */
+export interface XpStats {
+  xp: number;
+  level: number;
+  xpIntoLevel: number;
+  xpForNextLevel: number;
+  /** Progress toward the next level, 0..1. */
+  levelProgress: number;
+}
+
+/** The dashboard stats bundle. All numbers are real, never invented. */
+export interface DashboardStats {
+  sessionCount: number;
+  messageCounts: MessageCounts;
+  promptCount: number;
+  runtimes: string[];
+  activeDays: number;
+  streak: StreakStats;
+  xp: XpStats;
+  heatmap: HeatmapCell[];
+  firstActiveDate?: string;
+  lastActiveDate?: string;
+}
+
+/** Achievement grouping (cosmetic). */
+export type AchievementCategory =
+  'sessions' | 'messages' | 'streaks' | 'consistency' | 'progression';
+
+/** Achievement METADATA as served — never the unlock criterion predicate. */
+export interface AchievementMeta {
+  id: string;
+  name: string;
+  description: string;
+  category: AchievementCategory;
+}
+
+/** Unlocked / locked partition of the achievement catalog. */
+export interface AchievementsPayload {
+  unlocked: AchievementMeta[];
+  locked: AchievementMeta[];
+}
+
+/** GET /api/stats payload — aggregate stats + achievement metadata only. */
+export interface StatsResponse {
+  stats: DashboardStats;
+  achievements: AchievementsPayload;
+  /** Session files fully read this scan (≤ the cap). */
+  sessionsScanned: number;
+  /** Session files discovered before the cap was applied. */
+  sessionsTotal: number;
+  /** True when discovery exceeded the cap (totals are windowed). */
+  capped: boolean;
+}
+
+/** One session's METADATA (no message content). Titles/cwds are text only. */
+export interface SessionSummary {
+  id: string;
+  runtime: string;
+  title: string;
+  cwd: string;
+  startedAt?: string;
+  endedAt?: string;
+  messageCount: number;
+  runtimeMs?: number;
+}
+
+/** GET /api/sessions payload — a bounded, content-free session list. */
+export interface SessionsResponse {
+  sessions: SessionSummary[];
+  sessionsTotal: number;
+  capped: boolean;
+}

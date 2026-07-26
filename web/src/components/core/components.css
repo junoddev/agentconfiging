@@ -202,3 +202,45 @@ button.chip {
   width: 120px;
   border-top: var(--hairline-w) solid var(--trace-dim);
 }
+
+/* ── Heatmap: activity calendar, 7-row weekday grid, 2px gap ────────────── */
+
+.heatmap {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, 11px);
+  grid-auto-columns: 11px;
+  gap: 2px;
+  overflow-x: auto;
+}
+
+.heatmap__cell {
+  width: 11px;
+  height: 11px;
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+.heatmap__blank {
+  visibility: hidden;
+}
+
+.heatmap__cell--l1 {
+  background: color-mix(in srgb, var(--signal) 25%, transparent);
+  border-color: transparent;
+}
+
+.heatmap__cell--l2 {
+  background: color-mix(in srgb, var(--signal) 50%, transparent);
+  border-color: transparent;
+}
+
+.heatmap__cell--l3 {
+  background: color-mix(in srgb, var(--signal) 75%, transparent);
+  border-color: transparent;
+}
+
+.heatmap__cell--l4 {
+  background: var(--signal);
+  border-color: transparent;
+}

@@ -25,6 +25,8 @@ import type {
   RemoveResponse,
   Report,
   ScanResponse,
+  SessionsResponse,
+  StatsResponse,
   StorageCleanupResponse,
   StorageReport,
   SyncResponse,
@@ -269,6 +271,22 @@ export class ApiClient {
    */
   installPlugin(name: string): Promise<InstallPluginResponse> {
     return this.#send<InstallPluginResponse>('/api/marketplace/install', 'POST', { name });
+  }
+
+  /**
+   * DASHBOARD STATS (bead 7yb.2) — the read-only session-analytics surface. The
+   * shell keeps its ApiClient private, so the Dashboard page builds its own client
+   * from the launch token (the Marketplace/Settings pattern). `getStats` is the
+   * aggregate `DashboardStats` + achievement metadata (server-derived from THIS
+   * machine's `~/.claude` history, bounded to the most-recent N sessions — never
+   * message content). `getSessions` is a bounded, content-free session list.
+   */
+  getStats(): Promise<StatsResponse> {
+    return this.#get<StatsResponse>('/api/stats');
+  }
+
+  getSessions(): Promise<SessionsResponse> {
+    return this.#get<SessionsResponse>('/api/sessions');
   }
 
   async #get<T>(path: string): Promise<T> {

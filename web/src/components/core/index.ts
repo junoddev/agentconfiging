@@ -8,6 +8,13 @@ export { FileChip, type FileChipProps } from './FileChip.js';
 export { DiffPanel, type DiffPanelProps } from './DiffPanel.js';
 export { Table, type TableProps } from './Table.js';
 export { EmptyState, type EmptyStateProps } from './EmptyState.js';
+export {
+  Heatmap,
+  heatmapLevel,
+  leadingBlankCount,
+  type HeatmapProps,
+  type HeatmapDatum,
+} from './Heatmap.js';
 export { severityToken, severityClass, formatIndex, type Severity } from './finding.js';
 export { formatDelta, deltaTone, type DeltaTone } from './stat.js';
 export {

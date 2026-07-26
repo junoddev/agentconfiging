@@ -60,6 +60,23 @@ export type {
   MarketplacePlugin,
   InstalledPlugin,
 } from './marketplace.js';
+export {
+  registerStatsRoutes,
+  sessionSummary,
+  StatsCache,
+  ACHIEVEMENT_CATALOG,
+  DEFAULT_SESSION_CAP,
+  DEFAULT_TTL_MS,
+} from './stats-routes.js';
+export type {
+  StatsRoutesConfig,
+  StatsResponse,
+  SessionsResponse,
+  SessionSummary,
+  AchievementMeta,
+  AchievementsPayload,
+  LoadedHistory,
+} from './stats-routes.js';
 export { readManifest, parseManifest, upsertInstall, removeInstall } from './provenance.js';
 export type { InstallRecord, ProvenanceManifest } from './provenance.js';
 export { resolveWriteTarget } from './pathguard.js';

@@ -62,6 +62,7 @@ import { registerStorageRoutes } from './storage.js';
 import { registerSyncRoute } from './sync.js';
 import { registerCatalogRoutes, type CatalogSource } from './catalog.js';
 import { registerMarketplaceRoutes, type ClaudeExec } from './marketplace.js';
+import { registerStatsRoutes } from './stats-routes.js';
 import type { WriteScope } from './pathguard.js';
 
 export interface AppConfig {
@@ -401,6 +402,13 @@ export function createApp(config: AppConfig): Hono {
   // every spawn, degrades gracefully when the CLI is absent, and parses the CLI's
   // UNTRUSTED output defensively. See src/server/marketplace.ts.
   registerMarketplaceRoutes(app, { exec: config.marketplaceExec });
+
+  // DASHBOARD STATS (7yb.2): GET /api/stats + /api/sessions — the read-only
+  // session-analytics surface. Also under /api (inherits the token + Origin/CSRF
+  // gates); reads THIS machine's runtime history (~/.claude) through the committed
+  // claude adapter, bounded to the most-recent N session files, and returns only
+  // aggregate stats + achievement metadata + content-free session metadata.
+  registerStatsRoutes(app);
 
   // Unknown /api paths (any method): 404 JSON, no static fallback.
   app.all('/api/*', () => jsonError(404, 'not found'));

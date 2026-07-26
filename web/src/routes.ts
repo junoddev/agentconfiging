@@ -22,6 +22,7 @@ export type RouteName =
   | 'sync'
   | 'catalog'
   | 'marketplace'
+  | 'dashboard'
   | 'gallery';
 
 export type Route = { name: Exclude<RouteName, 'agent'> } | { name: 'agent'; kind: string };
@@ -59,6 +60,7 @@ export function parseRoute(hash: string): Route {
   if (path === '/instances') return { name: 'instances' };
   if (path === '/catalog') return { name: 'catalog' };
   if (path === '/marketplace') return { name: 'marketplace' };
+  if (path === '/dashboard') return { name: 'dashboard' };
   for (const name of EDITOR_ROUTES) {
     if (path === `/${name}`) return { name };
   }

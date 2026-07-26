@@ -18,6 +18,7 @@ import { Keybindings } from './pages/Keybindings.js';
 import { Sync } from './pages/Sync.js';
 import { Catalog } from './pages/Catalog.js';
 import { Marketplace } from './pages/Marketplace.js';
+import { Dashboard } from './pages/Dashboard.js';
 import { parseRoute, type Route } from './routes.js';
 import { Rail } from './shell/Rail.js';
 import { TopBar, type Theme } from './shell/TopBar.js';
@@ -72,6 +73,8 @@ function renderRoute(route: Route) {
       return <Catalog />;
     case 'marketplace':
       return <Marketplace />;
+    case 'dashboard':
+      return <Dashboard />;
     case 'gallery':
       return <GalleryPage />;
   }

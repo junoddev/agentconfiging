@@ -2,6 +2,17 @@
 export { ApiClient, ApiError, type ApiClientOptions, type ApiErrorKind } from './client.js';
 export { bootstrapToken, parseTokenHash, type ParsedToken } from './token.js';
 export type {
+  AchievementCategory,
+  AchievementMeta,
+  AchievementsPayload,
+  DashboardStats,
+  HeatmapCell,
+  MessageCounts,
+  SessionsResponse,
+  SessionSummary,
+  StatsResponse,
+  StreakStats,
+  XpStats,
   CatalogEntryMeta,
   CatalogFileRow,
   CatalogInstallResponse,

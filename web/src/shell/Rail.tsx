@@ -37,6 +37,7 @@ const EDITORS: RailItem[] = [
   { index: '14', label: 'SYNC', route: { name: 'sync' } },
   { index: '15', label: 'CATALOG', route: { name: 'catalog' } },
   { index: '16', label: 'MARKETPLACE', route: { name: 'marketplace' } },
+  { index: '17', label: 'DASHBOARD', route: { name: 'dashboard' } },
 ];
 
 /** Which rail item owns the active route (agent detail lights up AGENTS). */
