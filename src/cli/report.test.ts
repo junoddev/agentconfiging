@@ -159,20 +159,28 @@ describe('output shape', () => {
     expect(strip(pretty.json)).toEqual(strip(compact.json));
   });
 
-  it('runs cleanly with an injected PATH env bag (no crash, deterministic findings)', () => {
-    // NOTE: mcp-command-not-on-path cannot fire end-to-end yet — the scanner
-    // does not include root `.mcp.json` in project manifests (KNOWN_FILES
-    // gap), so the env bag has nothing to gate against on real trees. This
-    // pins that the wiring at least runs; collectPathCommands has its own
-    // unit tests in path-env.test.ts.
+  it('mcp-command-not-on-path fires end-to-end from a real scan when PATH lacks the command', () => {
+    // agentconfig-np8.12: the scanner now includes root `.mcp.json`
+    // (ADDITIONAL_KNOWN_FILES), so claude-rich's `postgres` server (command
+    // `npx`) is checked against the injected env bag. Pin updated on
+    // purpose: the old expectation (withEnv findings == without findings)
+    // encoded the KNOWN_FILES gap this bead fixed.
     const bin = mkTmpDir();
     fs.writeFileSync(path.join(bin, 'node'), '#!/bin/sh\n', { mode: 0o755 });
     const withEnv = run({ path: path.join(trees, 'claude-rich'), pathEnv: bin });
     const without = run({ path: path.join(trees, 'claude-rich'), pathEnv: '' });
     expect(withEnv.code).toBe(2);
-    expect((withEnv.json['findings'] as FindingLike[]).map((f) => f.id)).toEqual(
-      (without.json['findings'] as FindingLike[]).map((f) => f.id),
-    );
+
+    const withIds = (withEnv.json['findings'] as FindingLike[]).map((f) => f.id);
+    const withoutIds = (without.json['findings'] as FindingLike[]).map((f) => f.id);
+    // `npx` is not in the injected PATH dir (only `node` is) → warning.
+    // `bus-inspector` (./tools/bus-mcp) is path-form and never checked.
+    expect(withIds).toContain('mcp-command-not-on-path-postgres-npx');
+    expect(withIds.filter((id) => id.startsWith('mcp-command-not-on-path'))).toHaveLength(1);
+    // Empty PATH → no env fact → the check is skipped entirely, and the
+    // remaining findings are identical to the env-bag run.
+    expect(withoutIds).not.toContain('mcp-command-not-on-path-postgres-npx');
+    expect(withIds.filter((id) => !id.startsWith('mcp-command-not-on-path'))).toEqual(withoutIds);
   });
 });
 

@@ -41,6 +41,44 @@ export const KNOWN_FILES: readonly string[] = [
   'COPILOT.md',
 ];
 
+/**
+ * Documented additions to the verbatim KNOWN_FILES table (bead
+ * agentconfig-np8.12; same pattern as GLOBAL_SKIP_DIRS below: the ported
+ * tables stay byte-identical to markdowning, extensions live beside them
+ * and are merged at match time).
+ *
+ * Each entry is an exact project-relative path that a detector match
+ * trigger, discovery marker, or parser reads — but that the ported include
+ * rules never collect, so the artifact could be detected from fixture
+ * manifests yet never reach parsers/analyzers on a real scan. Upstream
+ * markdowning lacked them because its scanner predated the MCP pipeline
+ * and only mirrored the root files its own detectors used:
+ *
+ * - '.mcp.json'            — root MCP server config; parsed by report.ts
+ *                            (parseMcpJson) and required for the
+ *                            mcp-command-not-on-path analyzer to fire.
+ * - 'codex.toml'           — codex detector match trigger and discovery
+ *                            FILE_MARKERS row.
+ * - 'opencode.json'        — opencode detector match trigger, FILE_MARKERS
+ *                            row, and source of its providers/model extras.
+ * - '.github/copilot-instructions.md'
+ *                          — copilot detector match trigger, discovery
+ *                            .github probe target, and report.ts
+ *                            GUIDE_PATHS entry. NOT covered by KNOWN_DIRS:
+ *                            the '.github/copilot' prefix only matches
+ *                            '.github/copilot/...', not this sibling file.
+ *
+ * Matched as exact normalized paths (not names), so nested lookalikes like
+ * 'sub/.mcp.json' stay excluded, consistent with KNOWN_FILES root-only
+ * semantics.
+ */
+export const ADDITIONAL_KNOWN_FILES: ReadonlySet<string> = new Set([
+  '.mcp.json',
+  'codex.toml',
+  'opencode.json',
+  '.github/copilot-instructions.md',
+]);
+
 export const KNOWN_DIRS: readonly string[] = [
   '.claude',
   '.cursor',
@@ -149,10 +187,14 @@ function isKnownRootFile(norm: string): boolean {
   return KNOWN_FILES.includes(norm);
 }
 
-/** Project-scope include rule: known root file, or under a known dir with an allowed ext. */
+/**
+ * Project-scope include rule: known root file, documented additional known
+ * file (agentconfig-np8.12), or under a known dir with an allowed ext.
+ */
 function shouldIncludeProjectFile(relPath: string): boolean {
   const norm = normalizeRel(relPath);
   if (isKnownRootFile(norm)) return true;
+  if (ADDITIONAL_KNOWN_FILES.has(norm)) return true;
   if (!isUnderKnownDir(norm)) return false;
   return hasAllowedExt(norm);
 }

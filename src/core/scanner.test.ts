@@ -3,7 +3,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CAPS, ScanError, scanGlobal, scanProject } from './scanner.js';
+import {
+  ADDITIONAL_KNOWN_FILES,
+  CAPS,
+  KNOWN_FILES,
+  ScanError,
+  scanGlobal,
+  scanProject,
+} from './scanner.js';
 
 const tempDirs: string[] = [];
 
@@ -50,6 +57,47 @@ describe('scanProject', () => {
     expect(manifest.scope).toBe('project');
     expect(manifest.localOnly).toBe(false);
     expect(manifest.stats.fileCount).toBe(4);
+  });
+
+  it('collects ADDITIONAL_KNOWN_FILES at their exact paths, with content (agentconfig-np8.12)', () => {
+    const root = makeTempDir();
+    write(root, '.mcp.json', '{"mcpServers":{}}\n');
+    write(root, 'codex.toml', 'model = "gpt-5-codex"\n');
+    write(root, 'opencode.json', '{"model":"anthropic/claude"}\n');
+    write(root, '.github/copilot-instructions.md', '# copilot\n');
+    // Exact-path semantics: nested lookalikes stay excluded.
+    write(root, 'sub/.mcp.json', '{"mcpServers":{}}\n');
+    write(root, 'packages/app/codex.toml', 'nested\n');
+
+    const manifest = scanProject(root);
+    expect(manifest.files.map((f) => f.path)).toEqual([
+      '.github/copilot-instructions.md',
+      '.mcp.json',
+      'codex.toml',
+      'opencode.json',
+    ]);
+    for (const file of manifest.files) {
+      expect(file.content).toBeTruthy();
+      expect(file.truncated).toBeUndefined();
+    }
+  });
+
+  it('keeps the ported tables byte-identical (additions live in ADDITIONAL_KNOWN_FILES only)', () => {
+    // KNOWN_FILES is lifted verbatim from markdowning's scanner and must
+    // never absorb the documented additions (agentconfig-np8.12).
+    expect(KNOWN_FILES).toEqual([
+      'CLAUDE.md',
+      'AGENTS.md',
+      'GEMINI.md',
+      '.cursorrules',
+      '.aider.conf.yml',
+      '.aiderignore',
+      '.continuerules',
+      'COPILOT.md',
+    ]);
+    for (const added of ADDITIONAL_KNOWN_FILES) {
+      expect(KNOWN_FILES).not.toContain(added);
+    }
   });
 
   it('records size, sha256 and content for small text files', () => {
