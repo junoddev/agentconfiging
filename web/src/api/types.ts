@@ -514,6 +514,10 @@ export interface SessionSummary {
   endedAt?: string;
   messageCount: number;
   runtimeMs?: number;
+  /** True when the session file is being actively appended (SPEC §4.4). */
+  live: boolean;
+  /** User-authored tags (local sidecar; may be empty). */
+  tags: string[];
 }
 
 /** GET /api/sessions payload — a bounded, content-free session list. */
@@ -521,4 +525,60 @@ export interface SessionsResponse {
   sessions: SessionSummary[];
   sessionsTotal: number;
   capped: boolean;
+}
+
+/**
+ * SESSION REPLAY (bead 7yb.3). One content block of a replayed message. All
+ * secret-bearing strings (text/thinking/tool_result) are REDACTED server-side
+ * (SPEC §3): `text` never holds a raw secret and `spans` locate each
+ * `[REDACTED:*]` mark. Render EVERY field as a text node — never HTML. A
+ * `tool_use` block carries only its structural kind + `name` (its input is
+ * withheld server-side); `persistedOutputPath` is a REFERENCE the UI must never
+ * fetch or open.
+ */
+export interface ReplayBlock {
+  kind: 'text' | 'thinking' | 'tool_use' | 'tool_result' | 'unknown';
+  text?: string;
+  spans?: RedactionSpan[];
+  name?: string;
+  toolUseId?: string;
+  persistedOutputPath?: string;
+  blockType?: string;
+}
+
+/** One replayed message: structural fields + redacted content blocks. */
+export interface ReplayMessage {
+  role: 'user' | 'assistant';
+  /** Subagent (sidechain) traffic — rendered distinctly (indented/badged). */
+  isSidechain: boolean;
+  isMeta: boolean;
+  timestamp?: string;
+  model?: string;
+  uuid?: string;
+  blocks: ReplayBlock[];
+}
+
+/**
+ * GET /api/sessions/:id payload — ONE session's replay, PAGINATED. `messages` is
+ * the window `[offset, offset+limit)`; `messageCount` is the session total.
+ */
+export interface SessionDetail {
+  id: string;
+  runtime: string;
+  title: string;
+  cwd: string;
+  startedAt?: string;
+  endedAt?: string;
+  messageCount: number;
+  offset: number;
+  limit: number;
+  messages: ReplayMessage[];
+  live: boolean;
+  tags: string[];
+}
+
+/** POST /api/sessions/:id/tags payload — the stored (sanitized) tag set. */
+export interface SessionTagsResponse {
+  id: string;
+  tags: string[];
 }

@@ -23,6 +23,7 @@ export type RouteName =
   | 'catalog'
   | 'marketplace'
   | 'dashboard'
+  | 'sessions'
   | 'gallery';
 
 export type Route = { name: Exclude<RouteName, 'agent'> } | { name: 'agent'; kind: string };
@@ -61,6 +62,7 @@ export function parseRoute(hash: string): Route {
   if (path === '/catalog') return { name: 'catalog' };
   if (path === '/marketplace') return { name: 'marketplace' };
   if (path === '/dashboard') return { name: 'dashboard' };
+  if (path === '/sessions') return { name: 'sessions' };
   for (const name of EDITOR_ROUTES) {
     if (path === `/${name}`) return { name };
   }

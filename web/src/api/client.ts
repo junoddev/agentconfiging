@@ -25,7 +25,9 @@ import type {
   RemoveResponse,
   Report,
   ScanResponse,
+  SessionDetail,
   SessionsResponse,
+  SessionTagsResponse,
   StatsResponse,
   StorageCleanupResponse,
   StorageReport,
@@ -287,6 +289,31 @@ export class ApiClient {
 
   getSessions(): Promise<SessionsResponse> {
     return this.#get<SessionsResponse>('/api/sessions');
+  }
+
+  /**
+   * SESSION REPLAY (bead 7yb.3) — ONE session's messages, PAGINATED. The server
+   * validates `id` against its discovered set (an unknown/`../../` id is a 404,
+   * never a file read) and REDACTS every secret-bearing string before it crosses
+   * the wire, so `content` is always safe to render as text. `offset`/`limit`
+   * window a large session (limit is clamped server-side).
+   */
+  getSessionDetail(
+    id: string,
+    opts: { offset?: number; limit?: number } = {},
+  ): Promise<SessionDetail> {
+    const qs = new URLSearchParams();
+    if (opts.offset !== undefined) qs.set('offset', String(opts.offset));
+    if (opts.limit !== undefined) qs.set('limit', String(opts.limit));
+    const suffix = qs.toString() === '' ? '' : `?${qs.toString()}`;
+    return this.#get<SessionDetail>(`/api/sessions/${encodeURIComponent(id)}${suffix}`);
+  }
+
+  /** Replace the local tag set for one session (stored in a local sidecar). */
+  setSessionTags(id: string, tags: string[]): Promise<SessionTagsResponse> {
+    return this.#send<SessionTagsResponse>(`/api/sessions/${encodeURIComponent(id)}/tags`, 'POST', {
+      tags,
+    });
   }
 
   async #get<T>(path: string): Promise<T> {

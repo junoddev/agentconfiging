@@ -26,25 +26,43 @@
  * is the seam a file watcher can call to force a recompute.
  */
 
-import { stat } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { Hono } from 'hono';
+import type { Context, Hono } from 'hono';
 import {
   ACHIEVEMENTS,
   claudeAdapter,
   computeStats,
   evaluateAchievements,
+  redact,
   type Achievement,
+  type ContentBlock,
   type DashboardStats,
   type PromptHistory,
+  type RedactionSpan,
   type Session,
+  type SessionMessage,
 } from '../core/index.js';
 
 /** Most-recent session files fully read + parsed per load (bounds the work). */
 export const DEFAULT_SESSION_CAP = 400;
 /** How long a disk read is reused before a fresh scan (ms). */
 export const DEFAULT_TTL_MS = 30_000;
+/**
+ * LIVE detection window (ms): a session file whose mtime is within this many ms
+ * of "now" is treated as actively-appended (growing) and flagged `live` so the
+ * UI can give it the signal PULSE (SPEC §4.4). A simple mtime-recency flag is
+ * the v1 signal — no watcher/WS push is required for it.
+ */
+export const DEFAULT_LIVE_WINDOW_MS = 60_000;
+/** Messages returned per detail page when the caller gives no `limit`. */
+export const DEFAULT_PAGE_SIZE = 200;
+/** Hard ceiling on a detail page (bounds the wire payload for huge sessions). */
+export const MAX_PAGE_SIZE = 500;
+/** Bounds on the user-authored tag set stored per session. */
+export const MAX_TAGS = 32;
+export const MAX_TAG_LENGTH = 64;
 
 export interface StatsRoutesConfig {
   /**
@@ -59,6 +77,18 @@ export interface StatsRoutesConfig {
   sessionCap?: number;
   /** Cache TTL in ms. Defaults to {@link DEFAULT_TTL_MS}. */
   ttlMs?: number;
+  /** Recency window that flags a session `live`. Defaults to {@link DEFAULT_LIVE_WINDOW_MS}. */
+  liveWindowMs?: number;
+  /** Messages per detail page when `limit` is omitted. Defaults to {@link DEFAULT_PAGE_SIZE}. */
+  pageSize?: number;
+  /**
+   * Directory the user-authored session TAGS sidecar lives in. Defaults to an
+   * XDG state dir (`$XDG_STATE_HOME/agentconfiging` or `~/.local/state/agentconfiging`).
+   * Injectable so tests point it at a temp dir. The tags file is a single fixed
+   * file inside this dir — session ids are only ever used as JSON object KEYS,
+   * never spliced into a filesystem path.
+   */
+  stateDir?: string;
 }
 
 // ── Wire types (mirrored in web/src/api/types.ts) ─────────────────────────────
@@ -104,6 +134,10 @@ export interface SessionSummary {
   messageCount: number;
   /** end − start in ms when both timestamps parse, else undefined. */
   runtimeMs?: number;
+  /** True when the session file was appended within the live window (SPEC §4.4). */
+  live: boolean;
+  /** User-authored tags for this session (local sidecar; may be empty). */
+  tags: string[];
 }
 
 /** GET /api/sessions payload — a bounded, content-free session list. */
@@ -111,6 +145,78 @@ export interface SessionsResponse {
   sessions: SessionSummary[];
   sessionsTotal: number;
   capped: boolean;
+}
+
+// ── Session DETAIL (replay) wire types (7yb.3) ────────────────────────────────
+
+/**
+ * One content block of a replayed message, with all SECRET-BEARING string
+ * content REDACTED server-side (SPEC §3): `text` never carries a raw secret and
+ * `spans` locate each `[REDACTED:*]` mark for styling. The renderer treats every
+ * field as a TEXT node — nothing here is interpreted.
+ *
+ * Kinds mirror {@link ContentBlock}. `tool_use` deliberately omits its `input`:
+ * tool inputs are adversarial, potentially secret-bearing, and unbounded — only
+ * the structural kind + tool `name` are surfaced. `persistedOutputPath` is a
+ * REFERENCE to a spilled tool-result file (already shape-validated by the
+ * reader) — it is surfaced as text and NEVER read/opened.
+ */
+export interface ReplayBlock {
+  kind: ContentBlock['type'];
+  /** Redacted text for text / thinking / tool_result blocks. */
+  text?: string;
+  /** `[REDACTED:*]` mark offsets over `text`. */
+  spans?: RedactionSpan[];
+  /** Tool name for a tool_use block (structural). */
+  name?: string;
+  /** Correlating id for a tool_result block. */
+  toolUseId?: string;
+  /** Spill-file reference for a tool_result — a pointer only, never read. */
+  persistedOutputPath?: string;
+  /** Raw block `type` for an unrecognized block. */
+  blockType?: string;
+}
+
+/** One replayed message: structural fields + redacted content blocks. */
+export interface ReplayMessage {
+  role: SessionMessage['role'];
+  /** Subagent (sidechain) traffic — rendered distinctly by the UI (SPEC §5). */
+  isSidechain: boolean;
+  /** Runtime-injected meta line (not user-typed). */
+  isMeta: boolean;
+  timestamp?: string;
+  model?: string;
+  uuid?: string;
+  blocks: ReplayBlock[];
+}
+
+/**
+ * GET /api/sessions/:id payload — ONE session's replay, PAGINATED. `messages` is
+ * the requested window `[offset, offset+limit)`; `messageCount` is the session
+ * total so the UI can page. All content is redacted before it crosses the wire.
+ */
+export interface SessionDetailResponse {
+  id: string;
+  runtime: string;
+  title: string;
+  cwd: string;
+  startedAt?: string;
+  endedAt?: string;
+  /** Total messages in the session (not the page length). */
+  messageCount: number;
+  /** Window start actually served (clamped). */
+  offset: number;
+  /** Window size actually served (clamped to {@link MAX_PAGE_SIZE}). */
+  limit: number;
+  messages: ReplayMessage[];
+  live: boolean;
+  tags: string[];
+}
+
+/** POST /api/sessions/:id/tags payload — the stored (sanitized) tag set. */
+export interface SessionTagsResponse {
+  id: string;
+  tags: string[];
 }
 
 // ── Shared bounded loader (7yb.3 session-detail extends this) ──────────────────
@@ -123,6 +229,8 @@ export interface LoadedHistory {
   sessionsTotal: number;
   /** True when discovery exceeded the cap. */
   capped: boolean;
+  /** filePath → file mtime (epoch ms) at read time — drives live detection. */
+  mtimes: Map<string, number>;
 }
 
 const EMPTY_PROMPT_HISTORY: PromptHistory = {
@@ -201,9 +309,11 @@ export class StatsCache {
     const selected = withMtime.slice(0, this.#cap);
 
     const sessions: Session[] = [];
-    for (const { path: filePath } of selected) {
+    const mtimes = new Map<string, number>();
+    for (const { path: filePath, mtimeMs } of selected) {
       try {
         sessions.push(await claudeAdapter.readSession(filePath));
+        mtimes.set(filePath, mtimeMs);
       } catch {
         // A file that vanished / is unreadable must not abort the whole load.
       }
@@ -216,7 +326,7 @@ export class StatsCache {
       // No / unreadable history.jsonl — prompt counts stay zero.
     }
 
-    return { sessions, promptHistory, sessionsTotal, capped };
+    return { sessions, promptHistory, sessionsTotal, capped, mtimes };
   }
 }
 
@@ -231,16 +341,30 @@ function isoMs(iso: string | undefined): number | undefined {
   return Number.isNaN(ms) ? undefined : ms;
 }
 
+/**
+ * A session's stable id: the in-file sessionId when present, else the file's
+ * basename. This is the ONLY handle detail/tags routes accept — a request for an
+ * id absent from the loaded set is a 404, so a `../../` value can never be turned
+ * into a file read (the path-validation discipline is "accept only ids from the
+ * discovered set"). Ids are never spliced into a filesystem path.
+ */
+export function sessionIdOf(session: Session): string {
+  return session.sessionId ?? path.basename(session.filePath, '.jsonl');
+}
+
 /** Reduce a parsed session to its content-free summary. */
 export function sessionSummary(session: Session): SessionSummary {
   const startMs = isoMs(session.startedAt);
   const endMs = isoMs(session.endedAt);
   const summary: SessionSummary = {
-    id: session.sessionId ?? path.basename(session.filePath, '.jsonl'),
+    id: sessionIdOf(session),
     runtime: session.runtime,
-    title: session.title ?? session.summary ?? '',
+    // Redact the ai-title (auto-generated from content — could echo a secret).
+    title: redact(session.title ?? session.summary ?? '').text,
     cwd: session.cwd ?? '',
     messageCount: session.messages.length,
+    live: false,
+    tags: [],
   };
   if (session.startedAt !== undefined) summary.startedAt = session.startedAt;
   if (session.endedAt !== undefined) summary.endedAt = session.endedAt;
@@ -248,6 +372,152 @@ export function sessionSummary(session: Session): SessionSummary {
     summary.runtimeMs = endMs - startMs;
   }
   return summary;
+}
+
+/** True when a session file's mtime is within the live window of `nowMs`. */
+export function isLive(mtimeMs: number | undefined, nowMs: number, windowMs: number): boolean {
+  return mtimeMs !== undefined && nowMs - mtimeMs <= windowMs;
+}
+
+/**
+ * Redact ONE content block for the wire. Every string that can carry a
+ * user-pasted / tool-emitted secret (text, thinking, tool_result text) is run
+ * through the hardened catalogue so a raw secret NEVER leaves the process. A
+ * tool_use `input` is omitted entirely (adversarial + unbounded + secret-prone);
+ * only the structural kind + tool name survive.
+ */
+export function redactBlock(block: ContentBlock): ReplayBlock {
+  switch (block.type) {
+    case 'text': {
+      const { text, spans } = redact(block.text);
+      return { kind: 'text', text, spans };
+    }
+    case 'thinking': {
+      const { text, spans } = redact(block.thinking);
+      return { kind: 'thinking', text, spans };
+    }
+    case 'tool_use': {
+      const out: ReplayBlock = { kind: 'tool_use' };
+      if (block.name !== undefined) out.name = block.name;
+      return out;
+    }
+    case 'tool_result': {
+      const { text, spans } = redact(block.text);
+      const out: ReplayBlock = { kind: 'tool_result', text, spans };
+      if (block.toolUseId !== undefined) out.toolUseId = block.toolUseId;
+      if (block.persistedOutputPath !== undefined) {
+        out.persistedOutputPath = block.persistedOutputPath;
+      }
+      return out;
+    }
+    default:
+      return { kind: 'unknown', blockType: block.blockType };
+  }
+}
+
+/** Map a parsed message to its redacted replay shape. */
+export function toReplayMessage(message: SessionMessage): ReplayMessage {
+  const out: ReplayMessage = {
+    role: message.role,
+    isSidechain: message.isSidechain,
+    isMeta: message.isMeta,
+    blocks: message.content.map(redactBlock),
+  };
+  if (message.timestamp !== undefined) out.timestamp = message.timestamp;
+  if (message.model !== undefined) out.model = message.model;
+  if (message.uuid !== undefined) out.uuid = message.uuid;
+  return out;
+}
+
+/** Sanitize an untrusted tag list: strings only, trimmed, deduped, bounded. */
+export function sanitizeTags(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const value of raw) {
+    if (typeof value !== 'string') continue;
+    const trimmed = value.trim().slice(0, MAX_TAG_LENGTH);
+    if (trimmed === '' || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    out.push(trimmed);
+    if (out.length >= MAX_TAGS) break;
+  }
+  return out;
+}
+
+/** Parse & clamp the `offset` / `limit` page params (defaults + hard ceiling). */
+function parsePage(c: Context, pageSize: number): { offset: number; limit: number } {
+  const url = new URL(c.req.url);
+  const rawOffset = Number(url.searchParams.get('offset'));
+  const rawLimit = Number(url.searchParams.get('limit'));
+  const offset =
+    Number.isFinite(rawOffset) && rawOffset > 0
+      ? Math.min(Math.floor(rawOffset), Number.MAX_SAFE_INTEGER)
+      : 0;
+  const limit =
+    Number.isFinite(rawLimit) && rawLimit >= 1
+      ? Math.min(Math.floor(rawLimit), MAX_PAGE_SIZE)
+      : pageSize;
+  return { offset, limit };
+}
+
+/** Default XDG-ish state dir for the tags sidecar. */
+export function defaultStateDir(): string {
+  const xdg = process.env['XDG_STATE_HOME'];
+  const base = xdg && xdg.trim() !== '' ? xdg : path.join(os.homedir(), '.local', 'state');
+  return path.join(base, 'agentconfiging');
+}
+
+/**
+ * Local sidecar for user-authored session tags. Session logs are read-only, so
+ * tags live in a single fixed JSON file under a server-controlled state dir
+ * ({@link defaultStateDir}); the file maps sessionId → string[]. Session ids are
+ * only ever JSON KEYS — never part of the file path — so there is no path-
+ * traversal surface here. Reads are resilient (missing/malformed → empty).
+ */
+export class TagStore {
+  readonly #file: string;
+
+  constructor(stateDir: string) {
+    this.#file = path.join(stateDir, 'session-tags.json');
+  }
+
+  async readAll(): Promise<Record<string, string[]>> {
+    let raw: string;
+    try {
+      raw = await readFile(this.#file, 'utf8');
+    } catch {
+      return {};
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return {};
+    }
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const out: Record<string, string[]> = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      const tags = sanitizeTags(value);
+      if (tags.length > 0) out[key] = tags;
+    }
+    return out;
+  }
+
+  async get(id: string): Promise<string[]> {
+    return (await this.readAll())[id] ?? [];
+  }
+
+  /** Replace the tag set for `id`; an empty set removes the entry. Returns it. */
+  async set(id: string, tags: string[]): Promise<string[]> {
+    const all = await this.readAll();
+    const clean = sanitizeTags(tags);
+    if (clean.length === 0) delete all[id];
+    else all[id] = clean;
+    await mkdir(path.dirname(this.#file), { recursive: true });
+    await writeFile(this.#file, JSON.stringify(all), 'utf8');
+    return clean;
+  }
 }
 
 /** Session list ordering: most-recent activity first, then by id for stability. */
@@ -267,7 +537,10 @@ export function registerStatsRoutes(app: Hono, config: StatsRoutesConfig = {}): 
   const now = config.now ?? (() => Date.now());
   const cap = config.sessionCap ?? DEFAULT_SESSION_CAP;
   const ttlMs = config.ttlMs ?? DEFAULT_TTL_MS;
+  const liveWindowMs = config.liveWindowMs ?? DEFAULT_LIVE_WINDOW_MS;
+  const pageSize = config.pageSize ?? DEFAULT_PAGE_SIZE;
   const cache = new StatsCache(home, cap, ttlMs);
+  const tagStore = new TagStore(config.stateDir ?? defaultStateDir());
 
   // GET /api/stats — aggregate dashboard stats + achievement metadata. Local-
   // only (~/.claude), bounded (session cap), content-free (aggregates only).
@@ -290,12 +563,79 @@ export function registerStatsRoutes(app: Hono, config: StatsRoutesConfig = {}): 
   });
 
   // GET /api/sessions — a bounded, content-free session list (metadata only).
-  // Session DETAIL (message replay) is bead 7yb.3, which extends this module's
-  // shared cache; the list here carries no message bodies.
+  // Each row carries a `live` mtime-recency flag (SPEC §4.4) and its local tags;
+  // message bodies live only in the DETAIL route below.
   app.get('/api/sessions', async (c) => {
-    const { sessions, sessionsTotal, capped } = await cache.load(now());
-    const list = sessions.map(sessionSummary).sort(byRecency);
+    const nowMs = now();
+    const { sessions, sessionsTotal, capped, mtimes } = await cache.load(nowMs);
+    const tagMap = await tagStore.readAll();
+    const list = sessions
+      .map((session) => {
+        const summary = sessionSummary(session);
+        summary.live = isLive(mtimes.get(session.filePath), nowMs, liveWindowMs);
+        summary.tags = tagMap[summary.id] ?? [];
+        return summary;
+      })
+      .sort(byRecency);
     const body: SessionsResponse = { sessions: list, sessionsTotal, capped };
+    return c.json(body);
+  });
+
+  // GET /api/sessions/:id — ONE session's replay, PAGINATED + REDACTED. The id
+  // must name a session in the loaded set (path-validation: an arbitrary/`../../`
+  // id matches nothing → 404, and is never turned into a file read). Every
+  // secret-bearing string is redacted server-side before serialization.
+  app.get('/api/sessions/:id', async (c) => {
+    const id = c.req.param('id');
+    const nowMs = now();
+    const { sessions, mtimes } = await cache.load(nowMs);
+    const session = sessions.find((s) => sessionIdOf(s) === id);
+    if (!session) return c.json({ error: 'not found' }, 404);
+
+    const { offset, limit } = parsePage(c, pageSize);
+    const window = session.messages.slice(offset, offset + limit).map(toReplayMessage);
+    const tags = await tagStore.get(id);
+    const body: SessionDetailResponse = {
+      id,
+      runtime: session.runtime,
+      // Redact the ai-title: it is auto-generated from conversation content and
+      // could echo a pasted secret. cwd is a plain fs path (not secret-shaped).
+      title: redact(session.title ?? session.summary ?? '').text,
+      cwd: session.cwd ?? '',
+      messageCount: session.messages.length,
+      offset,
+      limit,
+      messages: window,
+      live: isLive(mtimes.get(session.filePath), nowMs, liveWindowMs),
+      tags,
+    };
+    if (session.startedAt !== undefined) body.startedAt = session.startedAt;
+    if (session.endedAt !== undefined) body.endedAt = session.endedAt;
+    return c.json(body);
+  });
+
+  // POST /api/sessions/:id/tags {tags} — replace the local tag set for one
+  // session. State-changing, so it inherits the app's Origin/CSRF gate. The id
+  // is validated against the loaded set (so tags never accrue for phantom ids);
+  // tags are sanitized (strings, trimmed, deduped, bounded) before they are
+  // written to the local sidecar.
+  app.post('/api/sessions/:id/tags', async (c) => {
+    const id = c.req.param('id');
+    const { sessions } = await cache.load(now());
+    if (!sessions.some((s) => sessionIdOf(s) === id)) return c.json({ error: 'not found' }, 404);
+
+    let parsed: unknown;
+    try {
+      parsed = await c.req.json();
+    } catch {
+      return c.json({ error: 'bad request' }, 400);
+    }
+    const rawTags =
+      parsed !== null && typeof parsed === 'object'
+        ? (parsed as { tags?: unknown }).tags
+        : undefined;
+    const tags = await tagStore.set(id, sanitizeTags(rawTags));
+    const body: SessionTagsResponse = { id, tags };
     return c.json(body);
   });
 }

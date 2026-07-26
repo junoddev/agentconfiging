@@ -93,14 +93,98 @@ function makeHome(name: string): string {
   return home;
 }
 
+/** A real AWS-style secret planted in session CONTENT; it must be redacted. */
+const PLANTED_SECRET = 'AKIAIOSFODNN7EXAMPLE';
+
+/**
+ * A home whose one session exercises every replay concern: a user text block
+ * carrying a planted secret, an assistant with thinking + tool_use + tool_result
+ * blocks, and a sidechain (subagent) message. `count` extra plain messages let
+ * pagination be tested.
+ */
+function makeReplayHome(name: string, count = 0): string {
+  const home = path.join(base, name);
+  const slug = path.join(home, 'projects', '-home-user-proj');
+  fs.mkdirSync(slug, { recursive: true });
+
+  const lines: unknown[] = [
+    { type: 'ai-title', aiTitle: 'Replay <b>run</b>', sessionId: 'rep-1' },
+    {
+      type: 'user',
+      sessionId: 'rep-1',
+      timestamp: iso(NOW - 10_000),
+      cwd: '/home/user/proj',
+      message: { role: 'user', content: `deploy with key ${PLANTED_SECRET} now` },
+    },
+    {
+      type: 'assistant',
+      sessionId: 'rep-1',
+      timestamp: iso(NOW - 9000),
+      message: {
+        role: 'assistant',
+        model: 'claude-x',
+        content: [
+          { type: 'thinking', thinking: `secret is ${PLANTED_SECRET}` },
+          { type: 'tool_use', id: 'tu-1', name: 'Bash', input: { command: PLANTED_SECRET } },
+          { type: 'tool_result', tool_use_id: 'tu-1', content: `output ${PLANTED_SECRET} done` },
+        ],
+      },
+    },
+    {
+      type: 'user',
+      sessionId: 'rep-1',
+      timestamp: iso(NOW - 8000),
+      isSidechain: true,
+      message: { role: 'user', content: 'subagent step' },
+    },
+  ];
+  for (let i = 0; i < count; i++) {
+    lines.push({
+      type: 'user',
+      sessionId: 'rep-1',
+      timestamp: iso(NOW - 7000 + i),
+      message: { role: 'user', content: `msg ${i}` },
+    });
+  }
+  fs.writeFileSync(path.join(slug, 'rep-1.jsonl'), lines.map((l) => JSON.stringify(l)).join('\n'));
+  // Pin the mtime deterministically (10s before NOW) so live detection is
+  // testable against the injected clock rather than the real wall clock.
+  const at = new Date(NOW - 10_000);
+  fs.utimesSync(path.join(slug, 'rep-1.jsonl'), at, at);
+  return home;
+}
+
 /** A bare app (no gates) with the stats routes over a fixture home. */
-function appFor(home: string, opts: { sessionCap?: number } = {}): Hono {
+function appFor(
+  home: string,
+  opts: {
+    sessionCap?: number;
+    now?: () => number;
+    liveWindowMs?: number;
+    pageSize?: number;
+    stateDir?: string;
+  } = {},
+): Hono {
   const app = new Hono();
-  registerStatsRoutes(app, { home, now: () => NOW, sessionCap: opts.sessionCap, ttlMs: 0 });
+  registerStatsRoutes(app, {
+    home,
+    now: opts.now ?? (() => NOW),
+    sessionCap: opts.sessionCap,
+    ttlMs: 0,
+    liveWindowMs: opts.liveWindowMs,
+    pageSize: opts.pageSize,
+    stateDir: opts.stateDir,
+  });
   return app;
 }
 
 const get = (app: Hono, url: string) => app.request(url);
+const post = (app: Hono, url: string, body: unknown) =>
+  app.request(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 
 describe('GET /api/stats', () => {
   it('returns aggregate stats + achievement metadata, content-free', async () => {
@@ -172,6 +256,127 @@ describe('GET /api/sessions', () => {
       expect(s).not.toHaveProperty('messages');
       expect(s).not.toHaveProperty('content');
     }
+  });
+});
+
+describe('GET /api/sessions (live + tags)', () => {
+  it('flags a recently-appended session as live', async () => {
+    // rep-1's newest message is NOW - 8000; a 60s window makes it live.
+    const app = appFor(makeReplayHome('sessions-live'), { liveWindowMs: 60_000 });
+    const body = await (await get(app, '/api/sessions')).json();
+    expect(body.sessions).toHaveLength(1);
+    expect(body.sessions[0].live).toBe(true);
+    expect(body.sessions[0].tags).toEqual([]);
+  });
+
+  it('does not flag an old session when the live window is tiny', async () => {
+    const app = appFor(makeReplayHome('sessions-notlive'), { liveWindowMs: 1 });
+    const body = await (await get(app, '/api/sessions')).json();
+    expect(body.sessions[0].live).toBe(false);
+  });
+});
+
+describe('GET /api/sessions/:id (replay detail)', () => {
+  it('redacts every secret-bearing content string server-side', async () => {
+    const app = appFor(makeReplayHome('detail-redact'));
+    const res = await get(app, '/api/sessions/rep-1');
+    expect(res.status).toBe(200);
+    const raw = await res.text();
+    // The planted secret NEVER crosses the wire, in any block kind.
+    expect(raw).not.toContain(PLANTED_SECRET);
+    expect(raw).toContain('[REDACTED:aws_access_key]');
+
+    const body = JSON.parse(raw);
+    expect(body.id).toBe('rep-1');
+    expect(body.messageCount).toBe(3);
+    // Adversarial title preserved as DATA, not executed.
+    expect(body.title).toBe('Replay <b>run</b>');
+
+    const user = body.messages[0];
+    expect(user.blocks[0].kind).toBe('text');
+    expect(user.blocks[0].text).toContain('[REDACTED:aws_access_key]');
+    expect(user.blocks[0].spans.length).toBeGreaterThan(0);
+
+    const assistant = body.messages[1];
+    const kinds = assistant.blocks.map((b: { kind: string }) => b.kind);
+    expect(kinds).toEqual(['thinking', 'tool_use', 'tool_result']);
+    // Redacted thinking + tool_result text.
+    expect(assistant.blocks[0].text).toContain('[REDACTED:aws_access_key]');
+    expect(assistant.blocks[2].text).toContain('[REDACTED:aws_access_key]');
+    // tool_use surfaces only structural fields — NEVER its (secret) input.
+    expect(assistant.blocks[1]).not.toHaveProperty('input');
+    expect(assistant.blocks[1].name).toBe('Bash');
+
+    // Sidechain (subagent) message is flagged distinctly.
+    expect(body.messages[2].isSidechain).toBe(true);
+  });
+
+  it('refuses a traversal-shaped / unknown id (no arbitrary file read)', async () => {
+    const app = appFor(makeReplayHome('detail-guard'));
+    for (const id of ['..%2F..%2Fetc%2Fpasswd', 'nope', '..']) {
+      const res = await get(app, `/api/sessions/${id}`);
+      expect(res.status).toBe(404);
+    }
+  });
+
+  it('paginates a large session (windowed page + total)', async () => {
+    const app = appFor(makeReplayHome('detail-page', 20), { pageSize: 5 });
+    const first = await (await get(app, '/api/sessions/rep-1')).json();
+    expect(first.messageCount).toBe(23); // 3 base + 20 extra
+    expect(first.messages).toHaveLength(5);
+    expect(first.offset).toBe(0);
+    expect(first.limit).toBe(5);
+
+    const page2 = await (await get(app, '/api/sessions/rep-1?offset=5&limit=10')).json();
+    expect(page2.messages).toHaveLength(10);
+    expect(page2.offset).toBe(5);
+
+    // limit is clamped to MAX_PAGE_SIZE.
+    const huge = await (await get(app, '/api/sessions/rep-1?limit=99999')).json();
+    expect(huge.limit).toBe(500);
+  });
+});
+
+describe('POST /api/sessions/:id/tags', () => {
+  it('stores sanitized tags in the local sidecar and lists them', async () => {
+    const stateDir = fs.mkdtempSync(path.join(base, 'tags-'));
+    const home = makeReplayHome('tags-store');
+    const app = appFor(home, { stateDir });
+
+    const res = await post(app, '/api/sessions/rep-1/tags', {
+      tags: ['  urgent  ', 'urgent', '', 'review', 42],
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // Trimmed, deduped, non-strings dropped.
+    expect(body).toEqual({ id: 'rep-1', tags: ['urgent', 'review'] });
+
+    // Sidecar persisted; the list route surfaces the tags.
+    const listApp = appFor(home, { stateDir });
+    const list = await (await get(listApp, '/api/sessions')).json();
+    expect(list.sessions[0].tags).toEqual(['urgent', 'review']);
+    // And the detail route.
+    const detail = await (await get(listApp, '/api/sessions/rep-1')).json();
+    expect(detail.tags).toEqual(['urgent', 'review']);
+  });
+
+  it('caps the tag count and each tag length', async () => {
+    const stateDir = fs.mkdtempSync(path.join(base, 'tags-cap-'));
+    const app = appFor(makeReplayHome('tags-cap'), { stateDir });
+    const many = Array.from({ length: 100 }, (_, i) => `t${i}`);
+    const body = await (await post(app, '/api/sessions/rep-1/tags', { tags: many })).json();
+    expect(body.tags.length).toBe(32);
+
+    const long = 'x'.repeat(200);
+    const body2 = await (await post(app, '/api/sessions/rep-1/tags', { tags: [long] })).json();
+    expect(body2.tags[0].length).toBe(64);
+  });
+
+  it('refuses tags for an unknown id (404)', async () => {
+    const stateDir = fs.mkdtempSync(path.join(base, 'tags-404-'));
+    const app = appFor(makeReplayHome('tags-404'), { stateDir });
+    const res = await post(app, '/api/sessions/nope/tags', { tags: ['x'] });
+    expect(res.status).toBe(404);
   });
 });
 

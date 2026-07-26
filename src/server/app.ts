@@ -403,11 +403,14 @@ export function createApp(config: AppConfig): Hono {
   // UNTRUSTED output defensively. See src/server/marketplace.ts.
   registerMarketplaceRoutes(app, { exec: config.marketplaceExec });
 
-  // DASHBOARD STATS (7yb.2): GET /api/stats + /api/sessions — the read-only
-  // session-analytics surface. Also under /api (inherits the token + Origin/CSRF
-  // gates); reads THIS machine's runtime history (~/.claude) through the committed
-  // claude adapter, bounded to the most-recent N session files, and returns only
-  // aggregate stats + achievement metadata + content-free session metadata.
+  // DASHBOARD STATS (7yb.2) + SESSION REPLAY (7yb.3): GET /api/stats,
+  // /api/sessions (list), /api/sessions/:id (paginated replay DETAIL) + POST
+  // /api/sessions/:id/tags (local tag sidecar). Also under /api (inherits the
+  // token + Origin/CSRF gates); reads THIS machine's runtime history (~/.claude)
+  // through the committed claude adapter, bounded to the most-recent N session
+  // files. Aggregates + session metadata are content-free; replay DETAIL renders
+  // session CONTENT but REDACTS every secret-bearing string server-side (SPEC §3)
+  // before it crosses the wire.
   registerStatsRoutes(app);
 
   // Unknown /api paths (any method): 404 JSON, no static fallback.
