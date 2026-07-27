@@ -153,6 +153,22 @@ export { readManifest, parseManifest, upsertInstall, removeInstall } from './pro
 export type { InstallRecord, ProvenanceManifest } from './provenance.js';
 export { resolveWriteTarget } from './pathguard.js';
 export type { WriteScope, Resolution } from './pathguard.js';
+export {
+  runPipeline,
+  PipelineValidationError,
+  NODE_TIMEOUT_MS,
+  defaultRuntimes,
+} from './pipeline/index.js';
+export type {
+  RunOptions,
+  RuntimeContext,
+  RuntimeMap,
+  NodeRuntime,
+  NodeEvent,
+  NodeStatus,
+  NodeResult,
+  PipelineResult,
+} from './pipeline/index.js';
 export { unifiedDiff } from './diff.js';
 export { trashFile, defaultTrashDir } from './trash.js';
 export { InstanceWatcher, WatcherSupervisor, reportDiff, DEFAULT_DEBOUNCE_MS } from './watcher.js';
