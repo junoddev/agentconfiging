@@ -858,3 +858,193 @@ export interface PtyStatusResponse {
   /** Present when unavailable — why (daemon mode / node-pty absent). */
   reason?: string;
 }
+
+// ── PIPELINES (E9, bead ira.2) ────────────────────────────────────────────────
+
+/**
+ * Wire mirror of the pure pipeline model (src/core/pipeline/types.ts). A pipeline
+ * is UNTRUSTED user-authored config: node config carries bash scripts, urls, and
+ * paths — every field is rendered as a TEXT NODE only, never markup. Kept in sync
+ * with the server model (validated server-side before save and before run).
+ */
+
+/** The 14 node types (SPEC §5 row 12). */
+export type PipelineNodeType =
+  | 'prompt'
+  | 'bash'
+  | 'github-action'
+  | 'http'
+  | 'transform'
+  | 'delay'
+  | 'input'
+  | 'output'
+  | 'git'
+  | 'filter'
+  | 'read-file'
+  | 'write-file'
+  | 'notification'
+  | 'json-extract';
+
+/** Fields every node carries: `id` (graph key) + `name` ({{NodeName}} key). */
+export interface PipelineNodeBase {
+  id: string;
+  name: string;
+}
+
+/** A single safe declarative transform op (NO eval — mirrors the core model). */
+export type TransformOp =
+  | { op: 'pick'; keys: string[] }
+  | { op: 'omit'; keys: string[] }
+  | { op: 'rename'; from: string; to: string }
+  | { op: 'set'; key: string; value: string };
+
+/** Comparison ops for the filter predicate (safe, fixed set). */
+export type FilterOp = 'eq' | 'ne' | 'contains' | 'gt' | 'lt' | 'exists';
+
+/** A safe filter predicate: compare one field against a literal by a fixed op. */
+export interface FilterPredicate {
+  field: string;
+  op: FilterOp;
+  value?: string | number | boolean;
+}
+
+export interface PromptNode extends PipelineNodeBase {
+  type: 'prompt';
+  prompt: string;
+  model?: string;
+}
+export interface BashNode extends PipelineNodeBase {
+  type: 'bash';
+  script: string;
+}
+export interface GithubActionNode extends PipelineNodeBase {
+  type: 'github-action';
+  workflow: string;
+  ref?: string;
+}
+export interface HttpNode extends PipelineNodeBase {
+  type: 'http';
+  url: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+}
+export interface TransformNode extends PipelineNodeBase {
+  type: 'transform';
+  operations: TransformOp[];
+}
+export interface DelayNode extends PipelineNodeBase {
+  type: 'delay';
+  ms: number;
+}
+export interface InputNode extends PipelineNodeBase {
+  type: 'input';
+}
+export interface OutputNode extends PipelineNodeBase {
+  type: 'output';
+}
+export interface GitNode extends PipelineNodeBase {
+  type: 'git';
+  subcommand: string;
+  args?: string[];
+}
+export interface FilterNode extends PipelineNodeBase {
+  type: 'filter';
+  predicate: FilterPredicate;
+}
+export interface ReadFileNode extends PipelineNodeBase {
+  type: 'read-file';
+  path: string;
+}
+export interface WriteFileNode extends PipelineNodeBase {
+  type: 'write-file';
+  path: string;
+  content: string;
+}
+export interface NotificationNode extends PipelineNodeBase {
+  type: 'notification';
+  message: string;
+  level?: 'info' | 'warn' | 'error';
+}
+export interface JsonExtractNode extends PipelineNodeBase {
+  type: 'json-extract';
+  path: string;
+}
+
+/** The discriminated union of every node config. */
+export type PipelineNode =
+  | PromptNode
+  | BashNode
+  | GithubActionNode
+  | HttpNode
+  | TransformNode
+  | DelayNode
+  | InputNode
+  | OutputNode
+  | GitNode
+  | FilterNode
+  | ReadFileNode
+  | WriteFileNode
+  | NotificationNode
+  | JsonExtractNode;
+
+/** A directed edge: `from`'s output feeds `to`'s input (node ids). */
+export interface PipelineEdge {
+  from: string;
+  to: string;
+}
+
+/** A complete pipeline graph. */
+export interface Pipeline {
+  id: string;
+  name: string;
+  nodes: PipelineNode[];
+  edges: PipelineEdge[];
+}
+
+/** GET /api/pipelines list entry (metadata only). */
+export interface PipelineSummary {
+  id: string;
+  name: string;
+  nodeCount: number;
+}
+
+export interface PipelineListResponse {
+  pipelines: PipelineSummary[];
+}
+export interface PipelineResponse {
+  pipeline: Pipeline;
+}
+export interface SavePipelineResponse {
+  id: string;
+  saved: true;
+}
+export interface DeletePipelineResponse {
+  id: string;
+  removed: true;
+}
+export interface RunStartResponse {
+  runId: string;
+}
+
+/** A node's live run status (mirrors the executor's NodeStatus). */
+export type RunNodeStatus = 'pending' | 'running' | 'ok' | 'error';
+
+/** One node's live state within a run snapshot. */
+export interface RunNodeState {
+  nodeName: string;
+  status: RunNodeStatus;
+  output?: unknown;
+  error?: string;
+}
+
+/** GET /api/pipelines/runs/:runId — the polled live run snapshot. */
+export interface RunSnapshot {
+  runId: string;
+  pipelineId: string;
+  status: 'running' | 'ok' | 'error';
+  startedAt: number;
+  finishedAt?: number;
+  error?: string;
+  nodes: Record<string, RunNodeState>;
+}

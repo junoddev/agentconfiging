@@ -24,6 +24,13 @@ import type {
   GitMutationResponse,
   GitStatusResponse,
   HealthResponse,
+  Pipeline,
+  PipelineListResponse,
+  PipelineResponse,
+  SavePipelineResponse,
+  DeletePipelineResponse,
+  RunStartResponse,
+  RunSnapshot,
   InstalledPluginsResponse,
   InstallPluginResponse,
   InstanceSummary,
@@ -448,6 +455,47 @@ export class ApiClient {
 
   gitPull(instance?: string): Promise<GitMutationResponse> {
     return this.#send<GitMutationResponse>('/api/git/pull', 'POST', gitBody({}, instance));
+  }
+
+  /**
+   * PIPELINES (bead ira.2) — the visual-workflow persistence + run surface. Like
+   * Git/Marketplace, the shell keeps its ApiClient private, so the Pipelines page
+   * builds its own from the launch token. A pipeline is UNTRUSTED user config
+   * (bash scripts / urls / paths) — render every field as a text node.
+   *
+   * `savePipeline` validates SERVER-side (validatePipeline); an invalid graph is a
+   * 400 whose `message` is the joined validation errors. `runPipeline` starts a
+   * run (executing the guarded server executor — running bash is CSRF-gated) and
+   * returns a `runId`; poll {@link getRun} for LIVE per-node status.
+   */
+  async listPipelines(): Promise<PipelineListResponse['pipelines']> {
+    const body = await this.#get<PipelineListResponse>('/api/pipelines');
+    return body.pipelines;
+  }
+
+  async getPipeline(id: string): Promise<Pipeline> {
+    const body = await this.#get<PipelineResponse>(`/api/pipelines/${encodeURIComponent(id)}`);
+    return body.pipeline;
+  }
+
+  savePipeline(pipeline: Pipeline): Promise<SavePipelineResponse> {
+    return this.#send<SavePipelineResponse>('/api/pipelines', 'POST', pipeline);
+  }
+
+  deletePipeline(id: string): Promise<DeletePipelineResponse> {
+    return this.#send<DeletePipelineResponse>(`/api/pipelines/${encodeURIComponent(id)}`, 'DELETE');
+  }
+
+  runPipeline(id: string, input: unknown, instance?: string): Promise<RunStartResponse> {
+    return this.#send<RunStartResponse>(
+      `/api/pipelines/${encodeURIComponent(id)}/run${qsInstance(instance)}`,
+      'POST',
+      { input },
+    );
+  }
+
+  getRun(runId: string): Promise<RunSnapshot> {
+    return this.#get<RunSnapshot>(`/api/pipelines/runs/${encodeURIComponent(runId)}`);
   }
 
   /** Replace the local tag set for one session (stored in a local sidecar). */

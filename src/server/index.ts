@@ -211,6 +211,13 @@ export type {
 } from './pty.js';
 export { registerPtyRoutes } from './pty-routes.js';
 export type { PtyRoutesConfig, PtyStatus } from './pty-routes.js';
+export {
+  registerPipelineRoutes,
+  isValidPipelineId,
+  parsePipeline,
+  safeValidate,
+} from './pipeline-routes.js';
+export type { PipelineRoutesConfig, RunRecord, RunNodeState } from './pipeline-routes.js';
 
 export interface StartServerOptions {
   /** Launch root — the DEFAULT instance, served when `?instance=` is absent. */

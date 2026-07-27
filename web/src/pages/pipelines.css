@@ -1,0 +1,338 @@
+/* Pipeline canvas (#/pipelines, bead ira.2). Chassis only — Signal-Grid tokens,
+   hairlines, mono. Themes React Flow's own chrome (nodes/edges/minimap/controls)
+   to the two first-class themes; nothing here animates. Every node field is
+   adversarial pipeline config rendered as a text node, never markup. */
+
+.pipeline-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.pipeline-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pipeline-toolbar .title-page {
+  margin: 0;
+}
+
+.pipeline-toolbar__actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.pipeline-name {
+  max-width: 200px;
+}
+
+.pipeline-runinput {
+  max-width: 280px;
+  flex: 1;
+}
+
+.pipeline-runbadge {
+  padding: 2px 8px;
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  color: var(--fg-dim);
+}
+.pipeline-runbadge--running {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+.pipeline-runbadge--ok {
+  color: var(--signal);
+  border-color: var(--signal);
+}
+.pipeline-runbadge--error {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.pipeline-notice {
+  color: var(--fg-dim);
+}
+
+.pipeline-workspace {
+  display: grid;
+  grid-template-columns: 180px 1fr auto;
+  gap: 12px;
+  align-items: stretch;
+  min-height: 0;
+  flex: 1;
+}
+
+/* ── Palette ─────────────────────────────────────────────────────────────── */
+
+.pipeline-palette {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 8px;
+  overflow-y: auto;
+  max-height: 640px;
+}
+
+.pipeline-palette__title {
+  color: var(--fg-dim);
+  letter-spacing: var(--tracking-micro);
+  margin-top: 4px;
+}
+.pipeline-palette__saved {
+  margin-top: 12px;
+  border-top: var(--hairline-w) solid var(--hairline);
+  padding-top: 8px;
+}
+
+.pipeline-palette__item,
+.pipeline-saved__open,
+.pipeline-saved__del {
+  background: transparent;
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  color: var(--fg);
+  text-align: left;
+  padding: 4px 6px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+}
+.pipeline-palette__item:hover,
+.pipeline-saved__open:hover {
+  border-color: var(--signal);
+  color: var(--signal);
+}
+
+.pipeline-saved {
+  display: flex;
+  gap: 4px;
+}
+.pipeline-saved__open {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pipeline-saved__del {
+  width: 24px;
+  text-align: center;
+  padding: 4px 0;
+}
+.pipeline-saved__del:hover {
+  border-color: var(--red);
+  color: var(--red);
+}
+.pipeline-palette__empty {
+  color: var(--fg-dim);
+}
+
+/* ── Canvas ──────────────────────────────────────────────────────────────── */
+
+.pipeline-canvas {
+  position: relative;
+  height: 640px;
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.pipeline-canvas__hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-dim);
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* React Flow chrome themed to Signal Grid. */
+.pipeline-canvas .react-flow__background {
+  background: var(--surface);
+}
+.pipeline-canvas .react-flow__edge-path {
+  stroke: var(--fg-dim);
+  stroke-width: 1;
+}
+.pipeline-canvas .react-flow__edge.selected .react-flow__edge-path,
+.pipeline-canvas .react-flow__edge:hover .react-flow__edge-path {
+  stroke: var(--signal);
+}
+.pipeline-canvas .react-flow__controls-button {
+  background: var(--surface);
+  border-bottom: var(--hairline-w) solid var(--hairline);
+  color: var(--fg);
+  fill: var(--fg);
+}
+.pipeline-canvas .react-flow__minimap.pipeline-minimap {
+  background: var(--surface);
+  border: var(--hairline-w) solid var(--hairline);
+}
+.pipeline-canvas .react-flow__minimap-mask {
+  fill: var(--bg);
+  fill-opacity: 0.6;
+}
+.pipeline-canvas .react-flow__minimap-node {
+  fill: var(--fg-dim);
+}
+
+/* ── Custom hairline-box node (DESIGN §6) ────────────────────────────────── */
+
+.pipeline-node {
+  min-width: 140px;
+  max-width: 200px;
+  background: var(--surface);
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+}
+.pipeline-node--selected {
+  border-color: var(--signal);
+}
+.pipeline-node__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--fg-dim);
+  letter-spacing: var(--tracking-micro);
+  border-bottom: var(--hairline-w) solid var(--hairline);
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+.pipeline-node__type {
+  text-transform: uppercase;
+}
+.pipeline-node__name {
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pipeline-node__summary {
+  color: var(--fg-dim);
+  font-size: var(--size-micro);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pipeline-node__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fg-dim);
+}
+
+/* Live run status (§5). */
+.pipeline-node--pending {
+  opacity: 0.65;
+}
+.pipeline-node--running {
+  border-color: var(--warn);
+}
+.pipeline-node--running .pipeline-node__dot {
+  background: var(--warn);
+}
+.pipeline-node--ok {
+  border-color: var(--signal);
+}
+.pipeline-node--ok .pipeline-node__dot {
+  background: var(--signal);
+}
+.pipeline-node--error {
+  border-color: var(--red);
+}
+.pipeline-node--error .pipeline-node__dot {
+  background: var(--red);
+}
+
+.pipeline-node__handle {
+  width: 6px;
+  height: 6px;
+  background: var(--fg-dim);
+  border: none;
+  border-radius: 50%;
+}
+
+/* ── Config side panel ───────────────────────────────────────────────────── */
+
+.pipeline-panel {
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 12px;
+  overflow-y: auto;
+  max-height: 640px;
+}
+.pipeline-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--fg-dim);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-micro);
+}
+.pipeline-panel__del {
+  background: transparent;
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  color: var(--fg-dim);
+  padding: 2px 6px;
+  cursor: pointer;
+}
+.pipeline-panel__del:hover {
+  border-color: var(--red);
+  color: var(--red);
+}
+.pipeline-panel__err {
+  color: var(--red);
+}
+.pipeline-panel__note {
+  color: var(--fg-dim);
+}
+
+.pipeline-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pipeline-field .micro-label {
+  color: var(--fg-dim);
+  letter-spacing: var(--tracking-micro);
+}
+
+.pipeline-input {
+  background: var(--bg);
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  color: var(--fg);
+  padding: 4px 6px;
+  font-family: var(--font-mono);
+  font-size: var(--size-data);
+  width: 100%;
+}
+.pipeline-input:focus {
+  outline: none;
+  border-color: var(--signal);
+}
+textarea.pipeline-input {
+  resize: vertical;
+}
+
+@media (max-width: 900px) {
+  .pipeline-workspace {
+    grid-template-columns: 1fr;
+  }
+  .pipeline-panel {
+    width: auto;
+  }
+}

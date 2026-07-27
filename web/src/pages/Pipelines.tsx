@@ -1,0 +1,394 @@
+/**
+ * Pipelines (rail `24 PIPELINES`, route `#/pipelines`) — the VISUAL WORKFLOW
+ * BUILDER (SPEC §5 row 12, E9, bead agentconfig-ira.2). A React Flow canvas with
+ * a 14-type node PALETTE, custom HAIRLINE-BOX nodes (DESIGN §6), 1px right-angled
+ * `step` edges, and a themed MiniMap. Select a node to edit its typed config in
+ * the side panel; SAVE/LOAD persist the graph as a Pipeline; RUN executes it on
+ * the server and colours nodes by LIVE per-node status (§5).
+ *
+ * SECURITY / TRUST: a pipeline is UNTRUSTED user config. Running it executes the
+ * COMMITTED guarded server executor (bash/http/file/git bounded + scoped to the
+ * instance root) — this page never runs anything itself; the run POST is CSRF-
+ * gated by the server. Every config/output value is rendered as a TEXT NODE
+ * (nodeSummary / the config panel inputs) — never markup. React Flow owns its own
+ * canvas DOM; its stylesheet is bundled by vite (no external fetch).
+ *
+ * CLIENT SEAM: like Git/Marketplace, the shell keeps its ApiClient private, so
+ * this page captures the launch token at module load and builds its own client.
+ */
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Background,
+  Controls,
+  MiniMap,
+  ReactFlow,
+  addEdge,
+  useEdgesState,
+  useNodesState,
+} from '@xyflow/react';
+import type { Connection, Edge, Node, NodeTypes, OnConnect } from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import {
+  ApiClient,
+  ApiError,
+  type PipelineNode,
+  type PipelineNodeType,
+  type PipelineSummary,
+  type RunSnapshot,
+} from '../api/index.js';
+import { parseTokenHash } from '../api/token.js';
+import { Button, EmptyState } from '../components/core/index.js';
+import { useAppState } from '../state/index.js';
+import { AgentConfigNode } from './pipelines/AgentConfigNode.js';
+import { NodeConfigPanel } from './pipelines/NodeConfigPanel.js';
+import {
+  AGENTCONFIG_NODE,
+  PALETTE,
+  applyRunStatus,
+  defaultNodeConfig,
+  graphToPipeline,
+  makePipelineId,
+  nextNodeId,
+  pipelineToGraph,
+  uniqueNodeName,
+  type FlowNodeData,
+} from './pipelines/logic.js';
+import './pipelines.css';
+
+const bootToken =
+  typeof window !== 'undefined' ? parseTokenHash(window.location.hash).token : undefined;
+
+/** Stable node/edge type maps (React Flow requires a stable reference). */
+const nodeTypes: NodeTypes = { [AGENTCONFIG_NODE]: AgentConfigNode };
+const defaultEdgeOptions = { type: 'step' as const };
+
+type Phase = 'loading' | 'ok' | 'error';
+
+/** Parse the run-input textbox: JSON when it parses, else the raw string; '' → undefined. */
+function parseInput(text: string): unknown {
+  const trimmed = text.trim();
+  if (trimmed === '') return undefined;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return text;
+  }
+}
+
+export function Pipelines() {
+  const { currentInstance } = useAppState();
+  const instanceId = currentInstance?.id;
+  const client = useMemo(() => (bootToken ? new ApiClient(bootToken) : undefined), []);
+
+  const [phase, setPhase] = useState<Phase>('loading');
+  const [errMsg, setErrMsg] = useState('');
+  const [list, setList] = useState<PipelineSummary[]>([]);
+
+  const [pipelineId, setPipelineId] = useState<string>(() => makePipelineId());
+  const [pipelineName, setPipelineName] = useState('Untitled');
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+
+  const [inputText, setInputText] = useState('');
+  const [runId, setRunId] = useState<string | undefined>();
+  const [run, setRun] = useState<RunSnapshot | undefined>();
+  const [running, setRunning] = useState(false);
+  const [notice, setNotice] = useState<string | undefined>();
+
+  const refreshList = useCallback(async () => {
+    if (!client) return;
+    setList(await client.listPipelines());
+  }, [client]);
+
+  useEffect(() => {
+    if (!client) {
+      setPhase('error');
+      setErrMsg('session token missing — reopen from the CLI');
+      return;
+    }
+    void (async () => {
+      try {
+        await refreshList();
+        setPhase('ok');
+      } catch (err) {
+        setPhase('error');
+        setErrMsg(err instanceof ApiError ? err.message : 'could not reach the local server');
+      }
+    })();
+  }, [client, refreshList]);
+
+  // LIVE run polling: while a run is in flight, poll its snapshot every 400ms and
+  // stop once it finishes. The snapshot colours the nodes (applyRunStatus below).
+  useEffect(() => {
+    if (!runId || !client) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const snap = await client.getRun(runId);
+        if (!active) return;
+        setRun(snap);
+        if (snap.finishedAt !== undefined) {
+          setRunning(false);
+          return;
+        }
+      } catch {
+        if (active) setRunning(false);
+        return;
+      }
+      if (active) timer = setTimeout(() => void poll(), 400);
+    };
+    timer = setTimeout(() => void poll(), 0);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [runId, client]);
+
+  const displayNodes = useMemo(() => applyRunStatus(nodes, run), [nodes, run]);
+  const selected = nodes.find((n) => n.selected);
+  const selectedConfig = selected ? (selected.data as FlowNodeData).config : undefined;
+
+  const onConnect: OnConnect = useCallback(
+    (connection: Connection) => setEdges((es) => addEdge({ ...connection, type: 'step' }, es)),
+    [setEdges],
+  );
+
+  const addNode = useCallback(
+    (type: PipelineNodeType) => {
+      setNodes((ns) => {
+        const id = nextNodeId(ns.map((n) => n.id));
+        const name = uniqueNodeName(
+          type,
+          ns.map((n) => (n.data as FlowNodeData).config.name),
+        );
+        const config = defaultNodeConfig(type, id, name);
+        const node: Node = {
+          id,
+          type: AGENTCONFIG_NODE,
+          position: { x: 40 + (ns.length % 5) * 30, y: 40 + ns.length * 24 },
+          data: { config } satisfies FlowNodeData,
+        };
+        return [...ns, node];
+      });
+    },
+    [setNodes],
+  );
+
+  const updateConfig = useCallback(
+    (next: PipelineNode) => {
+      setNodes((ns) =>
+        ns.map((n) =>
+          n.id === next.id ? { ...n, data: { ...(n.data as FlowNodeData), config: next } } : n,
+        ),
+      );
+    },
+    [setNodes],
+  );
+
+  const deleteSelected = useCallback(() => {
+    if (!selected) return;
+    const id = selected.id;
+    setNodes((ns) => ns.filter((n) => n.id !== id));
+    setEdges((es) => es.filter((e) => e.source !== id && e.target !== id));
+  }, [selected, setNodes, setEdges]);
+
+  const onNew = useCallback(() => {
+    setNodes([]);
+    setEdges([]);
+    setPipelineId(makePipelineId());
+    setPipelineName('Untitled');
+    setRun(undefined);
+    setRunId(undefined);
+    setNotice(undefined);
+  }, [setNodes, setEdges]);
+
+  const onLoad = useCallback(
+    async (id: string) => {
+      if (!client) return;
+      try {
+        const pipeline = await client.getPipeline(id);
+        const graph = pipelineToGraph(pipeline);
+        setNodes(graph.nodes);
+        setEdges(graph.edges);
+        setPipelineId(pipeline.id);
+        setPipelineName(pipeline.name);
+        setRun(undefined);
+        setRunId(undefined);
+        setNotice(undefined);
+      } catch (err) {
+        setNotice(err instanceof ApiError ? err.message : 'load failed');
+      }
+    },
+    [client, setNodes, setEdges],
+  );
+
+  const onSave = useCallback(async () => {
+    if (!client) return;
+    const pipeline = graphToPipeline(pipelineId, pipelineName.trim() || 'Untitled', nodes, edges);
+    try {
+      await client.savePipeline(pipeline);
+      setNotice('saved');
+      await refreshList();
+    } catch (err) {
+      // A 400's message is the joined validatePipeline errors — surface them.
+      setNotice(err instanceof ApiError ? err.message : 'save failed');
+    }
+  }, [client, pipelineId, pipelineName, nodes, edges, refreshList]);
+
+  const onRun = useCallback(async () => {
+    if (!client) return;
+    const pipeline = graphToPipeline(pipelineId, pipelineName.trim() || 'Untitled', nodes, edges);
+    try {
+      // Persist the current graph, then run it (the server validates + guards).
+      await client.savePipeline(pipeline);
+      await refreshList();
+      const { runId: id } = await client.runPipeline(pipelineId, parseInput(inputText), instanceId);
+      setRun(undefined);
+      setRunId(id);
+      setRunning(true);
+      setNotice(undefined);
+    } catch (err) {
+      setNotice(err instanceof ApiError ? err.message : 'run failed');
+    }
+  }, [client, pipelineId, pipelineName, nodes, edges, inputText, instanceId, refreshList]);
+
+  const onDelete = useCallback(
+    async (id: string) => {
+      if (!client) return;
+      try {
+        await client.deletePipeline(id);
+        await refreshList();
+        if (id === pipelineId) onNew();
+      } catch (err) {
+        setNotice(err instanceof ApiError ? err.message : 'delete failed');
+      }
+    },
+    [client, pipelineId, refreshList, onNew],
+  );
+
+  if (phase === 'error') {
+    return (
+      <main className="layout-main page">
+        <section className="page__section">
+          <h1 className="title-page">PIPELINES</h1>
+          <EmptyState title="NO SIGNAL" instruction={errMsg} />
+        </section>
+      </main>
+    );
+  }
+
+  const runStatus = running ? 'running' : (run?.status ?? undefined);
+
+  return (
+    <main className="layout-main page pipeline-page">
+      <section className="page__section pipeline-toolbar">
+        <h1 className="title-page">PIPELINES</h1>
+        <input
+          className="pipeline-input pipeline-name mono-data"
+          aria-label="pipeline name"
+          value={pipelineName}
+          onChange={(e) => setPipelineName(e.target.value)}
+        />
+        <input
+          className="pipeline-input pipeline-runinput mono-data"
+          aria-label="run input"
+          placeholder="run input ({{input}}) — text or JSON"
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+        />
+        <div className="pipeline-toolbar__actions">
+          <Button label="new" onClick={onNew} />
+          <Button label="save" variant="primary" onClick={() => void onSave()} />
+          <Button
+            label={running ? 'running…' : 'run'}
+            disabled={running}
+            onClick={() => void onRun()}
+          />
+        </div>
+        {runStatus !== undefined && (
+          <span className={`pipeline-runbadge micro-label pipeline-runbadge--${runStatus}`}>
+            run {runStatus}
+          </span>
+        )}
+        {notice !== undefined && (
+          <span className="pipeline-notice mono-data" role="status">
+            {notice}
+          </span>
+        )}
+      </section>
+
+      <section className="page__section pipeline-workspace">
+        <div className="pipeline-palette">
+          <span className="micro-label pipeline-palette__title">NODES</span>
+          {PALETTE.map((item) => (
+            <button
+              key={item.type}
+              type="button"
+              className="pipeline-palette__item micro-label"
+              onClick={() => addNode(item.type)}
+            >
+              + {item.label}
+            </button>
+          ))}
+          <span className="micro-label pipeline-palette__title pipeline-palette__saved">SAVED</span>
+          {list.length === 0 ? (
+            <span className="micro-label pipeline-palette__empty">none yet</span>
+          ) : (
+            list.map((p) => (
+              <div key={p.id} className="pipeline-saved">
+                <button
+                  type="button"
+                  className="pipeline-saved__open micro-label"
+                  onClick={() => void onLoad(p.id)}
+                >
+                  {p.name}
+                </button>
+                <button
+                  type="button"
+                  className="pipeline-saved__del micro-label"
+                  aria-label={`delete ${p.name}`}
+                  onClick={() => void onDelete(p.id)}
+                >
+                  ×
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="pipeline-canvas">
+          {nodes.length === 0 && (
+            <div className="pipeline-canvas__hint micro-label">
+              add nodes from the palette, connect them, then save or run
+            </div>
+          )}
+          <ReactFlow
+            nodes={displayNodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            nodeTypes={nodeTypes}
+            defaultEdgeOptions={defaultEdgeOptions}
+            fitView
+            proOptions={{ hideAttribution: true }}
+          >
+            <Background gap={24} />
+            <Controls />
+            <MiniMap pannable zoomable className="pipeline-minimap" />
+          </ReactFlow>
+        </div>
+
+        {selectedConfig !== undefined && (
+          <NodeConfigPanel
+            node={selectedConfig}
+            onChange={updateConfig}
+            onDelete={deleteSelected}
+          />
+        )}
+      </section>
+    </main>
+  );
+}

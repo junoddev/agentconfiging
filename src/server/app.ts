@@ -68,6 +68,8 @@ import { registerStatsRoutes } from './stats-routes.js';
 import { registerAnalyticsRoutes } from './analytics-routes.js';
 import { registerSearchRoutes } from './search-routes.js';
 import { registerPtyRoutes } from './pty-routes.js';
+import { registerPipelineRoutes } from './pipeline-routes.js';
+import type { RuntimeMap } from './pipeline/index.js';
 import { PtyManager } from './pty.js';
 import type { WriteScope } from './pathguard.js';
 
@@ -135,6 +137,19 @@ export interface AppConfig {
    * default manager is built from `interactive` — used by the status route only.
    */
   ptyManager?: PtyManager;
+  /**
+   * PIPELINES (bead ira.2): the state dir pipeline JSON persists under
+   * (`<stateDir>/pipelines`). Defaults to the shared XDG state dir; injectable so
+   * tests point it at a tmp dir.
+   */
+  pipelineStateDir?: string;
+  /**
+   * PIPELINES (bead ira.2): the executor runtime table a pipeline RUN uses.
+   * Defaults to the real committed node runtimes (bash/http/file/git, guarded).
+   * Injectable so tests exercise the run route through fake runtimes with zero
+   * real side effects while still going through the committed executor.
+   */
+  pipelineRuntimes?: RuntimeMap;
 }
 
 const MIME: Record<string, string> = {
@@ -501,6 +516,22 @@ export function createApp(config: AppConfig): Hono {
   const ptyManager =
     config.ptyManager ?? new PtyManager({ interactive: config.interactive ?? false });
   registerPtyRoutes(app, { manager: ptyManager, registry });
+
+  // PIPELINES (ira.2): GET /api/pipelines(+/:id) + POST /api/pipelines +
+  // DELETE /api/pipelines/:id + POST /api/pipelines/:id/run + GET
+  // /api/pipelines/runs/:runId — the visual-workflow persistence + run surface.
+  // Also under /api (inherits the token + Origin/CSRF gates; the save/delete/RUN
+  // POSTs are thus CSRF-gated — a run executes bash, the highest privilege here).
+  // Pipeline files are UNTRUSTED user config: every read parses defensively and
+  // the run path re-validates BEFORE handing the graph to the COMMITTED guarded
+  // executor (bash/http/file/git bounded + scoped to the instance root — never
+  // bypassed). Per-node status streams into an in-memory run record the client
+  // polls. See src/server/pipeline-routes.ts.
+  registerPipelineRoutes(app, {
+    registry,
+    ...(config.pipelineStateDir !== undefined ? { stateDir: config.pipelineStateDir } : {}),
+    ...(config.pipelineRuntimes !== undefined ? { runtimes: config.pipelineRuntimes } : {}),
+  });
 
   // Unknown /api paths (any method): 404 JSON, no static fallback.
   app.all('/api/*', () => jsonError(404, 'not found'));

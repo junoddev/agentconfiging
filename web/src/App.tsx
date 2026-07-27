@@ -25,6 +25,7 @@ import { Search } from './pages/Search.js';
 import { ContextHealth } from './pages/ContextHealth.js';
 import { Git } from './pages/Git.js';
 import { Terminal } from './pages/Terminal.js';
+import { Pipelines } from './pages/Pipelines.js';
 import { parseRoute, type Route } from './routes.js';
 import { Rail } from './shell/Rail.js';
 import { TopBar, type Theme } from './shell/TopBar.js';
@@ -95,6 +96,8 @@ function renderRoute(route: Route) {
       // The terminal is rendered persistently at the shell (see App) so its tabs
       // + live PTYs survive navigation; the routed slot renders nothing.
       return null;
+    case 'pipelines':
+      return <Pipelines />;
     case 'gallery':
       return <GalleryPage />;
   }
