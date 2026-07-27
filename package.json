@@ -11,6 +11,10 @@
     "agentconfiging": "dist/cli/index.js"
   },
   "main": "dist/core/index.js",
+  "exports": {
+    ".": "./dist/core/index.js",
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist"
   ],
@@ -18,7 +22,9 @@
     "dev": "concurrently -n server,web -c blue,magenta \"npm:dev:server\" \"npm:dev:web\"",
     "dev:server": "tsx watch src/server/index.ts",
     "dev:web": "vite web",
-    "build": "tsup && vite build web",
+    "clean:tsup": "node -e \"const fs=require('fs');['cli','server','core'].forEach(d=>fs.rmSync('dist/'+d,{recursive:true,force:true}));fs.existsSync('dist')&&fs.readdirSync('dist').forEach(f=>(f.endsWith('.js')||f.endsWith('.js.map'))&&fs.rmSync('dist/'+f,{force:true}))\"",
+    "build": "npm run clean:tsup && tsup && vite build web",
+    "prepublishOnly": "npm run build",
     "test": "vitest run",
     "lint": "eslint . && prettier --check .",
     "typecheck": "tsc --noEmit"
