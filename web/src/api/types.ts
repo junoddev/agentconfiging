@@ -660,3 +660,57 @@ export interface SessionTagsResponse {
   id: string;
   tags: string[];
 }
+
+/**
+ * SESSION SEARCH (bead 7yb.4). MIRRORS src/server/search.ts. The FTS index is
+ * backed by the OPTIONAL better-sqlite3 native module: when it cannot load, every
+ * search response is `{ available:false, reason }` (a 200) so the UI shows a clear
+ * "search unavailable — optional dependency not installed" state.
+ */
+
+export type SearchMode = 'fts' | 'semantic';
+
+/** One search hit. `snippet` is REDACTED server-side; `spans` locate the
+ *  `[REDACTED:*]` marks. Render `snippet` as a TEXT node only. */
+export interface SearchHit {
+  sessionId: string;
+  messageIndex: number;
+  role: string;
+  snippet: string;
+  spans: RedactionSpan[];
+  timestamp?: string;
+}
+
+/** GET /api/search payload. Discriminated on `available`. */
+export type SearchResponse =
+  | { available: false; reason: string }
+  | {
+      available: true;
+      mode: SearchMode;
+      query: string;
+      results: SearchHit[];
+      truncated: boolean;
+      /** Present only for a semantic query — the opt-in flag state + reason. */
+      semantic?: { enabled: boolean; reason: string };
+    };
+
+/** POST /api/search/reindex payload. */
+export type SearchReindexResponse =
+  | { available: false; reason: string }
+  | {
+      available: true;
+      indexed: { sessions: number; messages: number };
+      total: number;
+      lastIndexedAt: string;
+    };
+
+/** GET /api/search/status payload. */
+export type SearchStatusResponse =
+  | { available: false; reason: string; embeddings: { enabled: boolean } }
+  | {
+      available: true;
+      indexed: { sessions: number; messages: number };
+      total: number;
+      lastIndexedAt?: string;
+      embeddings: { enabled: boolean };
+    };

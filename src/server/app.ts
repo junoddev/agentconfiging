@@ -64,6 +64,7 @@ import { registerCatalogRoutes, type CatalogSource } from './catalog.js';
 import { registerMarketplaceRoutes, type ClaudeExec } from './marketplace.js';
 import { registerStatsRoutes } from './stats-routes.js';
 import { registerAnalyticsRoutes } from './analytics-routes.js';
+import { registerSearchRoutes } from './search-routes.js';
 import type { WriteScope } from './pathguard.js';
 
 export interface AppConfig {
@@ -421,6 +422,18 @@ export function createApp(config: AppConfig): Hono {
   // per model, cache efficiency, and daily/hourly trends — content-free (counts,
   // costs, model ids, buckets; never a message body).
   registerAnalyticsRoutes(app);
+
+  // SESSION SEARCH (7yb.4): GET /api/search, /api/search/status + POST
+  // /api/search/reindex. Also under /api (inherits the token + Origin/CSRF
+  // gates). Full-text search over session turns + tool results via SQLite FTS5,
+  // built from THIS machine's runtime history (~/.claude). The FTS engine depends
+  // on the OPTIONAL, lazily-loaded better-sqlite3 native module: when it cannot
+  // load, every search route degrades to { available:false, reason } (a 200) and
+  // the rest of the server keeps working — the core npx path never requires a
+  // native module. Result snippets are REDACTED server-side; the query is
+  // sanitized + bound as a parameter (no FTS5 injection). Semantic/embeddings mode
+  // is behind an opt-in flag (a documented stub in v1).
+  registerSearchRoutes(app);
 
   // Unknown /api paths (any method): 404 JSON, no static fallback.
   app.all('/api/*', () => jsonError(404, 'not found'));

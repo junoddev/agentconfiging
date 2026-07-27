@@ -93,6 +93,36 @@ export type {
   AchievementsPayload,
   LoadedHistory,
 } from './stats-routes.js';
+export { registerSearchRoutes } from './search-routes.js';
+export type { SearchRoutesConfig } from './search-routes.js';
+export {
+  SearchIndex,
+  defaultSqliteLoader,
+  sanitizeFtsMatch,
+  sessionRows,
+  messageSearchText,
+  clampLimit,
+  REASON_NO_MODULE,
+  REASON_NO_INDEX,
+  REASON_SEMANTIC_DISABLED,
+  REASON_SEMANTIC_STUB,
+  DEFAULT_MAX_RESULTS,
+  MAX_RESULTS_CEILING,
+  MAX_QUERY_TERMS,
+} from './search.js';
+export type {
+  SearchHit,
+  SearchResult,
+  ReindexResult,
+  StatusResult,
+  SearchMode,
+  Coverage,
+  IndexRow,
+  SearchIndexConfig,
+  SqliteLoader,
+  SqliteDatabase,
+  SqliteDatabaseCtor,
+} from './search.js';
 export { readManifest, parseManifest, upsertInstall, removeInstall } from './provenance.js';
 export type { InstallRecord, ProvenanceManifest } from './provenance.js';
 export { resolveWriteTarget } from './pathguard.js';

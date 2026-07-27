@@ -51,5 +51,8 @@
     "react": "^19.2.8",
     "smol-toml": "^1.7.1",
     "yaml": "^2.9.0"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^13.0.1"
   }
 }

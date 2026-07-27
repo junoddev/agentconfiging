@@ -26,6 +26,10 @@ import type {
   RemoveResponse,
   Report,
   ScanResponse,
+  SearchMode,
+  SearchReindexResponse,
+  SearchResponse,
+  SearchStatusResponse,
   SessionDetail,
   SessionsResponse,
   SessionTagsResponse,
@@ -319,6 +323,34 @@ export class ApiClient {
     if (opts.limit !== undefined) qs.set('limit', String(opts.limit));
     const suffix = qs.toString() === '' ? '' : `?${qs.toString()}`;
     return this.#get<SessionDetail>(`/api/sessions/${encodeURIComponent(id)}${suffix}`);
+  }
+
+  /**
+   * SESSION SEARCH (bead 7yb.4) — full-text search over session turns + tool
+   * results (SQLite FTS5). The index is backed by the OPTIONAL better-sqlite3
+   * native module; when it can't load the response is `{ available:false, reason }`
+   * (a 200, not an error) so the page shows a clear unavailable state. Result
+   * snippets are REDACTED server-side — render them as text nodes only. `mode`
+   * defaults to `fts`; `semantic` is the opt-in embeddings mode (a v1 stub).
+   */
+  searchSessions(
+    query: string,
+    opts: { mode?: SearchMode; limit?: number } = {},
+  ): Promise<SearchResponse> {
+    const qs = new URLSearchParams({ q: query });
+    if (opts.mode !== undefined) qs.set('mode', opts.mode);
+    if (opts.limit !== undefined) qs.set('limit', String(opts.limit));
+    return this.#get<SearchResponse>(`/api/search?${qs.toString()}`);
+  }
+
+  /** Rebuild the FTS index (incremental by mtime) → coverage stats. */
+  reindexSearch(): Promise<SearchReindexResponse> {
+    return this.#send<SearchReindexResponse>('/api/search/reindex', 'POST');
+  }
+
+  /** Index availability + coverage vs. total + the embeddings flag. */
+  getSearchStatus(): Promise<SearchStatusResponse> {
+    return this.#get<SearchStatusResponse>('/api/search/status');
   }
 
   /** Replace the local tag set for one session (stored in a local sidecar). */
