@@ -1,0 +1,134 @@
+/* ContextHealth (rail 21 CONTEXT, docs/DESIGN.md §5–§7). Page-local styles only;
+   the shared chassis lives in app.css / styles/ and components.css. The storage
+   panel reuses settings.css. Tokens only — no raw hex, no shadows, no gradients. */
+
+.ctx__sub {
+  margin-left: var(--gutter);
+  color: var(--fg-dim);
+}
+
+.ctx__lede {
+  margin-top: 8px;
+  color: var(--fg-dim);
+  max-width: 68ch;
+}
+
+.ctx__acquiring {
+  padding: var(--gutter) 0;
+}
+
+.ctx__heading {
+  margin-bottom: 8px;
+}
+
+/* Top stat row: three figures on the 12-column page grid, hairline column rules
+   between them. Reflows to one-up on narrow viewports. */
+.ctx__stats {
+  row-gap: var(--gutter);
+}
+
+.ctx__stat {
+  grid-column: span 4;
+}
+
+@media (max-width: 560px) {
+  .ctx__stat {
+    grid-column: span 12;
+  }
+  .ctx__stat.col-rule {
+    border-left: 0;
+  }
+}
+
+/* Budget meter: the VU bar plus a mono caption, tinted by verdict. */
+.ctx__budget {
+  display: flex;
+  align-items: center;
+  gap: var(--gutter);
+  margin-top: var(--gutter);
+  min-height: var(--row-h);
+}
+
+.ctx__budget-caption {
+  color: var(--fg-dim);
+}
+
+.ctx__budget--warn .ctx__budget-caption {
+  color: var(--warn);
+}
+
+.ctx__budget--over .ctx__budget-caption {
+  color: var(--red);
+}
+
+/* Optimization suggestions: a dotted list, severity-tinted marker. */
+.ctx__suggestions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ctx__suggestion {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.ctx__suggestion-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius);
+  background: var(--fg-dim);
+  flex: none;
+  transform: translateY(-1px);
+}
+
+.ctx__suggestion--warn .ctx__suggestion-dot {
+  background: var(--warn);
+}
+
+.ctx__suggestion--info .ctx__suggestion-dot {
+  background: var(--signal);
+}
+
+.ctx__suggestion-msg {
+  color: var(--fg);
+  max-width: 90ch;
+}
+
+/* Per-category share rows: name · VU bar · size, hairline-separated. */
+.ctx__cats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ctx__cat-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 200px) 1fr minmax(120px, auto);
+  gap: var(--gutter);
+  align-items: center;
+  min-height: var(--row-h);
+  border-bottom: var(--hairline-w) solid var(--hairline);
+}
+
+.ctx__cat-name {
+  color: var(--fg);
+}
+
+.ctx__cat-size {
+  color: var(--fg-dim);
+  text-align: right;
+}
+
+@media (max-width: 720px) {
+  .ctx__cat-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}

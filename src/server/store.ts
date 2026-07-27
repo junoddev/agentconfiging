@@ -17,9 +17,11 @@
 
 import {
   buildReport,
+  computeContextHealth,
   detect,
   scanProject,
   toReportFinding,
+  type ContextHealth,
   type DetectedAgent,
   type Fix,
   type ManifestStats,
@@ -47,6 +49,13 @@ export class ReportStore {
   readonly #version: string;
   readonly #scanOptions: ScanOptions;
   readonly #cache = new Map<ReportScope, ServedReport>();
+  /**
+   * Per-scope CONTEXT-HEALTH view (bead 7yb.6): a pure, content-free
+   * computation over the SAME scanned manifest that produced the report (sizes
+   * + paths + suggestions, never file bodies). Cached alongside `#cache` and
+   * populated in the single `#build` pass, so it costs no extra scan.
+   */
+  readonly #contextHealth = new Map<ReportScope, ContextHealth>();
   /**
    * Per-scope map of finding id → fix payload. SERVER-INTERNAL by design: it
    * holds the `fix.edits[].patch` (complete replacement file content, possibly
@@ -93,14 +102,30 @@ export class ReportStore {
     return this.#fixes.get(scope)?.get(findingId);
   }
 
+  /**
+   * The content-free context-health view for `scope`, computed on first access
+   * or when `fresh` is set (mirrors {@link get}). Reuses the cached manifest
+   * computation — no extra scan.
+   */
+  contextHealth(scope: ReportScope, opts: { fresh?: boolean } = {}): ContextHealth {
+    if (!opts.fresh) {
+      const hit = this.#contextHealth.get(scope);
+      if (hit) return hit;
+    }
+    this.#build(scope);
+    return this.#contextHealth.get(scope) as ContextHealth;
+  }
+
   /** Drop cached reports + fixes (one scope, or all). Watcher-bead hook. */
   invalidate(scope?: ReportScope): void {
     if (scope) {
       this.#cache.delete(scope);
       this.#fixes.delete(scope);
+      this.#contextHealth.delete(scope);
     } else {
       this.#cache.clear();
       this.#fixes.clear();
+      this.#contextHealth.clear();
     }
   }
 
@@ -125,6 +150,7 @@ export class ReportStore {
     for (const finding of findings) if (finding.fix) fixes.set(finding.id, finding.fix);
     this.#cache.set(scope, report);
     this.#fixes.set(scope, fixes);
+    this.#contextHealth.set(scope, computeContextHealth(manifest));
     return report;
   }
 }

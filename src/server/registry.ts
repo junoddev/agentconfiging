@@ -43,6 +43,7 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { ContextHealth } from '../core/index.js';
 import { ReportStore, type ServedReport } from './store.js';
 
 /** A registered root. `store` exists only while loaded (lazy + unloadable). */
@@ -262,6 +263,15 @@ export class InstanceRegistry {
   /** Compute (or return cached) the report for an instance, loading it lazily. */
   report(instance: RegistryInstance, opts: { fresh?: boolean } = {}): ServedReport {
     return this.load(instance).get('project', opts);
+  }
+
+  /**
+   * Compute (or return cached) the content-free CONTEXT-HEALTH view for an
+   * instance (bead 7yb.6), loading it lazily. Reuses the same scanned manifest
+   * as {@link report} — no extra scan.
+   */
+  contextHealth(instance: RegistryInstance, opts: { fresh?: boolean } = {}): ContextHealth {
+    return this.load(instance).contextHealth('project', opts);
   }
 
   /**

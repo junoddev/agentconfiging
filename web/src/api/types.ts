@@ -232,6 +232,53 @@ export interface StorageReport {
   homes: StorageHome[];
 }
 
+/**
+ * CONTEXT HEALTH (bead 7yb.6, GET /api/context-health). MIRRORS the core
+ * `ContextHealth` (src/core/context-health/types.ts). Content-free by contract:
+ * sizes + config paths + honest, size-derived suggestion text — never a file
+ * body. Paths are filesystem data; render as text nodes only.
+ */
+
+/** Which context-loaded config category a file belongs to. */
+export type ContextCategory =
+  'instructions' | 'settings' | 'rules' | 'memory' | 'skills' | 'subagents' | 'commands' | 'mcp';
+
+/** One context-loaded config file: path + byte size + category. */
+export interface ContextFile {
+  path: string;
+  size: number;
+  category: ContextCategory;
+}
+
+/** Aggregate byte/file total for one category. */
+export interface CategoryTotal {
+  category: ContextCategory;
+  bytes: number;
+  files: number;
+}
+
+/** Budget verdict: within, nearing, or over the ceiling. */
+export type BudgetStatus = 'ok' | 'warn' | 'over';
+
+/** One optimization suggestion. `message` is derived purely from sizes. */
+export interface ContextSuggestion {
+  id: string;
+  severity: 'warn' | 'info';
+  message: string;
+}
+
+/** GET /api/context-health payload (src/core/context-health, `ContextHealth`). */
+export interface ContextHealth {
+  totalBytes: number;
+  fileCount: number;
+  budgetBytes: number;
+  budgetRatio: number;
+  status: BudgetStatus;
+  byCategory: CategoryTotal[];
+  largest: ContextFile[];
+  suggestions: ContextSuggestion[];
+}
+
 /** POST /api/storage/cleanup payload (src/server/storage.ts). */
 export interface StorageCleanupResponse {
   cleaned: true;

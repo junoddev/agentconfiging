@@ -14,6 +14,7 @@ import type {
   AnalyticsResponse,
   ApplyFixResponse,
   CatalogInstallResponse,
+  ContextHealth,
   CatalogRemoveResponse,
   CatalogResponse,
   FileContent,
@@ -198,6 +199,17 @@ export class ApiClient {
   getStorage(instance?: string): Promise<StorageReport> {
     const qs = instance ? `?instance=${encodeURIComponent(instance)}` : '';
     return this.#get<StorageReport>(`/api/storage${qs}`);
+  }
+
+  /**
+   * CONTEXT HEALTH (bead 7yb.6) — the content-free size/footprint view of the
+   * agent config that loads into an agent's context window (total vs a budget,
+   * largest contributors, size-derived suggestions). Computed server-side over
+   * the same scanned manifest as the report; carries sizes + paths only.
+   */
+  getContextHealth(instance?: string): Promise<ContextHealth> {
+    const qs = instance ? `?instance=${encodeURIComponent(instance)}` : '';
+    return this.#get<ContextHealth>(`/api/context-health${qs}`);
   }
 
   cleanupStorage(home: string, name: string, instance?: string): Promise<StorageCleanupResponse> {

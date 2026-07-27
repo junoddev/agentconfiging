@@ -359,6 +359,24 @@ export function createApp(config: AppConfig): Hono {
     }
   });
 
+  // CONTEXT HEALTH (7yb.6): GET /api/context-health?instance= — the content-free
+  // size/footprint view of the agent config that loads into an agent's context
+  // window (sizes + paths + suggestions, never file bodies). Computed over the
+  // SAME scanned manifest the report route caches (no extra scan). Selector
+  // resolves ONLY against registered instances — unknown id/path → 404.
+  app.get('/api/context-health', (c) => {
+    const url = new URL(c.req.url);
+    const fresh = url.searchParams.get('fresh') === '1';
+    const instance = registry.resolve(url.searchParams.get('instance') ?? undefined);
+    if (!instance) return jsonError(404, 'unknown instance');
+    try {
+      return c.json(registry.contextHealth(instance, { fresh }));
+    } catch (err) {
+      console.error(`agentconfiging server: context-health failed: ${String(err)}`);
+      return jsonError(500, 'context-health failed');
+    }
+  });
+
   // WRITE API (gxo.3): POST /api/write, POST /api/delete, GET /api/file. These
   // register under /api, so they inherit the token + Origin/CSRF gates above.
   registerWriteRoutes(app, { scopes: config.scopes ?? [], trashDir: config.trashDir ?? '' });
