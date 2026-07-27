@@ -26,6 +26,7 @@
     "build": "npm run clean:tsup && tsup && vite build web",
     "prepublishOnly": "npm run build",
     "test": "vitest run",
+    "e2e": "node scripts/e2e-smoke.mjs",
     "lint": "eslint . && prettier --check .",
     "typecheck": "tsc --noEmit"
   },
