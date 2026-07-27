@@ -18,6 +18,11 @@ import type {
   CatalogRemoveResponse,
   CatalogResponse,
   FileContent,
+  GitBranchesResponse,
+  GitDiffResponse,
+  GitLogResponse,
+  GitMutationResponse,
+  GitStatusResponse,
   HealthResponse,
   InstalledPluginsResponse,
   InstallPluginResponse,
@@ -62,6 +67,16 @@ export class ApiError extends Error {
     super(message);
     this.name = 'ApiError';
   }
+}
+
+/** `?instance=<id>` query suffix, or '' when the default instance is intended. */
+function qsInstance(instance?: string): string {
+  return instance ? `?instance=${encodeURIComponent(instance)}` : '';
+}
+
+/** Merge an optional instance id into a git POST body (omitted when absent). */
+function gitBody(fields: Record<string, unknown>, instance?: string): Record<string, unknown> {
+  return instance !== undefined ? { ...fields, instance } : fields;
 }
 
 function kindForStatus(status: number): ApiErrorKind {
@@ -363,6 +378,69 @@ export class ApiClient {
   /** Index availability + coverage vs. total + the embeddings flag. */
   getSearchStatus(): Promise<SearchStatusResponse> {
     return this.#get<SearchStatusResponse>('/api/search/status');
+  }
+
+  /**
+   * GIT PANEL (bead ngs.1) — the launched-repo git surface. The server shells out
+   * to `git` (execFile, no shell, cwd pinned to the instance repo root) and
+   * validates every ref/path; the commit message is piped on stdin. When git is
+   * ABSENT the response is `{ gitAvailable:false }` and a non-repo dir is
+   * `{ isRepo:false }` (both 200s, not errors) so the page shows a clear empty
+   * state. Every git field is UNTRUSTED subprocess output — render as text nodes.
+   */
+  getGitStatus(instance?: string): Promise<GitStatusResponse> {
+    return this.#get<GitStatusResponse>(`/api/git/status${qsInstance(instance)}`);
+  }
+
+  getGitLog(instance?: string): Promise<GitLogResponse> {
+    return this.#get<GitLogResponse>(`/api/git/log${qsInstance(instance)}`);
+  }
+
+  getGitBranches(instance?: string): Promise<GitBranchesResponse> {
+    return this.#get<GitBranchesResponse>(`/api/git/branches${qsInstance(instance)}`);
+  }
+
+  getGitDiff(pathArg: string, staged: boolean, instance?: string): Promise<GitDiffResponse> {
+    const qs = new URLSearchParams({ path: pathArg });
+    if (staged) qs.set('staged', '1');
+    if (instance !== undefined) qs.set('instance', instance);
+    return this.#get<GitDiffResponse>(`/api/git/diff?${qs.toString()}`);
+  }
+
+  gitStage(files: string[], instance?: string): Promise<GitMutationResponse> {
+    return this.#send<GitMutationResponse>('/api/git/stage', 'POST', gitBody({ files }, instance));
+  }
+
+  gitUnstage(files: string[], instance?: string): Promise<GitMutationResponse> {
+    return this.#send<GitMutationResponse>(
+      '/api/git/unstage',
+      'POST',
+      gitBody({ files }, instance),
+    );
+  }
+
+  gitCommit(message: string, instance?: string): Promise<GitMutationResponse> {
+    return this.#send<GitMutationResponse>(
+      '/api/git/commit',
+      'POST',
+      gitBody({ message }, instance),
+    );
+  }
+
+  gitCheckout(branch: string, create: boolean, instance?: string): Promise<GitMutationResponse> {
+    return this.#send<GitMutationResponse>(
+      '/api/git/checkout',
+      'POST',
+      gitBody({ branch, create }, instance),
+    );
+  }
+
+  gitPush(instance?: string): Promise<GitMutationResponse> {
+    return this.#send<GitMutationResponse>('/api/git/push', 'POST', gitBody({}, instance));
+  }
+
+  gitPull(instance?: string): Promise<GitMutationResponse> {
+    return this.#send<GitMutationResponse>('/api/git/pull', 'POST', gitBody({}, instance));
   }
 
   /** Replace the local tag set for one session (stored in a local sidecar). */

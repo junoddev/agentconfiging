@@ -62,6 +62,8 @@ import { registerStorageRoutes } from './storage.js';
 import { registerSyncRoute } from './sync.js';
 import { registerCatalogRoutes, type CatalogSource } from './catalog.js';
 import { registerMarketplaceRoutes, type ClaudeExec } from './marketplace.js';
+import { registerGitRoutes } from './git-routes.js';
+import type { GitExec } from './git.js';
 import { registerStatsRoutes } from './stats-routes.js';
 import { registerAnalyticsRoutes } from './analytics-routes.js';
 import { registerSearchRoutes } from './search-routes.js';
@@ -108,6 +110,14 @@ export interface AppConfig {
    * with no real CLI present.
    */
   marketplaceExec?: ClaudeExec;
+  /**
+   * GIT PANEL (bead ngs.1): how the git-panel routes reach `git`. Defaults to the
+   * real subprocess (execFile, fixed command `git`, arg array, no shell, cwd
+   * pinned to the instance repo root, timeout). Injectable so tests fire a FAKE
+   * exec — recorded args/cwd/stdin, hostile output, ENOENT, timeout — at the
+   * parse + validation path with no real git present.
+   */
+  gitExec?: GitExec;
 }
 
 const MIME: Record<string, string> = {
@@ -422,6 +432,17 @@ export function createApp(config: AppConfig): Hono {
   // every spawn, degrades gracefully when the CLI is absent, and parses the CLI's
   // UNTRUSTED output defensively. See src/server/marketplace.ts.
   registerMarketplaceRoutes(app, { exec: config.marketplaceExec });
+
+  // GIT PANEL (ngs.1): GET /api/git/status|log|branches|diff + POST
+  // /api/git/stage|unstage|commit|checkout|push|pull — the launched-repo git
+  // panel. Also under /api (inherits the token + Origin/CSRF gates; the POSTs are
+  // thus CSRF-gated). It SHELLS OUT to `git` via execFile (fixed command, arg
+  // array, NO shell), pins cwd to the resolved instance's realpath'd repo root
+  // (the scope), validates every ref/path (no leading dash, no `..`, `--`
+  // separators) and pipes the commit message on stdin, times out every spawn, and
+  // degrades gracefully when git is absent / the dir is not a repo. See
+  // src/server/git.ts.
+  registerGitRoutes(app, { registry, exec: config.gitExec });
 
   // DASHBOARD STATS (7yb.2) + SESSION REPLAY (7yb.3): GET /api/stats,
   // /api/sessions (list), /api/sessions/:id (paginated replay DETAIL) + POST

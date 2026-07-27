@@ -27,6 +27,8 @@ describe('parseRoute', () => {
     expect(routeHash({ name: 'search' })).toBe('#/search');
     expect(parseRoute('#/context')).toEqual({ name: 'context' });
     expect(routeHash({ name: 'context' })).toBe('#/context');
+    expect(parseRoute('#/git')).toEqual({ name: 'git' });
+    expect(routeHash({ name: 'git' })).toBe('#/git');
   });
 
   it('routes agent detail with its kind param', () => {
@@ -89,6 +91,7 @@ describe('routeHash', () => {
       { name: 'analytics' },
       { name: 'search' },
       { name: 'context' },
+      { name: 'git' },
       { name: 'gallery' },
       { name: 'agent', kind: 'claude-code' },
     ];

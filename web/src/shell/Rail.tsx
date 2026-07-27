@@ -42,6 +42,7 @@ const EDITORS: RailItem[] = [
   { index: '19', label: 'ANALYTICS', route: { name: 'analytics' } },
   { index: '20', label: 'SEARCH', route: { name: 'search' } },
   { index: '21', label: 'CONTEXT', route: { name: 'context' } },
+  { index: '22', label: 'GIT', route: { name: 'git' } },
 ];
 
 /** Which rail item owns the active route (agent detail lights up AGENTS). */

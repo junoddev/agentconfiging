@@ -23,6 +23,7 @@ import { Sessions } from './pages/Sessions.js';
 import { Analytics } from './pages/Analytics.js';
 import { Search } from './pages/Search.js';
 import { ContextHealth } from './pages/ContextHealth.js';
+import { Git } from './pages/Git.js';
 import { parseRoute, type Route } from './routes.js';
 import { Rail } from './shell/Rail.js';
 import { TopBar, type Theme } from './shell/TopBar.js';
@@ -87,6 +88,8 @@ function renderRoute(route: Route) {
       return <Search />;
     case 'context':
       return <ContextHealth />;
+    case 'git':
+      return <Git />;
     case 'gallery':
       return <GalleryPage />;
   }

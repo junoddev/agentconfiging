@@ -460,6 +460,81 @@ export type InstallPluginResponse =
   | { available: false; reason: string };
 
 /**
+ * GIT PANEL (bead ngs.1). These MIRROR src/server/git.ts. Every string —
+ * branch/file/upstream names, commit subjects + authors — is UNTRUSTED git
+ * output (a branch or commit could be crafted); render each as a TEXT node only.
+ * `gitAvailable:false` means git is not installed; `isRepo:false` means the
+ * instance root is not a git repository — both are graceful 200s, not errors.
+ */
+
+/** One changed file. `status` is the porcelain-v2 letter (M/A/D/R/C/U). */
+export interface GitFileChange {
+  path: string;
+  status: string;
+  orig?: string;
+}
+
+export interface GitCommit {
+  hash: string;
+  author: string;
+  date: string;
+  subject: string;
+}
+
+export interface GitBranch {
+  name: string;
+  current: boolean;
+}
+
+/** GET /api/git/status payload. */
+export type GitStatusResponse =
+  | { gitAvailable: false; isRepo: false }
+  | { gitAvailable: true; isRepo: false }
+  | {
+      gitAvailable: true;
+      isRepo: true;
+      branch: string;
+      detached: boolean;
+      upstream?: string;
+      ahead: number;
+      behind: number;
+      staged: GitFileChange[];
+      unstaged: GitFileChange[];
+      untracked: string[];
+      /** Present only when the status command itself failed (timeout). */
+      ok?: boolean;
+      message?: string;
+    };
+
+/** GET /api/git/log payload. */
+export type GitLogResponse =
+  | { gitAvailable: false; isRepo: false }
+  | { gitAvailable: true; isRepo: false }
+  | { gitAvailable: true; isRepo: true; commits: GitCommit[] };
+
+/** GET /api/git/branches payload. */
+export type GitBranchesResponse =
+  | { gitAvailable: false; isRepo: false }
+  | { gitAvailable: true; isRepo: false }
+  | { gitAvailable: true; isRepo: true; branches: GitBranch[] };
+
+/** GET /api/git/diff payload — unified diff TEXT (parse + render as text nodes). */
+export type GitDiffResponse =
+  | { gitAvailable: false; isRepo: false }
+  | { gitAvailable: true; isRepo: false }
+  | { gitAvailable: true; isRepo: true; diff: string };
+
+/**
+ * A state-changing git op result (stage/unstage/commit/checkout/push/pull).
+ * `ok:false` carries git's own (untrusted) message — a bad ref, no remote,
+ * nothing to commit — a graceful 200, never a thrown error.
+ */
+export type GitMutationResponse =
+  | { gitAvailable: false; isRepo: false }
+  | { gitAvailable: true; isRepo: false }
+  | { gitAvailable: true; isRepo: true; ok: boolean; message?: string };
+
+/**
  * Server→client WebSocket push messages (src/server/watcher.ts,
  * `WatcherMessage`). A `report` push means the instance's config changed on disk
  * → the UI should refetch; `live-session` is a growing-session pulse.

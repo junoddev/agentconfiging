@@ -95,6 +95,31 @@ export type {
 } from './stats-routes.js';
 export { registerSearchRoutes } from './search-routes.js';
 export type { SearchRoutesConfig } from './search-routes.js';
+export { registerGitRoutes, type GitRoutesConfig } from './git-routes.js';
+export {
+  parseStatus,
+  parseLog,
+  parseBranches,
+  isValidRef,
+  isValidRepoPath,
+  isValidMessage,
+  validateFiles,
+  classifyError,
+  defaultGitExec,
+  DEFAULT_TIMEOUT_MS as GIT_DEFAULT_TIMEOUT_MS,
+  NET_TIMEOUT_MS as GIT_NET_TIMEOUT_MS,
+  LOG_LIMIT as GIT_LOG_LIMIT,
+  LOG_FORMAT as GIT_LOG_FORMAT,
+} from './git.js';
+export type {
+  GitExec,
+  GitExecOpts,
+  GitFailure,
+  GitStatus,
+  GitFileChange,
+  GitBranch,
+  GitCommit,
+} from './git.js';
 export {
   SearchIndex,
   defaultSqliteLoader,
