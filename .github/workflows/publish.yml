@@ -1,0 +1,34 @@
+name: Publish
+
+# Publishes agentconfiging to npm WITH provenance (npm's supply-chain
+# attestation, which requires a trusted CI OIDC context — it cannot be produced
+# from a local `npm publish`). Runs only when a maintainer pushes a version tag
+# (e.g. `v0.1.0`) AND the NPM_TOKEN repo secret is set. Until then this workflow
+# is inert. See PUBLISHING.md.
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required for npm provenance (OIDC)
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.x
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run e2e # the npx-from-tarball smoke gate
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
