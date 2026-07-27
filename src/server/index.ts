@@ -27,7 +27,7 @@ import { createServer } from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { KNOWN_DIRS } from '../core/index.js';
 import { createApp } from './app.js';
 import { handleRequest } from './bridge.js';
@@ -477,12 +477,8 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
   };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  startServer({ root: process.cwd() }).then(
-    ({ url }) => console.log(`agentconfiging server on ${url}`),
-    (err: unknown) => {
-      console.error(`agentconfiging server failed to start: ${String(err)}`);
-      process.exitCode = 1;
-    },
-  );
-}
+// NOTE: no direct-execution auto-run guard here. Under the published build
+// (tsup `splitting: false`) this module is bundled into dist/cli/index.js, where
+// an `import.meta.url === argv[1]` guard would fire on EVERY CLI command and
+// wrongly start the server. Direct `node dist/server/index.js` / dev use goes
+// through the dedicated ./dev-server.ts entry instead.

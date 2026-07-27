@@ -1,6 +1,6 @@
 {
   "name": "agentconfiging",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Local control center for AI agent configuration. `npx agentconfiging` opens a web UI over the agent setup in your repo.",
   "license": "MIT",
   "type": "module",
@@ -20,7 +20,7 @@
   ],
   "scripts": {
     "dev": "concurrently -n server,web -c blue,magenta \"npm:dev:server\" \"npm:dev:web\"",
-    "dev:server": "tsx watch src/server/index.ts",
+    "dev:server": "tsx watch src/server/dev-server.ts",
     "dev:web": "vite web",
     "clean:tsup": "node -e \"const fs=require('fs');['cli','server','core'].forEach(d=>fs.rmSync('dist/'+d,{recursive:true,force:true}));fs.existsSync('dist')&&fs.readdirSync('dist').forEach(f=>(f.endsWith('.js')||f.endsWith('.js.map'))&&fs.rmSync('dist/'+f,{force:true}))\"",
     "build": "npm run clean:tsup && tsup && vite build web",
@@ -65,5 +65,8 @@
   "optionalDependencies": {
     "better-sqlite3": "^13.0.1",
     "node-pty": "^1.1.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
