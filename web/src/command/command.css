@@ -1,0 +1,92 @@
+/* Command palette (DESIGN §6/§9): hairline modal, mono numbered list — no
+   blur, no glass, no shadow. Elevation is a hairline border + a faint scrim. */
+
+.cmdk {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 12vh var(--gutter) var(--gutter);
+  /* Faint scrim (no backdrop blur — that's glassmorphism, refused §9). */
+  background: color-mix(in srgb, var(--fg) 12%, transparent);
+}
+
+.cmdk__modal {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 100%);
+  max-height: 70vh;
+  background: var(--bg);
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.cmdk__input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 12px var(--gutter);
+  background: var(--bg);
+  color: var(--fg);
+  border: 0;
+  border-bottom: var(--hairline-w) solid var(--hairline);
+  font-family: var(--font-mono);
+  font-size: var(--size-data);
+  line-height: var(--leading-data);
+  outline: none;
+}
+
+.cmdk__input::placeholder {
+  color: var(--fg-dim);
+}
+
+.cmdk__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.cmdk__row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px var(--gutter);
+  cursor: pointer;
+}
+
+.cmdk__row--active {
+  background: var(--surface);
+}
+
+.cmdk__index {
+  flex: none;
+  color: var(--fg-dim);
+}
+
+.cmdk__row--active .cmdk__index {
+  color: var(--signal);
+}
+
+.cmdk__label {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: var(--size-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cmdk__hint {
+  flex: none;
+  color: var(--fg-dim);
+  font-size: var(--size-micro);
+}
+
+.cmdk__empty {
+  padding: 12px var(--gutter);
+  color: var(--fg-dim);
+}

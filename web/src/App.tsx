@@ -27,6 +27,8 @@ import { Git } from './pages/Git.js';
 import { Terminal } from './pages/Terminal.js';
 import { Pipelines } from './pages/Pipelines.js';
 import { parseRoute, type Route } from './routes.js';
+import { parseGlobalKey, type CommandAction } from './command/commands.js';
+import { CommandPalette } from './shell/CommandPalette.js';
 import { Rail } from './shell/Rail.js';
 import { TopBar, type Theme } from './shell/TopBar.js';
 import { useAppState } from './state/index.js';
@@ -114,9 +116,42 @@ export function App() {
   const route = useRoute();
   const app = useAppState();
 
+  // Cmd+K opens the command palette; Cmd+1..9 jump to the numbered rail pages.
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+
+  // Global shortcuts (DESIGN §6): Cmd+K palette, Cmd+1..9 page jumps. One
+  // window listener, cleaned up on unmount.
+  useEffect(() => {
+    const isMac = /mac/i.test(navigator.platform);
+    const onKey = (e: KeyboardEvent) => {
+      const intent = parseGlobalKey(e, isMac);
+      if (!intent) return;
+      e.preventDefault();
+      if (intent.type === 'open-palette') setPaletteOpen(true);
+      else window.location.hash = intent.hash;
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // App owns the theme, so palette actions route back through here.
+  const runCommand = (action: CommandAction) => {
+    switch (action.type) {
+      case 'navigate':
+        window.location.hash = action.hash;
+        break;
+      case 'toggle-theme':
+        setTheme((t) => (t === 'paper' ? 'ink' : 'paper'));
+        break;
+      case 'refetch':
+        app.refetch();
+        break;
+    }
+  };
 
   const unauthorized = app.error?.kind === 'unauthorized';
 
@@ -143,6 +178,12 @@ export function App() {
           <Terminal active={route.name === 'terminal'} theme={theme} />
         </>
       )}
+      <CommandPalette
+        open={paletteOpen}
+        theme={theme}
+        onClose={() => setPaletteOpen(false)}
+        onRun={runCommand}
+      />
     </div>
   );
 }
