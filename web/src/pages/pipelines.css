@@ -328,6 +328,159 @@ textarea.pipeline-input {
   resize: vertical;
 }
 
+/* ── Run history + replay (bead ira.3) ───────────────────────────────────── */
+
+.pipeline-history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+.pipeline-history__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.pipeline-history__head .micro-label {
+  color: var(--fg-dim);
+  letter-spacing: var(--tracking-micro);
+}
+.pipeline-history__note {
+  color: var(--fg-dim);
+}
+
+.pipeline-history__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.pipeline-history__row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  color: var(--fg);
+  padding: 4px 8px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+}
+.pipeline-history__row:hover {
+  border-color: var(--signal);
+}
+.pipeline-history__row--active {
+  border-color: var(--signal);
+}
+.pipeline-history__when {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pipeline-history__status {
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-micro);
+}
+.pipeline-history__meta {
+  color: var(--fg-dim);
+}
+.pipeline-run--ok .pipeline-history__status {
+  color: var(--signal);
+}
+.pipeline-run--error .pipeline-history__status {
+  color: var(--red);
+}
+.pipeline-run--running .pipeline-history__status {
+  color: var(--warn);
+}
+
+/* ── Replay stepper ──────────────────────────────────────────────────────── */
+
+.pipeline-replay {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: var(--hairline-w) solid var(--hairline);
+  padding-top: 8px;
+}
+.pipeline-replay__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.pipeline-replay__head .micro-label {
+  color: var(--fg-dim);
+  letter-spacing: var(--tracking-micro);
+}
+.pipeline-replay__nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pipeline-replay__count {
+  color: var(--fg-dim);
+}
+.pipeline-replay__node {
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pipeline-replay__node-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.pipeline-replay__name {
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pipeline-replay__node-status {
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-micro);
+  color: var(--fg-dim);
+}
+.pipeline-replay__output,
+.pipeline-replay__error {
+  margin: 0;
+  padding: 6px 8px;
+  background: var(--bg);
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow: auto;
+  font-size: var(--size-data);
+}
+.pipeline-replay__error {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+/* [REDACTED:*] mark within replay output — a secret was stripped server-side. */
+.pipeline-redact {
+  background: transparent;
+  color: var(--warn);
+  border: var(--hairline-w) solid var(--warn);
+  border-radius: var(--radius);
+  padding: 0 2px;
+}
+
 @media (max-width: 900px) {
   .pipeline-workspace {
     grid-template-columns: 1fr;

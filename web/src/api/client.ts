@@ -31,6 +31,8 @@ import type {
   DeletePipelineResponse,
   RunStartResponse,
   RunSnapshot,
+  RunHistoryEntry,
+  RunHistoryResponse,
   InstalledPluginsResponse,
   InstallPluginResponse,
   InstanceSummary,
@@ -496,6 +498,18 @@ export class ApiClient {
 
   getRun(runId: string): Promise<RunSnapshot> {
     return this.#get<RunSnapshot>(`/api/pipelines/runs/${encodeURIComponent(runId)}`);
+  }
+
+  /**
+   * RUN HISTORY (bead ira.3) — the most-recent runs for one pipeline as METADATA
+   * (status, timing, per-node status counts; never output). Select a row and
+   * fetch its REPLAY detail with {@link getRun} (output redacted server-side).
+   */
+  async listRuns(id: string): Promise<RunHistoryEntry[]> {
+    const body = await this.#get<RunHistoryResponse>(
+      `/api/pipelines/${encodeURIComponent(id)}/runs`,
+    );
+    return body.runs;
   }
 
   /** Replace the local tag set for one session (stored in a local sidecar). */

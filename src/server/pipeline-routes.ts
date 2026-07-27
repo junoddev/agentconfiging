@@ -29,6 +29,24 @@
  * is fully owned by this module, needs no shared WS-hub wiring, and is headless-
  * invokable.) Each finished run is also persisted under the state dir so ira.3's
  * run history has a seam to list/replay.
+ *
+ * RUN HISTORY / REPLAY (bead ira.3): finished runs are durable one-file-per-run
+ * under `<stateDir>/pipelines/runs/<runId>.json`. GET /api/pipelines/:id/runs
+ * lists the most-recent runs for a pipeline (METADATA ONLY — per-node status
+ * counts + timing, never output). GET /api/pipelines/runs/:runId is the replay
+ * detail: the recorded per-node status + output, served from memory (live) or
+ * disk (finished + evicted). Durable runs are BOUNDED per pipeline
+ * ({@link MAX_RUNS_PER_PIPELINE}) — a save prunes the oldest beyond the cap. A
+ * run id is a server-generated UUID, validated ({@link isValidRunId}) before it
+ * touches a path.
+ *
+ * REDACTION (secret-never-on-wire, SPEC §3): a persisted RunRecord holds RAW
+ * per-node output (bash stdout etc.) which can contain a secret the author's
+ * script printed. The on-disk record is author-owned; but the run-detail RESPONSE
+ * REDACTS every per-node output + error through the shared {@link redact} pass
+ * BEFORE it is serialized (the same discipline as session replay), so a replayed
+ * run never puts a raw secret on the wire. Output is serialized to text +
+ * `[REDACTED:*]` mark spans; the client renders it as text nodes.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -37,6 +55,8 @@ import path from 'node:path';
 import type { Hono } from 'hono';
 import { validatePipeline } from '../core/pipeline/index.js';
 import type { Pipeline, PipelineEdge, PipelineNode } from '../core/pipeline/index.js';
+import { redact } from '../core/redact/index.js';
+import type { RedactionSpan } from '../core/redact/index.js';
 import { runPipeline } from './pipeline/index.js';
 import type { NodeEvent, NodeStatus, RuntimeContext, RuntimeMap } from './pipeline/index.js';
 import { defaultStateDir } from './stats-routes.js';
@@ -65,12 +85,27 @@ const NODE_TYPES: ReadonlySet<string> = new Set<PipelineNode['type']>([
  *  No `.`, `/`, `\`, or `..` can occur, so the id is traversal-safe as a stem. */
 const PIPELINE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 
-/** Max in-memory run records retained (bounds memory; ira.3 owns durable list). */
+/** Max in-memory run records retained (bounds memory; the durable list below is
+ *  the source of truth for run HISTORY). */
 const MAX_RUNS = 100;
+
+/** Durable runs retained PER PIPELINE (ira.3). A save prunes older ones — run
+ *  history never grows without bound on disk. */
+const MAX_RUNS_PER_PIPELINE = 50;
+
+/** Server-generated run id: a v4-shaped UUID (randomUUID). No `.`, `/`, `\`, or
+ *  `..` can occur, so a validated run id is traversal-safe as a filename stem. */
+const RUN_ID_PATTERN =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 /** True for a strict, traversal-safe pipeline id (see {@link PIPELINE_ID_PATTERN}). */
 export function isValidPipelineId(id: unknown): id is string {
   return typeof id === 'string' && PIPELINE_ID_PATTERN.test(id);
+}
+
+/** True for a server-generated, traversal-safe run id (see {@link RUN_ID_PATTERN}). */
+export function isValidRunId(id: unknown): id is string {
+  return typeof id === 'string' && RUN_ID_PATTERN.test(id);
 }
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -147,6 +182,54 @@ export interface RunRecord {
   nodes: Record<string, RunNodeState>;
 }
 
+const RUN_STATUSES: ReadonlySet<string> = new Set<RunRecord['status']>(['running', 'ok', 'error']);
+const NODE_STATUSES: ReadonlySet<string> = new Set<NodeStatus>([
+  'pending',
+  'running',
+  'ok',
+  'error',
+]);
+
+/**
+ * Defensively parse a persisted run file into a RunRecord, or `undefined` for a
+ * tampered/hand-edited file. The runs dir is state a user could hand-edit, so a
+ * run file is no more trusted than a pipeline file: ids are re-validated, the
+ * status enums allowlisted, and the shape checked before it is served. Raw
+ * per-node `output` is carried through unparsed (redacted at serve time, never
+ * here). Never throws.
+ */
+export function parseRunRecord(raw: unknown): RunRecord | undefined {
+  if (!isPlainObject(raw)) return undefined;
+  const { runId, pipelineId, status, startedAt, finishedAt, error, nodes } = raw;
+  if (!isValidRunId(runId)) return undefined;
+  if (!isValidPipelineId(pipelineId)) return undefined;
+  if (typeof status !== 'string' || !RUN_STATUSES.has(status)) return undefined;
+  if (typeof startedAt !== 'number') return undefined;
+  if (!isPlainObject(nodes)) return undefined;
+  const parsedNodes: Record<string, RunNodeState> = {};
+  for (const [key, value] of Object.entries(nodes)) {
+    if (!isPlainObject(value)) return undefined;
+    const nodeName = value['nodeName'];
+    const nodeStatus = value['status'];
+    if (typeof nodeName !== 'string') return undefined;
+    if (typeof nodeStatus !== 'string' || !NODE_STATUSES.has(nodeStatus)) return undefined;
+    const state: RunNodeState = { nodeName, status: nodeStatus as NodeStatus };
+    if ('output' in value) state.output = value['output'];
+    if (typeof value['error'] === 'string') state.error = value['error'];
+    parsedNodes[key] = state;
+  }
+  const record: RunRecord = {
+    runId,
+    pipelineId,
+    status: status as RunRecord['status'],
+    startedAt,
+    nodes: parsedNodes,
+  };
+  if (typeof finishedAt === 'number') record.finishedAt = finishedAt;
+  if (typeof error === 'string') record.error = error;
+  return record;
+}
+
 /** On-disk pipeline + run store, rooted at `<stateDir>/pipelines`. */
 class PipelineStore {
   readonly #dir: string;
@@ -211,15 +294,75 @@ class PipelineStore {
     }
   }
 
-  /** Persist a finished run for ira.3's history (best-effort; never throws up). */
+  #runsDir(): string {
+    return path.join(this.#dir, 'runs');
+  }
+
+  /** Persist a finished run for run history, then prune the pipeline's oldest
+   *  runs beyond the cap (best-effort; a state-dir failure never throws up). */
   async saveRun(run: RunRecord): Promise<void> {
-    const dir = path.join(this.#dir, 'runs');
+    const dir = this.#runsDir();
     try {
       await mkdir(dir, { recursive: true });
+      // runId is a server-generated UUID (validated) — never a raw/attacker path.
       await writeFile(path.join(dir, `${run.runId}.json`), JSON.stringify(run), 'utf8');
+      await this.#pruneRuns(run.pipelineId);
     } catch {
       // A state-dir write failure must not crash the run — the live record still
-      // reflects the outcome in memory; durable history is ira.3's concern.
+      // reflects the outcome in memory.
+    }
+  }
+
+  /** Read one persisted run defensively (unknown/tampered → undefined). The
+   *  file's own runId MUST match the requested id, else it is treated as absent. */
+  async readRun(runId: string): Promise<RunRecord | undefined> {
+    let raw: string;
+    try {
+      raw = await readFile(path.join(this.#runsDir(), `${runId}.json`), 'utf8');
+    } catch {
+      return undefined;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return undefined;
+    }
+    const record = parseRunRecord(parsed);
+    if (record && record.runId !== runId) return undefined;
+    return record;
+  }
+
+  /** Every persisted run (each defensively parsed; unparseable files skipped). */
+  async listRuns(): Promise<RunRecord[]> {
+    let names: string[];
+    try {
+      names = await readdir(this.#runsDir());
+    } catch {
+      return [];
+    }
+    const out: RunRecord[] = [];
+    for (const file of names) {
+      if (!file.endsWith('.json')) continue;
+      const runId = file.slice(0, -'.json'.length);
+      if (!isValidRunId(runId)) continue;
+      const record = await this.readRun(runId);
+      if (record) out.push(record);
+    }
+    return out;
+  }
+
+  /** Drop the pipeline's oldest persisted runs beyond {@link MAX_RUNS_PER_PIPELINE}. */
+  async #pruneRuns(pipelineId: string): Promise<void> {
+    const forPipeline = (await this.listRuns())
+      .filter((r) => r.pipelineId === pipelineId)
+      .sort((a, b) => b.startedAt - a.startedAt);
+    for (const stale of forPipeline.slice(MAX_RUNS_PER_PIPELINE)) {
+      try {
+        await rm(path.join(this.#runsDir(), `${stale.runId}.json`));
+      } catch {
+        // A prune failure is harmless — the cap is best-effort.
+      }
     }
   }
 }
@@ -251,6 +394,104 @@ function invalidPipeline(errors: string[]): Response {
   });
 }
 
+/** A redacted text field: the text with secrets replaced by visible marks, plus
+ *  the mark spans over that text (the shape the client renders as text nodes). */
+interface RedactedText {
+  text: string;
+  spans: RedactionSpan[];
+}
+
+/** One node's state as SERVED (output/error redacted; never raw). */
+interface ServedRunNode {
+  nodeName: string;
+  status: NodeStatus;
+  output?: RedactedText;
+  error?: string;
+}
+
+/** A run's replay detail as SERVED — redacted, secret-never-on-wire. */
+interface ServedRun {
+  runId: string;
+  pipelineId: string;
+  status: RunRecord['status'];
+  startedAt: number;
+  finishedAt?: number;
+  error?: string;
+  nodes: Record<string, ServedRunNode>;
+}
+
+/** Metadata-only run history row (NO output; the list is content-free). */
+interface RunHistoryEntry {
+  runId: string;
+  pipelineId: string;
+  status: RunRecord['status'];
+  startedAt: number;
+  finishedAt?: number;
+  durationMs?: number;
+  counts: { ok: number; error: number; pending: number; running: number; total: number };
+}
+
+/** Serialize an arbitrary node output to display text (JSON for structured
+ *  values). Deterministic + never throws — the input for the redact pass. */
+function outputToText(output: unknown): string {
+  if (typeof output === 'string') return output;
+  try {
+    return JSON.stringify(output, null, 2) ?? String(output);
+  } catch {
+    return String(output);
+  }
+}
+
+/** Redact one node's raw output into the served text+spans shape. */
+function redactOutput(output: unknown): RedactedText {
+  const { text, spans } = redact(outputToText(output));
+  return { text, spans };
+}
+
+/** RunRecord → the REDACTED replay detail. Every per-node output + error and the
+ *  whole-run error passes through {@link redact} BEFORE serialization, so a raw
+ *  secret an author's script printed never crosses the wire (SPEC §3). */
+function serveRun(record: RunRecord): ServedRun {
+  const nodes: Record<string, ServedRunNode> = {};
+  for (const [id, state] of Object.entries(record.nodes)) {
+    const node: ServedRunNode = { nodeName: state.nodeName, status: state.status };
+    if (state.output !== undefined) node.output = redactOutput(state.output);
+    if (state.error !== undefined) node.error = redact(state.error).text;
+    nodes[id] = node;
+  }
+  const served: ServedRun = {
+    runId: record.runId,
+    pipelineId: record.pipelineId,
+    status: record.status,
+    startedAt: record.startedAt,
+    nodes,
+  };
+  if (record.finishedAt !== undefined) served.finishedAt = record.finishedAt;
+  if (record.error !== undefined) served.error = redact(record.error).text;
+  return served;
+}
+
+/** RunRecord → a metadata-only history row (per-node status counts + timing). */
+function historyEntry(record: RunRecord): RunHistoryEntry {
+  const counts = { ok: 0, error: 0, pending: 0, running: 0, total: 0 };
+  for (const state of Object.values(record.nodes)) {
+    counts[state.status] += 1;
+    counts.total += 1;
+  }
+  const entry: RunHistoryEntry = {
+    runId: record.runId,
+    pipelineId: record.pipelineId,
+    status: record.status,
+    startedAt: record.startedAt,
+    counts,
+  };
+  if (record.finishedAt !== undefined) {
+    entry.finishedAt = record.finishedAt;
+    entry.durationMs = Math.max(0, record.finishedAt - record.startedAt);
+  }
+  return entry;
+}
+
 export function registerPipelineRoutes(app: Hono, config: PipelineRoutesConfig): void {
   const registry = config.registry;
   const store = new PipelineStore(config.stateDir ?? defaultStateDir());
@@ -277,11 +518,37 @@ export function registerPipelineRoutes(app: Hono, config: PipelineRoutesConfig):
   });
 
   // GET /api/pipelines/runs/:runId — MUST precede /api/pipelines/:id so the
-  // static `runs` segment is not captured as an id. The live run snapshot.
-  app.get('/api/pipelines/runs/:runId', (c) => {
-    const record = runs.get(c.req.param('runId'));
+  // static `runs` segment is not captured as an id. The run REPLAY detail: the
+  // live snapshot (in memory) OR a finished run read from disk. Output/error are
+  // REDACTED before serialization (secret-never-on-wire, like session replay).
+  app.get('/api/pipelines/runs/:runId', async (c) => {
+    const runId = c.req.param('runId');
+    if (!isValidRunId(runId)) return jsonError(400, 'invalid run id');
+    const record = runs.get(runId) ?? (await store.readRun(runId));
     if (!record) return jsonError(404, 'unknown run');
-    return c.json(record);
+    return c.json(serveRun(record));
+  });
+
+  // GET /api/pipelines/:id/runs — the run HISTORY for a pipeline: the most-recent
+  // runs as METADATA ONLY (status, timing, per-node status counts — never
+  // output). In-flight in-memory runs are merged in so a fresh run appears at
+  // once; the durable set is bounded per pipeline (pruned on save).
+  app.get('/api/pipelines/:id/runs', async (c) => {
+    const id = c.req.param('id');
+    if (!isValidPipelineId(id)) return jsonError(400, 'invalid pipeline id');
+    const byId = new Map<string, RunRecord>();
+    for (const record of await store.listRuns()) {
+      if (record.pipelineId === id) byId.set(record.runId, record);
+    }
+    // In-memory (live / just-finished) records win over any disk copy.
+    for (const record of runs.values()) {
+      if (record.pipelineId === id) byId.set(record.runId, record);
+    }
+    const history = [...byId.values()]
+      .sort((a, b) => b.startedAt - a.startedAt)
+      .slice(0, MAX_RUNS_PER_PIPELINE)
+      .map(historyEntry);
+    return c.json({ runs: history });
   });
 
   // GET /api/pipelines/:id — one pipeline (defensively parsed; unknown → 404).

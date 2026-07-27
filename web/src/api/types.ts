@@ -1030,15 +1030,35 @@ export interface RunStartResponse {
 /** A node's live run status (mirrors the executor's NodeStatus). */
 export type RunNodeStatus = 'pending' | 'running' | 'ok' | 'error';
 
-/** One node's live state within a run snapshot. */
+/**
+ * A REDACTED text field: `text` carries the value with every secret already
+ * replaced server-side by a visible `[REDACTED:*]` mark, and `spans` locate each
+ * mark within `text` for styling (mirrors src/core/redact). A raw secret never
+ * crosses the wire — render `text` as text nodes only.
+ */
+export interface RedactedText {
+  text: string;
+  spans: RedactionSpan[];
+}
+
+/**
+ * One node's state within a run snapshot / replay detail. `output` is the node's
+ * recorded output REDACTED server-side (secret-never-on-wire, like session
+ * replay) — `output.text` holds `[REDACTED:*]` marks, never a raw secret. Render
+ * every field as a text node.
+ */
 export interface RunNodeState {
   nodeName: string;
   status: RunNodeStatus;
-  output?: unknown;
+  output?: RedactedText;
   error?: string;
 }
 
-/** GET /api/pipelines/runs/:runId — the polled live run snapshot. */
+/**
+ * GET /api/pipelines/runs/:runId — the polled live snapshot AND the run REPLAY
+ * detail (a finished run read from durable history). Per-node output/error are
+ * REDACTED server-side before this crosses the wire.
+ */
 export interface RunSnapshot {
   runId: string;
   pipelineId: string;
@@ -1047,4 +1067,33 @@ export interface RunSnapshot {
   finishedAt?: number;
   error?: string;
   nodes: Record<string, RunNodeState>;
+}
+
+/** Per-node status tally for a run history row. */
+export interface RunStatusCounts {
+  ok: number;
+  error: number;
+  pending: number;
+  running: number;
+  total: number;
+}
+
+/**
+ * One row of a pipeline's run HISTORY (GET /api/pipelines/:id/runs). METADATA
+ * ONLY — status, timing, and per-node status counts; never output (fetch the
+ * replay detail via {@link RunSnapshot} for that).
+ */
+export interface RunHistoryEntry {
+  runId: string;
+  pipelineId: string;
+  status: 'running' | 'ok' | 'error';
+  startedAt: number;
+  finishedAt?: number;
+  durationMs?: number;
+  counts: RunStatusCounts;
+}
+
+/** GET /api/pipelines/:id/runs payload — most-recent runs, newest first. */
+export interface RunHistoryResponse {
+  runs: RunHistoryEntry[];
 }

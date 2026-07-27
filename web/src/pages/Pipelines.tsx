@@ -35,6 +35,7 @@ import {
   type PipelineNode,
   type PipelineNodeType,
   type PipelineSummary,
+  type RunHistoryEntry,
   type RunSnapshot,
 } from '../api/index.js';
 import { parseTokenHash } from '../api/token.js';
@@ -42,6 +43,7 @@ import { Button, EmptyState } from '../components/core/index.js';
 import { useAppState } from '../state/index.js';
 import { AgentConfigNode } from './pipelines/AgentConfigNode.js';
 import { NodeConfigPanel } from './pipelines/NodeConfigPanel.js';
+import { RunHistory } from './pipelines/RunHistory.js';
 import {
   AGENTCONFIG_NODE,
   PALETTE,
@@ -96,10 +98,59 @@ export function Pipelines() {
   const [running, setRunning] = useState(false);
   const [notice, setNotice] = useState<string | undefined>();
 
+  const [history, setHistory] = useState<RunHistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [selectedRunId, setSelectedRunId] = useState<string | undefined>();
+  const [replay, setReplay] = useState<RunSnapshot | undefined>();
+
   const refreshList = useCallback(async () => {
     if (!client) return;
     setList(await client.listPipelines());
   }, [client]);
+
+  const refreshHistory = useCallback(
+    async (id: string) => {
+      if (!client) return;
+      setHistoryLoading(true);
+      try {
+        setHistory(await client.listRuns(id));
+      } catch {
+        // A pipeline that was never saved has no run history — an empty list is
+        // the honest state, not an error.
+        setHistory([]);
+      } finally {
+        setHistoryLoading(false);
+      }
+    },
+    [client],
+  );
+
+  // Load the run history for whichever pipeline is on the canvas, and clear any
+  // open replay, whenever the pipeline id changes (new / load).
+  useEffect(() => {
+    setSelectedRunId(undefined);
+    setReplay(undefined);
+    void refreshHistory(pipelineId);
+  }, [pipelineId, refreshHistory]);
+
+  // When a run finishes, refresh the history so the new run appears in the list.
+  useEffect(() => {
+    if (!running && runId !== undefined) void refreshHistory(pipelineId);
+  }, [running, runId, pipelineId, refreshHistory]);
+
+  const onSelectRun = useCallback(
+    async (rid: string) => {
+      if (!client) return;
+      setSelectedRunId(rid);
+      try {
+        // The detail is REDACTED server-side — safe to render as text nodes.
+        setReplay(await client.getRun(rid));
+      } catch {
+        setReplay(undefined);
+      }
+    },
+    [client],
+  );
 
   useEffect(() => {
     if (!client) {
@@ -388,6 +439,18 @@ export function Pipelines() {
             onDelete={deleteSelected}
           />
         )}
+      </section>
+
+      <section className="page__section pipeline-history-section">
+        <RunHistory
+          runs={history}
+          replay={replay}
+          selectedRunId={selectedRunId}
+          loading={historyLoading}
+          canRerun={nodes.length > 0 && !running}
+          onSelect={(rid) => void onSelectRun(rid)}
+          onRerun={() => void onRun()}
+        />
       </section>
     </main>
   );
