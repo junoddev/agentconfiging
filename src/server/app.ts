@@ -67,6 +67,8 @@ import type { GitExec } from './git.js';
 import { registerStatsRoutes } from './stats-routes.js';
 import { registerAnalyticsRoutes } from './analytics-routes.js';
 import { registerSearchRoutes } from './search-routes.js';
+import { registerPtyRoutes } from './pty-routes.js';
+import { PtyManager } from './pty.js';
 import type { WriteScope } from './pathguard.js';
 
 export interface AppConfig {
@@ -118,6 +120,21 @@ export interface AppConfig {
    * parse + validation path with no real git present.
    */
   gitExec?: GitExec;
+  /**
+   * EMBEDDED TERMINAL (bead ngs.2): true only when the server was launched
+   * INTERACTIVELY. The PTY is the highest-privilege surface, so it exists ONLY
+   * in interactive mode — daemon mode leaves this false and GET /api/pty/status
+   * reports unavailable (and index.ts does not serve the /api/pty WS upgrade).
+   * Defaults to false (fail-closed) for a directly-constructed app.
+   */
+  interactive?: boolean;
+  /**
+   * The shared PTY manager (bead ngs.2). index.ts constructs one (with the
+   * session token to scrub from child envs) and passes it here so the status
+   * route + the WS upgrade share one caps/teardown owner. When omitted, a
+   * default manager is built from `interactive` — used by the status route only.
+   */
+  ptyManager?: PtyManager;
 }
 
 const MIME: Record<string, string> = {
@@ -473,6 +490,17 @@ export function createApp(config: AppConfig): Hono {
   // sanitized + bound as a parameter (no FTS5 injection). Semantic/embeddings mode
   // is behind an opt-in flag (a documented stub in v1).
   registerSearchRoutes(app);
+
+  // EMBEDDED TERMINAL (ngs.2): GET /api/pty/status — the capability probe for the
+  // PTY surface. Also under /api (inherits the token + Origin/CSRF gates). The
+  // PTY data pipe is a WebSocket wired at the transport layer in index.ts; this
+  // route only reports whether the terminal is available (interactive launch +
+  // loadable node-pty) and the validated shell/CLI launch choices. The shared
+  // manager is injected by index.ts; a directly-constructed app builds a default
+  // one from `interactive` (default false → status reports unavailable).
+  const ptyManager =
+    config.ptyManager ?? new PtyManager({ interactive: config.interactive ?? false });
+  registerPtyRoutes(app, { manager: ptyManager, registry });
 
   // Unknown /api paths (any method): 404 JSON, no static fallback.
   app.all('/api/*', () => jsonError(404, 'not found'));

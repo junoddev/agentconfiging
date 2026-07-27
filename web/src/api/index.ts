@@ -57,6 +57,8 @@ export type {
   ManifestStats,
   MarketplacePlugin,
   MarketplaceResponse,
+  PtyStatusResponse,
+  ShellChoice,
   RedactionSpan,
   Report,
   ReportFinding,

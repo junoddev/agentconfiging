@@ -34,6 +34,7 @@ import { handleRequest } from './bridge.js';
 import { InstanceRegistry } from './registry.js';
 import { WatcherSupervisor } from './watcher.js';
 import { WsHub, handleUpgrade } from './ws.js';
+import { PtyManager, handlePtyUpgrade } from './pty.js';
 import { defaultTrashDir } from './trash.js';
 import type { WriteScope } from './pathguard.js';
 import { LOOPBACK_HOST, resolveServerOptions } from './options.js';
@@ -167,6 +168,33 @@ export {
   decodeFrames,
   DEFAULT_MAX_CONNECTIONS,
 } from './ws.js';
+export {
+  PtyManager,
+  PtyConnection,
+  handlePtyUpgrade,
+  defaultPtyLoader,
+  shellChoices,
+  resolveChoice,
+  defaultShell,
+  buildChildEnv,
+  parseClientMessage,
+  RUNTIME_CLI,
+  REASON_NOT_INTERACTIVE,
+  REASON_NO_MODULE as PTY_REASON_NO_MODULE,
+  DEFAULT_MAX_SESSIONS,
+} from './pty.js';
+export type {
+  PtyLoader,
+  PtySpawner,
+  PtyProcess,
+  PtySpawnOptions,
+  PtyManagerConfig,
+  PtyUpgradeConfig,
+  ShellChoice,
+  PtyClientMessage,
+} from './pty.js';
+export { registerPtyRoutes } from './pty-routes.js';
+export type { PtyRoutesConfig, PtyStatus } from './pty-routes.js';
 
 export interface StartServerOptions {
   /** Launch root — the DEFAULT instance, served when `?instance=` is absent. */
@@ -183,6 +211,14 @@ export interface StartServerOptions {
   port?: number;
   /** Static app-shell directory; default <package>/dist/web. */
   distDir?: string;
+  /**
+   * EMBEDDED TERMINAL (bead ngs.2). The PTY is the highest-privilege surface —
+   * an arbitrary interactive shell — so it exists ONLY in an INTERACTIVE launch.
+   * The default `agentconfiging` launch is interactive, so this DEFAULTS to true;
+   * a future daemon mode MUST pass `interactive: false`, which withholds the
+   * /api/pty WS upgrade (a 404) and makes GET /api/pty/status report unavailable.
+   */
+  interactive?: boolean;
 }
 
 export interface RunningServer {
@@ -197,6 +233,14 @@ export interface RunningServer {
    * token gates as every /api request (see ws.ts).
    */
   wsUrl: string;
+  /**
+   * PTY WebSocket URL (bead ngs.2): `ws://127.0.0.1:<port>/api/pty`, present
+   * only in an interactive launch (undefined in daemon mode). The UI connects
+   * with the session token as the sole subprotocol — the SAME authenticated
+   * handshake as `wsUrl` — plus `?instance=&shell=` query selectors. See ws.ts /
+   * pty.ts for the gate (Host + Origin + token before the 101, before any PTY).
+   */
+  ptyUrl?: string;
   port: number;
   token: string;
   close(): Promise<void>;
@@ -268,6 +312,14 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
   });
   registry.setLifecycle(supervisor);
 
+  // EMBEDDED TERMINAL (ngs.2): the PTY is the highest-privilege surface and
+  // exists ONLY in an interactive launch (default true; a daemon passes false).
+  // The manager owns node-pty loading, the concurrency cap, and kill-on-teardown;
+  // it is passed to createApp (so the status route + WS upgrade share one owner)
+  // and given the session token so it is scrubbed from every child shell's env.
+  const interactive = opts.interactive ?? true;
+  const ptyManager = new PtyManager({ interactive, sessionToken: token });
+
   // The real port exists only after listen; until then port() returns 0 and
   // the app's Host allowlist rejects everything (fail-closed).
   let boundPort = 0;
@@ -279,6 +331,8 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
     version,
     scopes: buildWriteScopes(opts.root),
     trashDir: defaultTrashDir(),
+    interactive,
+    ptyManager,
   });
 
   const server = createServer((req, res) => {
@@ -298,6 +352,22 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
   server.on('upgrade', (req, socket, head) => {
     wsSockets.add(socket);
     socket.on('close', () => wsSockets.delete(socket));
+    const pathname = (req.url ?? '/').split('?')[0];
+    // The PTY WS (ngs.2) is a SEPARATE upgrade route, but reuses the EXACT same
+    // authenticated handshake as the report WS (Host + Origin + token before the
+    // 101). It is served only in interactive mode — in daemon mode handlePtyUpgrade
+    // 404s the path (and the fallthrough report handler would too), so a daemon
+    // exposes no terminal.
+    if (pathname === '/api/pty') {
+      void handlePtyUpgrade(req, socket, head, {
+        tokenHash,
+        port: () => boundPort,
+        manager: ptyManager,
+        registry,
+        path: '/api/pty',
+      });
+      return;
+    }
     handleUpgrade(req, socket, head, {
       tokenHash,
       port: () => boundPort,
@@ -330,6 +400,7 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
   return {
     url: `http://${LOOPBACK_HOST}:${boundPort}/#token=${token}`,
     wsUrl: `ws://${LOOPBACK_HOST}:${boundPort}/api/ws`,
+    ...(interactive ? { ptyUrl: `ws://${LOOPBACK_HOST}:${boundPort}/api/pty` } : {}),
     port: boundPort,
     token,
     // Teardown order matters: stop the watchers (release every chokidar handle
@@ -337,6 +408,8 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
     // http server. Do the watcher/WS teardown first so no push races shutdown.
     close: async () => {
       await supervisor.closeAll();
+      // Kill every live PTY first (ngs.2) — no orphaned shells survive shutdown.
+      ptyManager.killAll();
       // Send WS close frames to any graceful clients, then DIRECTLY destroy
       // every upgraded socket — closeAllConnections() cannot reach them, and an
       // undestroyed one keeps server.close()'s callback from ever firing.

@@ -836,3 +836,25 @@ export type SearchStatusResponse =
       lastIndexedAt?: string;
       embeddings: { enabled: boolean };
     };
+
+// ── EMBEDDED TERMINAL (ngs.2) ─────────────────────────────────────────────────
+
+/** One validated launch target for a PTY (src/server/pty.ts, `ShellChoice`). */
+export interface ShellChoice {
+  /** Opaque id: `shell` (the user's $SHELL) or `cli:<kind>` (a detected CLI). */
+  id: string;
+  /** Human label (the binary basename / runtime CLI name). */
+  label: string;
+}
+
+/** GET /api/pty/status payload (src/server/pty-routes.ts, `PtyStatus`). */
+export interface PtyStatusResponse {
+  /** True only when the launch was interactive AND node-pty is loadable. */
+  available: boolean;
+  /** Whether the server was launched interactively (a daemon has no terminal). */
+  interactive: boolean;
+  /** The validated launch choices for the instance (empty when unavailable). */
+  shells: ShellChoice[];
+  /** Present when unavailable — why (daemon mode / node-pty absent). */
+  reason?: string;
+}

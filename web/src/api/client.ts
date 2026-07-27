@@ -29,6 +29,7 @@ import type {
   InstanceSummary,
   InstancesResponse,
   MarketplaceResponse,
+  PtyStatusResponse,
   RemoveResponse,
   Report,
   ScanResponse,
@@ -225,6 +226,12 @@ export class ApiClient {
   getContextHealth(instance?: string): Promise<ContextHealth> {
     const qs = instance ? `?instance=${encodeURIComponent(instance)}` : '';
     return this.#get<ContextHealth>(`/api/context-health${qs}`);
+  }
+
+  /** GET the embedded-terminal capability probe (ngs.2) for an instance. */
+  getPtyStatus(instance?: string): Promise<PtyStatusResponse> {
+    const qs = instance ? `?instance=${encodeURIComponent(instance)}` : '';
+    return this.#get<PtyStatusResponse>(`/api/pty/status${qs}`);
   }
 
   cleanupStorage(home: string, name: string, instance?: string): Promise<StorageCleanupResponse> {

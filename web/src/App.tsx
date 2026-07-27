@@ -24,6 +24,7 @@ import { Analytics } from './pages/Analytics.js';
 import { Search } from './pages/Search.js';
 import { ContextHealth } from './pages/ContextHealth.js';
 import { Git } from './pages/Git.js';
+import { Terminal } from './pages/Terminal.js';
 import { parseRoute, type Route } from './routes.js';
 import { Rail } from './shell/Rail.js';
 import { TopBar, type Theme } from './shell/TopBar.js';
@@ -90,6 +91,10 @@ function renderRoute(route: Route) {
       return <ContextHealth />;
     case 'git':
       return <Git />;
+    case 'terminal':
+      // The terminal is rendered persistently at the shell (see App) so its tabs
+      // + live PTYs survive navigation; the routed slot renders nothing.
+      return null;
     case 'gallery':
       return <GalleryPage />;
   }
@@ -128,7 +133,12 @@ export function App() {
           </section>
         </main>
       ) : (
-        renderRoute(route)
+        <>
+          {renderRoute(route)}
+          {/* Persistent terminal: mounted once, only hidden off-route, so its
+              tabs + live PTYs survive navigation (ngs.2). */}
+          <Terminal active={route.name === 'terminal'} theme={theme} />
+        </>
       )}
     </div>
   );

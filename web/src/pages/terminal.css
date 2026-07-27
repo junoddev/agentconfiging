@@ -1,0 +1,99 @@
+/* Embedded terminal (ngs.2) — the xterm surface themed to Signal Grid. The
+   xterm library owns its own DOM inside `.terminal-surface`; we only frame it
+   with the chassis tokens (hairlines, mono micro-labels, no radius > 2px). */
+
+.terminal-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.terminal-scope {
+  color: var(--fg-dim);
+  margin-top: 4px;
+}
+
+.terminal-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gutter);
+  border-bottom: var(--hairline-w) solid var(--hairline);
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.terminal-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.terminal-tab {
+  display: inline-flex;
+  align-items: center;
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.terminal-tab--active {
+  border-color: var(--signal);
+}
+
+.terminal-tab__label {
+  background: none;
+  border: none;
+  color: var(--fg-dim);
+  cursor: pointer;
+  padding: 4px 8px;
+  font-family: var(--font-mono);
+}
+
+.terminal-tab--active .terminal-tab__label {
+  color: var(--fg);
+}
+
+.terminal-tab__close {
+  background: none;
+  border: none;
+  color: var(--fg-dim);
+  cursor: pointer;
+  padding: 4px 8px 4px 0;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.terminal-tab__close:hover {
+  color: var(--red);
+}
+
+.terminal-launch {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.terminal-stage {
+  flex: 1 1 auto;
+  min-height: 420px;
+  display: flex;
+}
+
+.terminal-surface {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 420px;
+  background: var(--surface);
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 8px;
+  overflow: hidden;
+}
+
+/* xterm's own viewport should fill the framed surface. */
+.terminal-surface .xterm,
+.terminal-surface .xterm-viewport {
+  height: 100%;
+}
