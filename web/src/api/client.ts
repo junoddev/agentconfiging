@@ -33,6 +33,7 @@ import type {
   RunSnapshot,
   RunHistoryEntry,
   RunHistoryResponse,
+  ScheduleResponse,
   InstalledPluginsResponse,
   InstallPluginResponse,
   InstanceSummary,
@@ -510,6 +511,30 @@ export class ApiClient {
       `/api/pipelines/${encodeURIComponent(id)}/runs`,
     );
     return body.runs;
+  }
+
+  /**
+   * SCHEDULE (bead ira.4) — read/write a pipeline's cron/preset schedule. The
+   * schedule only RUNS when a daemon (`agentconfiging daemon`) is up; the
+   * interactive server persists it and reports the next fire time. `setSchedule`
+   * validates the cron SERVER-side (an invalid cron is a 400) and binds the run
+   * to the current instance's root.
+   */
+  getSchedule(id: string): Promise<ScheduleResponse> {
+    return this.#get<ScheduleResponse>(`/api/pipelines/${encodeURIComponent(id)}/schedule`);
+  }
+
+  setSchedule(
+    id: string,
+    cron: string,
+    enabled: boolean,
+    instance?: string,
+  ): Promise<ScheduleResponse> {
+    return this.#send<ScheduleResponse>(
+      `/api/pipelines/${encodeURIComponent(id)}/schedule${qsInstance(instance)}`,
+      'POST',
+      { cron, enabled },
+    );
   }
 
   /** Replace the local tag set for one session (stored in a local sidecar). */

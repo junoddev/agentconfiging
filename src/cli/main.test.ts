@@ -145,11 +145,22 @@ describe('runCli launch dispatch', () => {
   });
 });
 
-describe('runCli daemon stub', () => {
-  it('prints not-implemented to stderr and exits 1 (never Ink)', async () => {
-    const { code, stdout, stderr } = await cli(['daemon']);
-    expect(code).toBe(1);
-    expect(stdout).toBe('');
-    expect(stderr).toBe('daemon: not implemented\n');
+describe('runCli daemon dispatch', () => {
+  it('dispatches to the daemon flow with once=false by default', async () => {
+    const daemon = vi.fn(async () => 0);
+    const { code } = await cli(['daemon'], { daemon });
+    expect(code).toBe(0);
+    expect(daemon).toHaveBeenCalledWith({ once: false }, expect.anything());
+  });
+
+  it('--once sets once=true', async () => {
+    const daemon = vi.fn(async () => 0);
+    await cli(['daemon', '--once'], { daemon });
+    expect(daemon).toHaveBeenCalledWith({ once: true }, expect.anything());
+  });
+
+  it('propagates the daemon exit code', async () => {
+    const { code } = await cli(['daemon', '--once'], { daemon: async () => 3 });
+    expect(code).toBe(3);
   });
 });

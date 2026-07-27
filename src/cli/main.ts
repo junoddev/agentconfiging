@@ -3,8 +3,8 @@
  * so tests can drive the full command surface in-process, side-effect free.
  *
  * Commands: default/`launch` (Ink UI + local server), `report` (plain JSON
- * to stdout for CI — never Ink, never color, SPEC §4), `daemon` (stub until
- * its bead lands — never Ink either).
+ * to stdout for CI — never Ink, never color, SPEC §4), `daemon` (the headless
+ * scheduler that fires scheduled pipelines — plain timestamped lines, never Ink).
  *
  * Usage errors (unknown command/flag, extra positionals) exit with
  * EX_USAGE (64) — deliberately distinct from 1, which `report` uses for
@@ -14,6 +14,7 @@
  */
 
 import { Command, CommanderError } from 'commander';
+import { runDaemon, type DaemonOptions, type DaemonDeps } from './daemon.js';
 import { runLaunch, type LaunchOptions } from './launch.js';
 import { REPORT_HELP, runReport, type ReportIo } from './report.js';
 
@@ -23,6 +24,8 @@ export const EX_USAGE = 64;
 export interface CliDeps {
   /** Launch flow override for tests; defaults to the real runLaunch. */
   launch?: (opts: LaunchOptions, io: ReportIo) => Promise<number>;
+  /** Daemon flow override for tests; defaults to the real runDaemon. */
+  daemon?: (opts: DaemonOptions, deps: DaemonDeps) => Promise<number>;
 }
 
 function addLaunchOptions(command: Command): Command {
@@ -37,6 +40,7 @@ export async function runCli(
   deps: CliDeps = {},
 ): Promise<number> {
   const launch = deps.launch ?? ((opts: LaunchOptions) => runLaunch(opts, { io }));
+  const daemon = deps.daemon ?? ((opts: DaemonOptions) => runDaemon(opts, { io }));
   let code = 0;
 
   // Root options are parsed greedily even when they appear after the
@@ -94,11 +98,11 @@ export async function runCli(
 
   program
     .command('daemon')
-    .description('headless scheduler (not implemented yet)')
-    .action(() => {
-      // Never Ink, per SPEC §4. Real implementation is a later bead.
-      io.stderr('daemon: not implemented\n');
-      code = 1;
+    .description('run the headless scheduler that fires scheduled pipelines (plain output, no UI)')
+    .option('--once', 'run every currently-due pipeline once, then exit (for cron/testing)')
+    .action(async (opts: { once?: boolean }) => {
+      // Never Ink, per SPEC §4 / DESIGN §8 — plain timestamped lines only.
+      code = await daemon({ once: opts.once === true }, { io });
     });
 
   try {

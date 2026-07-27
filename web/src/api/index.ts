@@ -77,6 +77,8 @@ export type {
   RunStatusCounts,
   RunHistoryEntry,
   RunHistoryResponse,
+  PipelineSchedule,
+  ScheduleResponse,
   PromptNode,
   BashNode,
   GithubActionNode,

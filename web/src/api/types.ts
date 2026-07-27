@@ -1097,3 +1097,27 @@ export interface RunHistoryEntry {
 export interface RunHistoryResponse {
   runs: RunHistoryEntry[];
 }
+
+/**
+ * A pipeline's SCHEDULE (bead ira.4). `cron` is a cron expression or a named
+ * preset; the schedule only RUNS when a daemon (`agentconfiging daemon`) is up —
+ * the interactive server just persists it. `instanceRoot` is the run's pinned
+ * cwd/scope; `lastRunAt` is the epoch-ms of the most recent scheduled run.
+ */
+export interface PipelineSchedule {
+  pipelineId: string;
+  cron: string;
+  enabled: boolean;
+  instanceRoot: string;
+  lastRunAt?: number;
+}
+
+/**
+ * GET/POST /api/pipelines/:id/schedule payload — the saved schedule (null when
+ * none is set) plus the computed next fire time in epoch ms (null when disabled
+ * or unset).
+ */
+export interface ScheduleResponse {
+  schedule: PipelineSchedule | null;
+  nextRun: number | null;
+}

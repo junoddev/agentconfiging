@@ -218,6 +218,24 @@ export {
   safeValidate,
 } from './pipeline-routes.js';
 export type { PipelineRoutesConfig, RunRecord, RunNodeState } from './pipeline-routes.js';
+export { Scheduler } from './scheduler.js';
+export type {
+  SchedulerConfig,
+  ScheduleSource,
+  ScheduledRunner,
+  PipelineLoader,
+} from './scheduler.js';
+export {
+  ScheduleStore,
+  parseSchedule,
+  parseCron,
+  isValidCron,
+  computeNextRun,
+  computePrevRun,
+  matchesDate,
+  PRESETS,
+} from './schedule/index.js';
+export type { Schedule, ParsedCron, CronParseError } from './schedule/index.js';
 
 export interface StartServerOptions {
   /** Launch root — the DEFAULT instance, served when `?instance=` is absent. */

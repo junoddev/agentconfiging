@@ -57,6 +57,47 @@
   color: var(--fg-dim);
 }
 
+/* ── Schedule control (bead ira.4) ───────────────────────────────────────── */
+
+.pipeline-schedule {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+}
+
+.pipeline-schedule__title {
+  color: var(--fg-dim);
+}
+
+.pipeline-schedule__cron {
+  max-width: 320px;
+  flex: 1;
+}
+
+.pipeline-schedule__toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg-dim);
+}
+
+.pipeline-schedule__next {
+  color: var(--fg-dim);
+}
+
+.pipeline-schedule__note {
+  color: var(--fg-dim);
+  opacity: 0.8;
+}
+
+.pipeline-schedule__note code {
+  font-family: var(--font-mono, monospace);
+}
+
 .pipeline-workspace {
   display: grid;
   grid-template-columns: 180px 1fr auto;

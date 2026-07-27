@@ -8,6 +8,8 @@ export type { ReportFinding, ReportIo, ReportOptions } from './report.js';
 export { collectPathCommands } from './path-env.js';
 export { buildOpenCommand, runLaunch } from './launch.js';
 export type { LaunchDeps, LaunchOptions, ServerFactory, ServerHandle } from './launch.js';
+export { runDaemon, TICK_MS } from './daemon.js';
+export type { DaemonDeps, DaemonOptions, SchedulerLike } from './daemon.js';
 export {
   addInstance,
   addInstances,

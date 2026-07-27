@@ -60,6 +60,8 @@ import type { RedactionSpan } from '../core/redact/index.js';
 import { runPipeline } from './pipeline/index.js';
 import type { NodeEvent, NodeStatus, RuntimeContext, RuntimeMap } from './pipeline/index.js';
 import { defaultStateDir } from './stats-routes.js';
+import { ScheduleStore, computeNextRun, parseCron } from './schedule/index.js';
+import type { Schedule } from './schedule/index.js';
 import type { InstanceRegistry } from './registry.js';
 
 /** The 14 node types (SPEC §5 row 12) — the allowlist a defensive parse checks a
@@ -494,9 +496,20 @@ function historyEntry(record: RunRecord): RunHistoryEntry {
 
 export function registerPipelineRoutes(app: Hono, config: PipelineRoutesConfig): void {
   const registry = config.registry;
-  const store = new PipelineStore(config.stateDir ?? defaultStateDir());
+  const stateDir = config.stateDir ?? defaultStateDir();
+  const store = new PipelineStore(stateDir);
+  const scheduleStore = new ScheduleStore(stateDir);
   const runtimes = config.runtimes;
   const now = config.now ?? (() => Date.now());
+
+  /** Compute the next fire time (epoch ms) for a schedule, or null when disabled/invalid. */
+  const nextRunOf = (schedule: Schedule): number | null => {
+    if (!schedule.enabled) return null;
+    const parsed = parseCron(schedule.cron);
+    if ('error' in parsed) return null;
+    const next = computeNextRun(parsed, new Date(now()));
+    return next ? next.getTime() : null;
+  };
 
   // In-memory live-run registry, insertion-order bounded to MAX_RUNS.
   const runs = new Map<string, RunRecord>();
@@ -653,5 +666,56 @@ export function registerPipelineRoutes(app: Hono, config: PipelineRoutesConfig):
     );
 
     return c.json({ runId });
+  });
+
+  // GET /api/pipelines/:id/schedule — the pipeline's saved schedule (or null) +
+  // its next fire time. The daemon (`agentconfiging daemon`) is what actually
+  // RUNS due schedules; the interactive server only reads/writes the schedule.
+  app.get('/api/pipelines/:id/schedule', async (c) => {
+    const id = c.req.param('id');
+    if (!isValidPipelineId(id)) return jsonError(400, 'invalid pipeline id');
+    const schedule = await scheduleStore.get(id);
+    if (!schedule) return c.json({ schedule: null, nextRun: null });
+    return c.json({ schedule, nextRun: nextRunOf(schedule) });
+  });
+
+  // POST /api/pipelines/:id/schedule { cron, enabled } — set (or update) the
+  // pipeline's schedule. CSRF-gated by the app. The cron/preset is VALIDATED
+  // ({@link parseCron}); the pipeline must exist; the run is bound to the resolved
+  // instance's root (bash/git cwd + file scope) — the SAME instance binding a
+  // manual run uses. Schedules run only when a daemon is up (documented in the UI).
+  app.post('/api/pipelines/:id/schedule', async (c) => {
+    const id = c.req.param('id');
+    if (!isValidPipelineId(id)) return jsonError(400, 'invalid pipeline id');
+    const pipeline = await store.read(id);
+    if (!pipeline) return jsonError(404, 'unknown pipeline');
+
+    // Bind to a REGISTERED instance root (unknown → 404), like the run route.
+    const instance = registry.resolve(new URL(c.req.url).searchParams.get('instance') ?? undefined);
+    if (!instance) return jsonError(404, 'unknown instance');
+
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return jsonError(400, 'invalid schedule');
+    }
+    if (!isPlainObject(body)) return jsonError(400, 'invalid schedule');
+    const cron = body['cron'];
+    if (typeof cron !== 'string') return jsonError(400, 'cron is required');
+    const parsed = parseCron(cron);
+    if ('error' in parsed) return jsonError(400, `invalid cron: ${parsed.error}`);
+    const enabled = body['enabled'] !== false; // default enabled
+
+    const existing = await scheduleStore.get(id);
+    const schedule: Schedule = {
+      pipelineId: id,
+      cron,
+      enabled,
+      instanceRoot: instance.root,
+      ...(existing?.lastRunAt !== undefined ? { lastRunAt: existing.lastRunAt } : {}),
+    };
+    const saved = await scheduleStore.set(schedule);
+    return c.json({ schedule: saved, nextRun: nextRunOf(saved) });
   });
 }

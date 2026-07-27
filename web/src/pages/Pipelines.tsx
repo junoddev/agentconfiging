@@ -34,6 +34,7 @@ import {
   ApiError,
   type PipelineNode,
   type PipelineNodeType,
+  type PipelineSchedule,
   type PipelineSummary,
   type RunHistoryEntry,
   type RunSnapshot,
@@ -44,6 +45,7 @@ import { useAppState } from '../state/index.js';
 import { AgentConfigNode } from './pipelines/AgentConfigNode.js';
 import { NodeConfigPanel } from './pipelines/NodeConfigPanel.js';
 import { RunHistory } from './pipelines/RunHistory.js';
+import { SCHEDULE_PRESETS, formatLastRun, formatNextRun } from './pipelines/schedule.js';
 import {
   AGENTCONFIG_NODE,
   PALETTE,
@@ -103,6 +105,12 @@ export function Pipelines() {
   const [selectedRunId, setSelectedRunId] = useState<string | undefined>();
   const [replay, setReplay] = useState<RunSnapshot | undefined>();
 
+  const [cronText, setCronText] = useState('@daily');
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [schedule, setSchedule] = useState<PipelineSchedule | null>(null);
+  const [nextRun, setNextRun] = useState<number | null>(null);
+  const [scheduleNotice, setScheduleNotice] = useState<string | undefined>();
+
   const refreshList = useCallback(async () => {
     if (!client) return;
     setList(await client.listPipelines());
@@ -125,13 +133,38 @@ export function Pipelines() {
     [client],
   );
 
-  // Load the run history for whichever pipeline is on the canvas, and clear any
-  // open replay, whenever the pipeline id changes (new / load).
+  const refreshSchedule = useCallback(
+    async (id: string) => {
+      if (!client) return;
+      try {
+        const res = await client.getSchedule(id);
+        setSchedule(res.schedule);
+        setNextRun(res.nextRun);
+        if (res.schedule) {
+          setCronText(res.schedule.cron);
+          setScheduleEnabled(res.schedule.enabled);
+        } else {
+          setScheduleEnabled(false);
+        }
+      } catch {
+        // A never-saved pipeline has no schedule — the honest state is "none".
+        setSchedule(null);
+        setNextRun(null);
+        setScheduleEnabled(false);
+      }
+    },
+    [client],
+  );
+
+  // Load the run history + schedule for whichever pipeline is on the canvas, and
+  // clear any open replay, whenever the pipeline id changes (new / load).
   useEffect(() => {
     setSelectedRunId(undefined);
     setReplay(undefined);
+    setScheduleNotice(undefined);
     void refreshHistory(pipelineId);
-  }, [pipelineId, refreshHistory]);
+    void refreshSchedule(pipelineId);
+  }, [pipelineId, refreshHistory, refreshSchedule]);
 
   // When a run finishes, refresh the history so the new run appears in the list.
   useEffect(() => {
@@ -319,6 +352,38 @@ export function Pipelines() {
     [client, pipelineId, refreshList, onNew],
   );
 
+  const onSaveSchedule = useCallback(async () => {
+    if (!client) return;
+    const cron = cronText.trim();
+    if (cron === '') {
+      setScheduleNotice('enter a cron expression or preset');
+      return;
+    }
+    const pipeline = graphToPipeline(pipelineId, pipelineName.trim() || 'Untitled', nodes, edges);
+    try {
+      // The schedule route needs the pipeline to exist — persist it first.
+      await client.savePipeline(pipeline);
+      await refreshList();
+      const res = await client.setSchedule(pipelineId, cron, scheduleEnabled, instanceId);
+      setSchedule(res.schedule);
+      setNextRun(res.nextRun);
+      setScheduleNotice('schedule saved · runs via `agentconfiging daemon`');
+    } catch (err) {
+      // A 400's message is the cron validation error — surface it.
+      setScheduleNotice(err instanceof ApiError ? err.message : 'schedule save failed');
+    }
+  }, [
+    client,
+    cronText,
+    pipelineId,
+    pipelineName,
+    nodes,
+    edges,
+    scheduleEnabled,
+    instanceId,
+    refreshList,
+  ]);
+
   if (phase === 'error') {
     return (
       <main className="layout-main page">
@@ -366,6 +431,46 @@ export function Pipelines() {
         {notice !== undefined && (
           <span className="pipeline-notice mono-data" role="status">
             {notice}
+          </span>
+        )}
+      </section>
+
+      <section className="page__section pipeline-schedule">
+        <span className="micro-label pipeline-schedule__title">SCHEDULE</span>
+        <input
+          className="pipeline-input pipeline-schedule__cron mono-data"
+          aria-label="cron schedule"
+          list="pipeline-schedule-presets"
+          placeholder="cron (min hour dom mon dow) or a @preset"
+          value={cronText}
+          onChange={(e) => setCronText(e.target.value)}
+        />
+        <datalist id="pipeline-schedule-presets">
+          {SCHEDULE_PRESETS.map((p) => (
+            <option key={p.value} value={p.value}>
+              {p.label}
+            </option>
+          ))}
+        </datalist>
+        <label className="pipeline-schedule__toggle micro-label">
+          <input
+            type="checkbox"
+            aria-label="schedule enabled"
+            checked={scheduleEnabled}
+            onChange={(e) => setScheduleEnabled(e.target.checked)}
+          />
+          enabled
+        </label>
+        <Button label="save schedule" onClick={() => void onSaveSchedule()} />
+        <span className="pipeline-schedule__next micro-label">
+          next {formatNextRun(nextRun)} · last {formatLastRun(schedule?.lastRunAt)}
+        </span>
+        <span className="pipeline-schedule__note micro-label">
+          schedules run via <code>agentconfiging daemon</code> (the UI only sets them)
+        </span>
+        {scheduleNotice !== undefined && (
+          <span className="pipeline-notice mono-data" role="status">
+            {scheduleNotice}
           </span>
         )}
       </section>
