@@ -65,6 +65,7 @@ import { registerMarketplaceRoutes, type ClaudeExec } from './marketplace.js';
 import { registerGitRoutes } from './git-routes.js';
 import type { GitExec } from './git.js';
 import { registerStatsRoutes } from './stats-routes.js';
+import { registerKnownProjectsRoute } from './known-projects.js';
 import { registerAnalyticsRoutes } from './analytics-routes.js';
 import { registerSearchRoutes } from './search-routes.js';
 import { registerPtyRoutes } from './pty-routes.js';
@@ -485,6 +486,15 @@ export function createApp(config: AppConfig): Hono {
   // session CONTENT but REDACTS every secret-bearing string server-side (SPEC §3)
   // before it crosses the wire.
   registerStatsRoutes(app);
+
+  // KNOWN-PROJECT SUGGESTIONS (qoc.3): GET /api/known-projects — project roots
+  // seen in THIS machine's ~/.claude history (cwd read from each session's
+  // in-file ENTRIES, never the lossy slug dir) that EXIST on disk and are NOT
+  // already registered. Also under /api (inherits the token + Origin/CSRF gates);
+  // local-only, bounded (most-recent N), content-free (roots + a session count +
+  // last-seen only). Feeds the EXISTING add flow (POST /api/instances) — the UI
+  // one-click adds a suggestion. See src/server/known-projects.ts.
+  registerKnownProjectsRoute(app, { registry });
 
   // TOKEN/COST ANALYTICS (7yb.5): GET /api/analytics. Also under /api (inherits
   // the token + Origin/CSRF gates); reads THIS machine's runtime history

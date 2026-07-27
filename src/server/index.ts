@@ -94,6 +94,18 @@ export type {
   AchievementsPayload,
   LoadedHistory,
 } from './stats-routes.js';
+export {
+  registerKnownProjectsRoute,
+  KnownProjectsCache,
+  DEFAULT_KNOWN_SESSION_CAP,
+  DEFAULT_KNOWN_TTL_MS,
+} from './known-projects.js';
+export type {
+  KnownProjectsConfig,
+  KnownProject,
+  KnownProjectsResponse,
+  RootResolver,
+} from './known-projects.js';
 export { registerSearchRoutes } from './search-routes.js';
 export type { SearchRoutesConfig } from './search-routes.js';
 export { registerGitRoutes, type GitRoutesConfig } from './git-routes.js';

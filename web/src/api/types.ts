@@ -134,6 +134,28 @@ export interface HealthResponse {
 }
 
 /**
+ * KNOWN-PROJECT SUGGESTION (bead qoc.3, GET /api/known-projects). MIRRORS
+ * src/server/known-projects.ts. A project root seen in THIS machine's ~/.claude
+ * history (cwd read from the session ENTRIES, never the lossy slug) that EXISTS
+ * on disk and is NOT already a registered instance — offered to the add flow.
+ * `root` is filesystem data; render it as a text node only.
+ */
+export interface KnownProject {
+  root: string;
+  /** ISO timestamp of the most-recent session touching this root, when known. */
+  lastSeen?: string;
+  /** Sessions (within the scanned window) whose cwd resolved to this root. */
+  sessionCount: number;
+}
+
+/** GET /api/known-projects payload — suggested roots for the add flow. */
+export interface KnownProjectsResponse {
+  projects: KnownProject[];
+  sessionsTotal: number;
+  capped: boolean;
+}
+
+/**
  * POST /api/write payload (src/server/write.ts). `dryRun:true` returns the
  * preview (no disk touch); `dryRun:false` reports the commit. `diff` is unified
  * diff TEXT — parse it (write/parseDiff) and render only as text nodes.

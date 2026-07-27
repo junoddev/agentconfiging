@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ApiClient, ApiError } from '../api/client.js';
 import { parseTokenHash } from '../api/token.js';
-import type { InstanceSummary, ScanResponse } from '../api/types.js';
+import type { InstanceSummary, KnownProject, ScanResponse } from '../api/types.js';
 import { Button, EmptyState } from '../components/core/index.js';
 import { useAppState } from '../state/index.js';
 import { annotateHits, formatScanStats } from './instances/hits.js';
+import { formatKnownMeta, pruneKnownProjects } from './instances/suggestions.js';
 import './instances.css';
 
 /**
@@ -40,6 +41,10 @@ export function Instances() {
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Known-project suggestions (roots seen in ~/.claude the user can one-click add).
+  const [known, setKnown] = useState<KnownProject[] | null>(null);
+  const [knownError, setKnownError] = useState<string | null>(null);
+
   const refreshList = useCallback(async () => {
     if (!client) return;
     try {
@@ -50,9 +55,21 @@ export function Instances() {
     }
   }, [client]);
 
+  const refreshKnown = useCallback(async () => {
+    if (!client) return;
+    try {
+      setKnown((await client.getKnownProjects()).projects);
+      setKnownError(null);
+    } catch (err) {
+      setKnown([]);
+      setKnownError(err instanceof ApiError ? err.message : 'request failed');
+    }
+  }, [client]);
+
   useEffect(() => {
     void refreshList();
-  }, [refreshList]);
+    void refreshKnown();
+  }, [refreshList, refreshKnown]);
 
   const messageFor = (err: unknown): string =>
     err instanceof ApiError ? err.message : 'request failed';
@@ -105,6 +122,24 @@ export function Instances() {
     [client, busy, refreshList],
   );
 
+  const onAddKnown = useCallback(
+    async (root: string) => {
+      if (!client || busy) return;
+      setBusy(true);
+      setKnownError(null);
+      try {
+        await client.addInstance(root);
+        await refreshList();
+        await refreshKnown();
+      } catch (err) {
+        setKnownError(messageFor(err));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [client, busy, refreshList, refreshKnown],
+  );
+
   const onUnload = useCallback(
     async (id: string) => {
       if (!client || busy) return;
@@ -151,6 +186,12 @@ export function Instances() {
       )
     : [];
   const onlyDefault = instances.length <= 1 && instances.every((i) => i.isDefault);
+  const suggestions = known
+    ? pruneKnownProjects(
+        known,
+        instances.map((i) => i.root),
+      )
+    : [];
 
   return (
     <main className="layout-main page">
@@ -289,6 +330,40 @@ export function Instances() {
         </div>
         {addError && <p className="instances__error mono-data">{addError}</p>}
       </section>
+
+      {(suggestions.length > 0 || knownError) && (
+        <>
+          <hr className="rule-h" />
+          <section className="page__section">
+            <h2 className="micro-label">SUGGESTED PROJECTS</h2>
+            <p className="micro-label instances__hint">
+              seen in your recent sessions · one click to watch
+            </p>
+            {knownError ? (
+              <p className="instances__error mono-data">{knownError}</p>
+            ) : (
+              <ul className="instances__hits">
+                {suggestions.map((sug) => (
+                  <li key={sug.root} className="instances__hit">
+                    <div className="instances__hit-body">
+                      <span className="instances__root mono-data">{sug.root}</span>
+                      <span className="micro-label instances__hit-meta">
+                        {formatKnownMeta(sug)}
+                      </span>
+                    </div>
+                    <Button
+                      label="add"
+                      variant="primary"
+                      onClick={() => void onAddKnown(sug.root)}
+                      disabled={busy}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </>
+      )}
 
       <hr className="rule-h" />
 

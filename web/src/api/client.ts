@@ -38,6 +38,7 @@ import type {
   InstallPluginResponse,
   InstanceSummary,
   InstancesResponse,
+  KnownProjectsResponse,
   MarketplaceResponse,
   PtyStatusResponse,
   RemoveResponse,
@@ -176,6 +177,16 @@ export class ApiClient {
    */
   scanFolder(path: string): Promise<ScanResponse> {
     return this.#send<ScanResponse>('/api/instances/scan', 'POST', { path });
+  }
+
+  /**
+   * KNOWN-PROJECT SUGGESTIONS (bead qoc.3) — project roots seen in THIS machine's
+   * ~/.claude history (server-derived, cwd read from session entries not the lossy
+   * slug) that EXIST on disk and are NOT already registered. Each is one-click
+   * added through the EXISTING {@link addInstance} flow. Roots are filesystem text.
+   */
+  getKnownProjects(): Promise<KnownProjectsResponse> {
+    return this.#get<KnownProjectsResponse>('/api/known-projects');
   }
 
   /**
