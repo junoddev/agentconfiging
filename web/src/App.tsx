@@ -31,6 +31,16 @@ import { parseGlobalKey, type CommandAction } from './command/commands.js';
 import { CommandPalette } from './shell/CommandPalette.js';
 import { Rail } from './shell/Rail.js';
 import { TopBar, type Theme } from './shell/TopBar.js';
+import { About } from './shell/About.js';
+import { Onboarding } from './shell/Onboarding.js';
+import {
+  readOnboarded,
+  readTheme,
+  resolveInitialTheme,
+  shouldShowOnboarding,
+  writeOnboarded,
+  writeTheme,
+} from './shell/theme.js';
 import { useAppState } from './state/index.js';
 
 /** Current hash route, kept in sync with `hashchange`. */
@@ -109,19 +119,38 @@ function renderRoute(route: Route) {
  *  Data comes from the AppStateProvider; the shell renders an honest error state
  *  (never a crash) when the session token is missing/rejected. */
 export function App() {
-  // Seed theme from the OS preference; the toggle flips explicitly thereafter.
+  // Seed theme from the saved choice, falling back to the OS preference; the
+  // toggle then flips + persists explicitly (see toggleTheme).
   const [theme, setTheme] = useState<Theme>(() =>
-    window.matchMedia('(prefers-color-scheme: dark)').matches ? 'ink' : 'paper',
+    resolveInitialTheme(readTheme(), window.matchMedia('(prefers-color-scheme: dark)').matches),
   );
   const route = useRoute();
   const app = useAppState();
 
   // Cmd+K opens the command palette; Cmd+1..9 jump to the numbered rail pages.
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // First-run onboarding (once, flag-gated) + the about dialog.
+  const [showOnboarding, setShowOnboarding] = useState(() => shouldShowOnboarding(readOnboarded()));
+  const [aboutOpen, setAboutOpen] = useState(false);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+
+  // Flip + persist the theme. Persistence happens only on an explicit choice, so
+  // an untouched install keeps following the OS preference across reloads. Both
+  // the top-bar toggle and the palette's theme-toggle command route through here.
+  const toggleTheme = () =>
+    setTheme((t) => {
+      const next = t === 'paper' ? 'ink' : 'paper';
+      writeTheme(next);
+      return next;
+    });
+
+  const finishOnboarding = () => {
+    writeOnboarded();
+    setShowOnboarding(false);
+  };
 
   // Global shortcuts (DESIGN §6): Cmd+K palette, Cmd+1..9 page jumps. One
   // window listener, cleaned up on unmount.
@@ -145,7 +174,7 @@ export function App() {
         window.location.hash = action.hash;
         break;
       case 'toggle-theme':
-        setTheme((t) => (t === 'paper' ? 'ink' : 'paper'));
+        toggleTheme();
         break;
       case 'refetch':
         app.refetch();
@@ -159,7 +188,8 @@ export function App() {
     <div className="layout-shell">
       <TopBar
         theme={theme}
-        onToggleTheme={() => setTheme(theme === 'paper' ? 'ink' : 'paper')}
+        onToggleTheme={toggleTheme}
+        onAbout={() => setAboutOpen(true)}
         projectPath={app.currentInstance?.root}
         wsState={app.wsState}
       />
@@ -184,6 +214,8 @@ export function App() {
         onClose={() => setPaletteOpen(false)}
         onRun={runCommand}
       />
+      {aboutOpen && <About onClose={() => setAboutOpen(false)} />}
+      {showOnboarding && <Onboarding onDone={finishOnboarding} />}
     </div>
   );
 }
