@@ -134,7 +134,9 @@ export class ApiClient {
   constructor(token: string, opts: ApiClientOptions = {}) {
     this.#token = token;
     this.#baseUrl = opts.baseUrl ?? '';
-    this.#fetch = opts.fetchImpl ?? fetch;
+    // Browser global fetch is this-sensitive ("Illegal invocation" if called
+    // with a foreign `this`), so the default must be bound to globalThis.
+    this.#fetch = opts.fetchImpl ?? fetch.bind(globalThis);
   }
 
   /** GET the report for an instance (or the default instance when omitted). */

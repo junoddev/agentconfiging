@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiClient, ApiError } from './client.js';
 
 /** A fetch stub returning `body` as JSON with `status`, capturing calls. */
@@ -171,6 +171,31 @@ describe('ApiClient instance mutations', () => {
     const client = new ApiClient('tok', { fetchImpl });
     const err = await client.removeInstance('x').catch((e: unknown) => e);
     expect(err).toMatchObject({ status: 0, kind: 'network' });
+  });
+});
+
+describe('ApiClient default fetch binding', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('calls the global fetch with globalThis as `this` (browser fetch is this-sensitive)', async () => {
+    // Mimics window.fetch in real browsers: throws "Illegal invocation" when
+    // invoked with a foreign `this` (e.g. the ApiClient instance).
+    function thisSensitiveFetch(this: unknown): Promise<Response> {
+      if (this !== undefined && this !== globalThis) {
+        throw new TypeError('Illegal invocation');
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ ok: true, version: '1.0.0' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+    }
+    vi.stubGlobal('fetch', thisSensitiveFetch);
+    const client = new ApiClient('tok'); // no fetchImpl: uses the global default
+    await expect(client.getHealth()).resolves.toMatchObject({ ok: true });
   });
 });
 
