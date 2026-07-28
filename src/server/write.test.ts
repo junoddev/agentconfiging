@@ -136,6 +136,23 @@ describe('POST /api/write — dry-run', () => {
     expect(fs.readFileSync(target, 'utf-8')).toBe(before);
     expect(fs.statSync(target).mtimeMs).toBe(mtimeBefore);
   });
+
+  it('diff is REDACTED: a dry-run over a secret-bearing file is not a disclosure oracle', async () => {
+    const secret = 'sk-FAKE11111111111111111111111111111111FAKE';
+    const target = path.join(projectRoot, '.claude', 'settings.json');
+    fs.writeFileSync(target, JSON.stringify({ env: { OPENAI_API_KEY: secret } }, null, 2));
+    // Empty replacement content puts the ENTIRE old file on the diff's minus
+    // side — before the fix this echoed the raw secret to the wire.
+    const res = await post('/api/write', {
+      path: '.claude/settings.json',
+      content: '',
+      dryRun: true,
+    });
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).not.toContain(secret);
+    expect(body).toContain('[REDACTED:');
+  });
 });
 
 describe('POST /api/write — commit', () => {

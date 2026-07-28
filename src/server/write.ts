@@ -65,7 +65,8 @@ function jsonError(status: 400 | 403 | 404 | 409 | 413 | 500, message: string): 
 // O_NOFOLLOW makes the OS refuse to open a symlinked FINAL component (ELOOP),
 // atomically — the TOCTOU backstop to the resolver's lstat tail-walk. Falls
 // back to 0 (no-op) on platforms lacking it; the lstat-walk still guards there.
-const O_NOFOLLOW = fs.constants.O_NOFOLLOW ?? 0;
+// Exported so sibling write surfaces (hooks-edit.ts) share the ONE definition.
+export const O_NOFOLLOW = fs.constants.O_NOFOLLOW ?? 0;
 
 /** Existing regular file at `abs`? (a symlink here was already realpath'd). */
 export function statFile(abs: string): fs.Stats | undefined {
@@ -77,7 +78,9 @@ export function statFile(abs: string): fs.Stats | undefined {
   }
 }
 
-async function readJsonBody(req: Request): Promise<Record<string, unknown> | undefined> {
+/** Parse a JSON object body, or undefined (never throws) for anything else.
+ *  Shared with the sibling write surfaces (hooks-edit.ts). */
+export async function readJsonBody(req: Request): Promise<Record<string, unknown> | undefined> {
   try {
     const body = (await req.json()) as unknown;
     if (body === null || typeof body !== 'object' || Array.isArray(body)) return undefined;
@@ -107,7 +110,11 @@ export function previewResolved(
   return {
     willModify,
     willCreate: !willModify,
-    diff: unifiedDiff(oldContent, content, resolved.relPath),
+    // Redacted before it can reach any response: the old side is raw disk
+    // bytes, and an unredacted diff is a disclosure oracle that defeats the
+    // GET /api/file redaction guarantee (a dry-run write with empty content
+    // would echo the entire raw file).
+    diff: redact(unifiedDiff(oldContent, content, resolved.relPath)).text,
   };
 }
 

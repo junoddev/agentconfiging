@@ -60,6 +60,7 @@ import { DiscoveryError, discoverProjects, RegistryClient } from '../core/index.
 import { GlobalStore } from './store.js';
 import { InstanceRegistry, InvalidRootError } from './registry.js';
 import { registerApplyFixRoute, registerWriteRoutes } from './write.js';
+import { registerHooksEditRoute } from './hooks-edit.js';
 import { registerStorageRoutes } from './storage.js';
 import { registerSyncRoute } from './sync.js';
 import { registerCatalogRoutes, type CatalogSource } from './catalog.js';
@@ -456,6 +457,15 @@ export function createApp(config: AppConfig): Hono {
   // under /api (inherits the same gates); recomputes the fix per-instance and
   // writes every edit through the SAME guarded write path as /api/write.
   registerApplyFixRoute(app, { scopes: config.scopes ?? [], registry });
+
+  // HOOKS EDIT (71h.9): POST /api/hooks/edit — structured hook add/remove
+  // applied to the RAW settings file server-side, so a REDACTED settings.json
+  // (secrets in env) is editable without the client round-tripping redacted
+  // content. Also under /api (inherits the token + Origin/CSRF gates); resolves
+  // through the SAME scopes/guard and writes through the SAME guarded primitive
+  // as /api/write; the dry-run/commit diff is redacted before it crosses the
+  // wire. See src/server/hooks-edit.ts.
+  registerHooksEditRoute(app, { scopes: config.scopes ?? [] });
 
   // STORAGE (wmc.2): GET /api/storage + POST /api/storage/cleanup — disk-usage
   // breakdown per instance and a recoverable, allowlisted cleanup. Also under
