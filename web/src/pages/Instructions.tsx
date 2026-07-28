@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ApiError, type FileContent, type RedactionSpan } from '../api/index.js';
 import { Button, EmptyState, FileChip, SourceBadge } from '../components/core/index.js';
+import { fileReadOnly } from '../lib/editable.js';
 import { homeRel } from '../lib/format.js';
 import { useAppState, useGlobalConfig } from '../state/index.js';
 import { WriteFlow, useWriteFlow } from '../write/index.js';
@@ -142,9 +143,10 @@ export function Instructions() {
   const instructionFiles = useMemo(() => collectInstructionFiles(report?.agents ?? []), [report]);
   const groups = useMemo(() => groupByScope(instructionFiles), [instructionFiles]);
 
-  // Inherited GLOBAL instruction files (bead 71h.5): absolute root-joined paths,
-  // read via getFile only — they NEVER enter the save flow. Absent/failed global
-  // data ⇒ empty lists and the page renders exactly as before.
+  // Inherited GLOBAL instruction files (bead 71h.5): absolute root-joined paths.
+  // Since 71h.10 they are editable when served unredacted — saves take the same
+  // write flow, gated by its global-scope warning. Absent/failed global data ⇒
+  // empty lists and the page renders exactly as before.
   const globalFiles = useMemo(() => collectGlobalInstructionFiles(globalEntries), [globalEntries]);
   const globalGroups = useMemo(() => groupGlobalByRoot(globalFiles), [globalFiles]);
   const globalByPath = useMemo(() => new Map(globalFiles.map((f) => [f.path, f])), [globalFiles]);
@@ -209,10 +211,11 @@ export function Instructions() {
   }, [flow.phase, selected, getFile]);
 
   const redacted = file ? isRedacted(file) : false;
-  // Inherited global file ⇒ read-only, whatever its content: its absolute path
-  // must never reach the write flow from a project view.
+  // Inherited global file: kept for provenance (badge/note), but since bead
+  // 71h.10 it is EDITABLE — the save goes through the same /api/write flow and
+  // the WriteFlow global-scope warning. Only redaction forces read-only.
   const inherited = selected !== undefined && globalByPath.has(selected);
-  const readOnly = redacted || inherited;
+  const readOnly = fileReadOnly({ redacted, inherited });
   const dirty = file !== undefined && !readOnly && draft !== file.content;
   const busy = flow.phase === 'loading' || flow.phase === 'committing';
 
@@ -264,7 +267,7 @@ export function Instructions() {
               {globalGroups.map((group) => (
                 <div key={group.root} className="instr__group">
                   <span className="instr__group-label">
-                    <SourceBadge scope="global" detail={homeRel(group.root)} readOnly />
+                    <SourceBadge scope="global" detail={homeRel(group.root)} />
                   </span>
                   {group.files.map((gf) => (
                     <span
@@ -296,7 +299,7 @@ export function Instructions() {
                       <SourceBadge
                         scope="global"
                         detail={homeRel(globalByPath.get(selected)?.root ?? '')}
-                        readOnly
+                        readOnly={redacted}
                       />
                     ) : (
                       <span className="instr__scope micro-label">scope · {file.pathScope}</span>
@@ -334,7 +337,9 @@ export function Instructions() {
                     </p>
                   )}
                   {inherited && !redacted && (
-                    <p className="instr__note micro-label">inherited · read-only</p>
+                    <p className="instr__note micro-label">
+                      inherited · edits apply to all projects on this machine
+                    </p>
                   )}
 
                   {mode === 'edit' &&

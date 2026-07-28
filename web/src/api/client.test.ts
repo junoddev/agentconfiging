@@ -111,6 +111,76 @@ describe('ApiClient instance mutations', () => {
     expect(res).toEqual(body);
   });
 
+  it('POSTs a hooks-edit ADD body to /api/hooks/edit (bead 71h.10)', async () => {
+    const body = { willCreate: false, willModify: true, pathScope: 'global', diff: '+x\n' };
+    const fetchImpl = stubFetch(body);
+    const client = new ApiClient('tok', { fetchImpl });
+    const req = {
+      path: '/Users/x/.claude/settings.json',
+      op: 'add' as const,
+      event: 'Stop',
+      hook: { type: 'command' as const, command: 'echo done' },
+      dryRun: true,
+    };
+    const res = await client.editHooks(req);
+    const [url, init] = firstCall(fetchImpl);
+    expect(url).toBe('/api/hooks/edit');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe(JSON.stringify(req));
+    expect(init.headers).toMatchObject({
+      Authorization: 'Bearer tok',
+      'content-type': 'application/json',
+    });
+    expect(res).toEqual(body);
+  });
+
+  it('POSTs a hooks-edit REMOVE body with address + expected command', async () => {
+    const fetchImpl = stubFetch({
+      committed: true,
+      created: false,
+      modified: true,
+      path: 'settings.json',
+      pathScope: 'global',
+      diff: '-x\n',
+    });
+    const client = new ApiClient('tok', { fetchImpl });
+    const req = {
+      path: '/Users/x/.claude/settings.json',
+      op: 'remove' as const,
+      address: { event: 'Stop', groupIndex: 0, hookIndex: 1 },
+      expected: { command: '.claude/notify.sh' },
+      dryRun: false,
+    };
+    await client.editHooks(req);
+    const [url, init] = firstCall(fetchImpl);
+    expect(url).toBe('/api/hooks/edit');
+    expect(init.body).toBe(JSON.stringify(req));
+  });
+
+  it('maps a 401 hooks-edit to an unauthorized ApiError', async () => {
+    const client = new ApiClient('tok', { fetchImpl: stubFetch({ error: 'unauthorized' }, 401) });
+    await expect(
+      client.editHooks({
+        path: '.claude/settings.json',
+        op: 'add',
+        event: 'Stop',
+        hook: { type: 'command', command: 'x' },
+      }),
+    ).rejects.toMatchObject({ status: 401, kind: 'unauthorized' });
+  });
+
+  it('maps a 409 hooks-edit (stale remove address) to a conflict ApiError', async () => {
+    const client = new ApiClient('tok', { fetchImpl: stubFetch({ error: 'conflict' }, 409) });
+    await expect(
+      client.editHooks({
+        path: '.claude/settings.json',
+        op: 'remove',
+        address: { event: 'Stop', groupIndex: 0, hookIndex: 0 },
+        expected: { command: 'gone' },
+      }),
+    ).rejects.toMatchObject({ status: 409, kind: 'conflict', message: 'conflict' });
+  });
+
   it('POSTs an applyFix body with findingId + dryRun, omitting instance when absent', async () => {
     const body = { dryRun: true, findingId: 'f', fixKind: 'create-file', edits: [] };
     const fetchImpl = stubFetch(body);

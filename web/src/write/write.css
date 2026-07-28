@@ -19,6 +19,18 @@
   color: var(--warn);
 }
 
+/* GLOBAL-SCOPE warning (bead 71h.10): warn-tone banner shown in the diff step
+   whenever the pending write's pathScope is 'global' — an unmissable flag that
+   the edit lands in ~/.claude-style config affecting every project and agent
+   on this machine. Severity palette only (DESIGN §2); no new colors. */
+.write-flow__global {
+  margin: 0;
+  padding: 6px 10px;
+  color: var(--warn);
+  border: var(--hairline-w) solid var(--warn);
+  border-radius: 2px;
+}
+
 .write-flow__status--ok {
   color: var(--signal);
 }

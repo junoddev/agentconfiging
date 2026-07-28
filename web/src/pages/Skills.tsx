@@ -25,6 +25,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ApiError, type FileContent } from '../api/index.js';
 import { Button, EmptyState, FileChip, SourceBadge } from '../components/core/index.js';
+import { fileReadOnly } from '../lib/editable.js';
 import { homeRel } from '../lib/format.js';
 import { useAppState, useGlobalConfig } from '../state/index.js';
 import { WriteFlow, useWriteFlow } from '../write/index.js';
@@ -76,8 +77,9 @@ export function Skills() {
   const skills = entries.filter((e) => e.kind === 'skill');
   const agents = entries.filter((e) => e.kind === 'agent');
 
-  // Inherited GLOBAL skills/agents (bead 71h.5): absolute root-joined paths,
-  // read via getFile only — never a write target. They are EXCLUDED from the
+  // Inherited GLOBAL skills/agents (bead 71h.5): absolute root-joined paths.
+  // Since 71h.10 they are editable when served unredacted — saves take the same
+  // write flow, gated by its global-scope warning. They stay EXCLUDED from the
   // connections graph (the graph maps THIS instance's config; the bulk loader
   // stays project-only). Absent global data ⇒ [] and the page is unchanged.
   const globalEntries = useMemo(() => collectGlobalEntries(globalDirs), [globalDirs]);
@@ -182,11 +184,17 @@ export function Skills() {
   }, [entries, graphFiles]);
 
   // ── Editor derived state ──────────────────────────────────────────────────
-  const redacted = selection?.kind === 'file' && (loaded?.spans.length ?? 0) > 0;
-  // Inherited global file ⇒ read-only regardless of content: its absolute path
-  // must never reach the write flow from a project view.
+  // Spans OR literal [REDACTED:*] marks — belt-and-braces parity with the
+  // sibling editors, load-bearing since the 71h.10 global unlock.
+  const redacted =
+    selection?.kind === 'file' &&
+    loaded !== undefined &&
+    (loaded.spans.length > 0 || loaded.content.includes('[REDACTED:'));
+  // Inherited global file: kept for provenance (badge/note), but since bead
+  // 71h.10 it is EDITABLE — the save goes through the same /api/write flow and
+  // the WriteFlow global-scope warning. Only redaction forces read-only.
   const inherited = selection?.kind === 'file' && globalByPath.has(selection.entry.path);
-  const readOnly = redacted || inherited;
+  const readOnly = fileReadOnly({ redacted, inherited });
   const savePath = selection?.kind === 'template' ? newPath.trim() : selection?.entry.path;
   const draftCard = useMemo(
     () => cardFor(draft, selection?.kind === 'file' ? selection.entry.name : 'new'),
@@ -280,11 +288,7 @@ export function Skills() {
               {globalEntries.length > 0 && (
                 <>
                   <div className="micro-label skills__group">
-                    <SourceBadge
-                      scope="global"
-                      detail={homeRel(globalEntries[0]?.root ?? '')}
-                      readOnly
-                    />
+                    <SourceBadge scope="global" detail={homeRel(globalEntries[0]?.root ?? '')} />
                   </div>
                   {globalEntries.map((entry) => (
                     <span
@@ -354,7 +358,7 @@ export function Skills() {
                         <SourceBadge
                           scope="global"
                           detail={homeRel(globalByPath.get(selection.entry.path)?.root ?? '')}
-                          readOnly
+                          readOnly={redacted}
                         />
                       ) : (
                         loaded && (
@@ -373,7 +377,9 @@ export function Skills() {
                       </p>
                     )}
                     {inherited && !redacted && (
-                      <p className="skills__redact micro-label">inherited · read-only</p>
+                      <p className="skills__redact micro-label">
+                        inherited · edits apply to all projects on this machine
+                      </p>
                     )}
 
                     <div className="skills__views">

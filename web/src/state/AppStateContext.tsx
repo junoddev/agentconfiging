@@ -34,6 +34,7 @@ import type {
   GlobalEntry,
   GlobalEntryError,
   GlobalReport,
+  HookEditRequest,
   InstanceSummary,
   Report,
   WriteResponse,
@@ -71,6 +72,10 @@ export interface AppStateValue extends AppState {
    */
   applyFix: (findingId: string, opts: { dryRun: boolean }) => Promise<ApplyFixResponse>;
   writeFile: (path: string, content: string, dryRun: boolean) => Promise<WriteResponse>;
+  /** STRUCTURED hook add/remove (bead 71h.10) — dry-run/commit through
+   *  POST /api/hooks/edit; the raw file never crosses the wire, so a redacted
+   *  settings file is editable without the redaction-save trap. */
+  editHooks: (req: HookEditRequest) => Promise<WriteResponse>;
 }
 
 /**
@@ -225,6 +230,14 @@ export function AppStateProvider({ children, deps }: AppStateProviderProps) {
     [client],
   );
 
+  const editHooks = useCallback(
+    (req: HookEditRequest): Promise<WriteResponse> => {
+      if (!client) return Promise.reject(new ApiError(401, 'unauthorized', 'no session'));
+      return client.editHooks(req);
+    },
+    [client],
+  );
+
   // Boot: no deps ⇒ unauthorized; otherwise load instances + default report and
   // open the socket. Cleanup closes the socket so no handle leaks.
   useEffect(() => {
@@ -287,8 +300,19 @@ export function AppStateProvider({ children, deps }: AppStateProviderProps) {
       getFile,
       applyFix,
       writeFile,
+      editHooks,
     }),
-    [state, selectInstance, refetch, refetchGlobal, clearError, getFile, applyFix, writeFile],
+    [
+      state,
+      selectInstance,
+      refetch,
+      refetchGlobal,
+      clearError,
+      getFile,
+      applyFix,
+      writeFile,
+      editHooks,
+    ],
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

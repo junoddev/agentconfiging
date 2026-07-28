@@ -12,6 +12,9 @@
  *                                         the client never holds it).
  *   - { kind: 'file', path, content }   → dry-runs writing `content` to `path`
  *                                         (the editor save path).
+ *   - { kind: 'hooks-edit', edit }      → dry-runs a STRUCTURED hook add/remove
+ *                                         through /api/hooks/edit (bead 71h.10;
+ *                                         raw file never crosses the wire).
  * It always DRY-RUNS first: no write happens until `commit()`. The resulting
  * `previews` (one per edit, parsed diff hunks) are what DiffPanel shows.
  *
@@ -29,14 +32,26 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { ApiError } from '../api/client.js';
+import type { HookEditRequest } from '../api/types.js';
 import type { DiffHunk } from '../components/core/index.js';
 import { useAppState } from '../state/index.js';
 import { parseDiff } from './parseDiff.js';
 
-/** What to write: an existing finding's fix, or an editor's proposed file body. */
+/** What to write: a finding's fix, an editor's proposed file body, or a
+ *  structured hook op (`edit.dryRun` is ignored — the flow sets it per phase). */
 export type WriteRequest =
   | { kind: 'fix'; findingId: string; label?: string }
-  | { kind: 'file'; path: string; content: string; label?: string };
+  | {
+      kind: 'file';
+      path: string;
+      content: string;
+      label?: string;
+      /** The caller decided on this write because the file was ABSENT (e.g. the
+       *  Hooks global-add fallback). If the dry-run reveals the file now exists,
+       *  committing would silently REPLACE it — refuse instead. */
+      expectCreate?: boolean;
+    }
+  | { kind: 'hooks-edit'; edit: HookEditRequest; label?: string };
 
 /** One edit's preview: the parsed diff plus whether it creates or modifies. */
 export interface WritePreview {
@@ -86,7 +101,7 @@ function reason(err: unknown, context: 'preview' | 'commit'): string {
 }
 
 export function useWriteFlow(): WriteFlowController {
-  const { applyFix, writeFile, refetch } = useAppState();
+  const { applyFix, writeFile, editHooks, refetch, refetchGlobal } = useAppState();
 
   const [phase, setPhase] = useState<WriteFlowPhase>('idle');
   const [request, setRequest] = useState<WriteRequest | undefined>();
@@ -117,6 +132,17 @@ export function useWriteFlow(): WriteFlowController {
               willModify: e.willModify,
               hunks: parseDiff(e.diff),
             }));
+          } else if (req.kind === 'hooks-edit') {
+            const res = await editHooks({ ...req.edit, dryRun: true });
+            next = [
+              {
+                path: res.path ?? req.edit.path,
+                pathScope: res.pathScope,
+                willCreate: res.willCreate ?? false,
+                willModify: res.willModify ?? false,
+                hunks: parseDiff(res.diff),
+              },
+            ];
           } else {
             const res = await writeFile(req.path, req.content, true);
             next = [
@@ -130,6 +156,14 @@ export function useWriteFlow(): WriteFlowController {
             ];
           }
           if (run !== runId.current) return;
+          if (req.kind === 'file' && req.expectCreate && next.some((p) => p.willModify)) {
+            // The absence that justified a whole-file create no longer holds
+            // (another session created the file since our load) — replacing it
+            // now could clobber content we never saw.
+            setMessage('refused · the file was just created elsewhere — reload and retry');
+            setPhase('error');
+            return;
+          }
           setPreviews(next);
           setPhase('ready');
         } catch (err) {
@@ -139,7 +173,7 @@ export function useWriteFlow(): WriteFlowController {
         }
       })();
     },
-    [applyFix, writeFile],
+    [applyFix, writeFile, editHooks],
   );
 
   const commit = useCallback(() => {
@@ -161,6 +195,9 @@ export function useWriteFlow(): WriteFlowController {
             refetch();
             return;
           }
+        } else if (req.kind === 'hooks-edit') {
+          await editHooks({ ...req.edit, dryRun: false });
+          if (run !== runId.current) return;
         } else {
           await writeFile(req.path, req.content, false);
           if (run !== runId.current) return;
@@ -170,13 +207,23 @@ export function useWriteFlow(): WriteFlowController {
         // Pull the fresh report so the resolved finding drops out / the file
         // reflects the write (the WS push will also trigger this).
         refetch();
+        // A GLOBAL-scope commit (bead 71h.10) also refreshes the machine-global
+        // report, so inherited views — and the pages' global file loads keyed
+        // off its entries — pick up the new on-disk state.
+        if (previews.some((p) => p.pathScope === 'global')) refetchGlobal();
       } catch (err) {
         if (run !== runId.current) return;
         setMessage(reason(err, 'commit'));
         setPhase('error');
+        // A 409 means our view is stale — refresh it so the retry addresses
+        // the file as it is now instead of conflicting forever.
+        if (err instanceof ApiError && err.kind === 'conflict') {
+          refetch();
+          if (previews.some((p) => p.pathScope === 'global')) refetchGlobal();
+        }
       }
     })();
-  }, [request, applyFix, writeFile, refetch]);
+  }, [request, previews, applyFix, writeFile, editHooks, refetch, refetchGlobal]);
 
   const cancel = useCallback(() => {
     runId.current += 1; // supersede any in-flight request

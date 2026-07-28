@@ -9,14 +9,18 @@ import { HookForm } from './hooks/HookForm.js';
 import { HOOK_EVENTS } from './hooks/events.js';
 import {
   addHookToSettings,
+  canRemoveHookEntry,
   contentHasRedactionMarks,
   draftFromTemplate,
   emptyDraft,
+  globalAddViaWholeFile,
   globalHookCards,
   globalHookSource,
+  hookWriteTargets,
   isRedacted,
   parseHooksBlock,
   removeHookFromSettings,
+  type GlobalHookStatus,
   type HookDraft,
   type HookEntry,
   type HooksParse,
@@ -50,9 +54,10 @@ function initialSources(): SourceState[] {
 }
 
 /** Load + parse state for the inherited ~/.claude settings file (bead 71h.4).
- *  Undefined = no global source / file absent → silently no global section. */
+ *  Undefined = no global `.claude` home at all; 'absent' = the home exists but
+ *  settings.json does not (an ADD can create it — bead 71h.10). */
 interface GlobalSourceState {
-  status: 'loading' | 'ready' | 'error';
+  status: GlobalHookStatus;
   parse?: HooksParse;
   message?: string;
 }
@@ -75,10 +80,18 @@ interface GlobalSourceState {
  * into it is disabled with a note). Only files served without redaction marks are
  * writable.
  *
- * INHERITED GLOBAL HOOKS (bead 71h.4): the machine-global ~/.claude/settings.json
- * (from useGlobalConfig) is ALSO shown — its hooks fire for this project too —
- * as ALWAYS-read-only cards under a GLOBAL SourceBadge. It never joins the
- * writable/write-target lists; sidebar event counts include it.
+ * INHERITED GLOBAL HOOKS (beads 71h.4 / 71h.10): the machine-global
+ * ~/.claude/settings.json (from useGlobalConfig) is ALSO shown — its hooks fire
+ * for this project too — under a GLOBAL SourceBadge, and since 71h.10 it is
+ * EDITABLE: cards carry [REMOVE] (hidden for command-less entries) and the
+ * create form can target it. Both ops drive the STRUCTURED /api/hooks/edit
+ * endpoint (server bead 71h.9) through the SAME dry-run → diff → commit flow —
+ * the server re-reads the RAW file, so even a redacted global settings.json is
+ * editable without the save trap; the flow's GLOBAL-SCOPE warning flags every
+ * commit as affecting all projects/agents. An ABSENT global settings.json is
+ * created via the whole-file /api/write fallback instead (the structured
+ * endpoint 404s on absent files). The whole-file project editors above stay
+ * trap-gated exactly as before.
  */
 export function Hooks() {
   const { getFile, report, currentInstance } = useAppState();
@@ -128,8 +141,10 @@ export function Hooks() {
   }, [getFile, instanceId, report]);
 
   // The inherited ~/.claude settings.json (bead 71h.4) — instance-independent.
-  // No global entry / no settings.json / a 404 ⇒ silently no global section;
-  // any other failure shows the page's normal per-source error note.
+  // No global `.claude` home ⇒ silently no global section; a 404 on the file is
+  // the 'absent' state (an ADD can create it — bead 71h.10); any other failure
+  // shows the page's normal per-source error note. A committed global op
+  // refetches the global report (useWriteFlow), which re-runs this load.
   const globalSrc = useMemo(() => globalHookSource(globalEntries), [globalEntries]);
   useEffect(() => {
     if (!globalSrc) {
@@ -145,7 +160,7 @@ export function Hooks() {
       .catch((err: unknown) => {
         if (cancelled) return;
         if (err instanceof ApiError && err.kind === 'notfound') {
-          setGlobalState(undefined);
+          setGlobalState({ status: 'absent' });
           return;
         }
         setGlobalState({
@@ -173,12 +188,19 @@ export function Hooks() {
     return map;
   }, [writable]);
 
+  // Create-form targets: the writable project files plus the global one when
+  // usable (loaded or absent-and-creatable) — bead 71h.10.
+  const targets = useMemo(
+    () => hookWriteTargets(writablePaths, globalSrc, globalState?.status),
+    [writablePaths, globalSrc, globalState],
+  );
+
   // Keep the write target valid as availability changes.
   useEffect(() => {
-    if (writablePaths.length > 0 && !writablePaths.includes(target)) {
-      setTarget(writablePaths[0]!);
+    if (targets.length > 0 && !targets.some((t) => t.path === target)) {
+      setTarget(targets[0]!.path);
     }
-  }, [writablePaths, target]);
+  }, [targets, target]);
 
   // All cards across ready files, redacted files contributing read-only cards.
   const cards = useMemo<CardRef[]>(() => {
@@ -230,6 +252,52 @@ export function Hooks() {
 
   const beginCreate = useCallback(() => {
     setBuildError(undefined);
+
+    // GLOBAL target (bead 71h.10): a present file takes the STRUCTURED
+    // /api/hooks/edit add (works even when redacted — the server edits the raw
+    // file); an absent one is CREATED whole via /api/write (the structured
+    // endpoint 404s on absent files; nothing redacted in a file that isn't).
+    if (globalSrc !== undefined && target === globalSrc.path) {
+      const status = globalState?.status;
+      if (status !== 'ready' && status !== 'absent') {
+        setBuildError('global settings file is not available');
+        return;
+      }
+      if (globalAddViaWholeFile(status)) {
+        try {
+          const content = addHookToSettings('{}', draft);
+          flow.begin({
+            kind: 'file',
+            path: globalSrc.path,
+            content,
+            label: `add ${draft.event} hook`,
+            // Absence justified this whole-file create; if the dry-run finds
+            // the file now exists, the flow refuses rather than replace it.
+            expectCreate: true,
+          });
+        } catch (err) {
+          setBuildError(err instanceof Error ? err.message : 'could not build change');
+        }
+        return;
+      }
+      if (draft.type.trim() !== 'command') {
+        setBuildError('global hooks support type "command" only');
+        return;
+      }
+      flow.begin({
+        kind: 'hooks-edit',
+        edit: {
+          path: globalSrc.path,
+          op: 'add',
+          event: draft.event,
+          ...(draft.matcher.trim() !== '' ? { matcher: draft.matcher } : {}),
+          hook: { type: 'command', command: draft.command },
+        },
+        label: `add ${draft.event} hook`,
+      });
+      return;
+    }
+
     const base = baseContent.get(target);
     if (base === undefined) {
       setBuildError('no writable settings file');
@@ -241,7 +309,7 @@ export function Hooks() {
     } catch (err) {
       setBuildError(err instanceof Error ? err.message : 'could not build change');
     }
-  }, [baseContent, target, draft, flow]);
+  }, [baseContent, target, draft, flow, globalSrc, globalState]);
 
   const removeCard = useCallback(
     (card: CardRef) => {
@@ -269,6 +337,28 @@ export function Hooks() {
       }
     },
     [baseContent, flow],
+  );
+
+  // GLOBAL card removal (bead 71h.10): the STRUCTURED remove op, addressed by
+  // the card's own parseHooksBlock coordinates with the command pinned as the
+  // server-side precondition (stale view ⇒ 409, file untouched). Callers gate
+  // on canRemoveHookEntry — a command-less entry would 400.
+  const removeGlobalEntry = useCallback(
+    (entry: HookEntry) => {
+      if (!globalSrc || entry.command === undefined) return;
+      setBuildError(undefined);
+      flow.begin({
+        kind: 'hooks-edit',
+        edit: {
+          path: globalSrc.path,
+          op: 'remove',
+          address: { event: entry.event, groupIndex: entry.groupIndex, hookIndex: entry.hookIndex },
+          expected: { command: entry.command },
+        },
+        label: `remove ${entry.event} hook`,
+      });
+    },
+    [globalSrc, flow],
   );
 
   const openForm = useCallback(() => {
@@ -344,13 +434,13 @@ export function Hooks() {
               <button
                 type="button"
                 className="hooks__add"
-                disabled={writablePaths.length === 0}
+                disabled={targets.length === 0}
                 onClick={openForm}
               >
                 [+ NEW HOOK]
               </button>
             )}
-            {writablePaths.length === 0 && !anyLoading && (
+            {targets.length === 0 && !anyLoading && (
               <span className="hooks__note micro-label">no writable settings file</span>
             )}
           </div>
@@ -366,7 +456,7 @@ export function Hooks() {
                 }}
                 onSubmit={beginCreate}
                 onCancel={closeForm}
-                targets={writablePaths}
+                targets={targets}
                 target={target}
                 onTargetChange={setTarget}
                 busy={flowBusy}
@@ -410,14 +500,16 @@ export function Hooks() {
               )}
               {globalSrc && visibleGlobalCards.length > 0 && (
                 <div className="hooks__global">
-                  <SourceBadge scope="global" detail={homeRel(globalSrc.root)} readOnly />
+                  <SourceBadge scope="global" detail={homeRel(globalSrc.root)} />
                   <div className="hooks__cards">
                     {visibleGlobalCards.map((card) => (
                       <HookCard
                         key={`global:${card.entry.event}:${card.entry.groupIndex}:${card.entry.hookIndex}`}
                         entry={card.entry}
                         source={card.source}
-                        readOnly
+                        {...(canRemoveHookEntry(card.entry)
+                          ? { onRemove: () => removeGlobalEntry(card.entry) }
+                          : {})}
                       />
                     ))}
                   </div>

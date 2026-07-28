@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   addHookToSettings,
+  canRemoveHookEntry,
   contentHasRedactionMarks,
   draftFromTemplate,
   emptyDraft,
+  globalAddViaWholeFile,
   globalHookCards,
   globalHookSource,
   groupByEvent,
   HOOK_TEMPLATES,
+  hookWriteTargets,
   isDraftValid,
   isRedacted,
   parseHooksBlock,
@@ -105,7 +108,7 @@ describe('parseHooksBlock', () => {
   });
 });
 
-describe('globalHookSource (inherited ~/.claude, bead 71h.4)', () => {
+describe('globalHookSource (inherited ~/.claude, beads 71h.4/71h.10)', () => {
   const claudeEntry = {
     root: '/Users/x/.claude',
     dir: '.claude',
@@ -131,14 +134,17 @@ describe('globalHookSource (inherited ~/.claude, bead 71h.4)', () => {
     expect(globalHookSource([codexEntry])).toBeUndefined();
   });
 
-  it('is a no-op when the .claude entry carries no settings.json', () => {
+  it('still yields the source when the .claude entry carries no settings.json (an ADD creates it — 71h.10)', () => {
     const noSettings = {
       ...claudeEntry,
       agents: [
         { kind: 'claude-code', confidence: 'low' as const, files: ['CLAUDE.md'], extras: {} },
       ],
     };
-    expect(globalHookSource([noSettings])).toBeUndefined();
+    expect(globalHookSource([noSettings])).toEqual({
+      root: '/Users/x/.claude',
+      path: '/Users/x/.claude/settings.json',
+    });
   });
 
   it('never yields a project-relative write-target path', () => {
@@ -151,12 +157,11 @@ describe('globalHookSource (inherited ~/.claude, bead 71h.4)', () => {
 });
 
 describe('globalHookCards', () => {
-  it('marks every card readOnly with the given source label', () => {
+  it('builds one card per entry with the given source label', () => {
     const parse = parseHooksBlock(RICH);
     const cards = globalHookCards(parse, '~/.claude/settings.json');
     expect(cards).toHaveLength(3);
     for (const card of cards) {
-      expect(card.readOnly).toBe(true);
       expect(card.source).toBe('~/.claude/settings.json');
     }
   });
@@ -164,6 +169,54 @@ describe('globalHookCards', () => {
   it('yields no cards for an absent or failed parse', () => {
     expect(globalHookCards(undefined, 'x')).toEqual([]);
     expect(globalHookCards(parseHooksBlock('{ not json'), 'x')).toEqual([]);
+  });
+});
+
+describe('canRemoveHookEntry (structured REMOVE gate, 71h.9 addendum #1)', () => {
+  it('allows removal only when the entry carries a string command', () => {
+    expect(canRemoveHookEntry({ command: '.claude/notify.sh' })).toBe(true);
+    expect(canRemoveHookEntry({ command: '' })).toBe(true); // still a string precondition
+  });
+
+  it('hides REMOVE for a command-less entry (endpoint 400s on non-string expected.command)', () => {
+    expect(canRemoveHookEntry({})).toBe(false);
+    expect(canRemoveHookEntry({ command: undefined })).toBe(false);
+  });
+});
+
+describe('globalAddViaWholeFile (absent-file fallback, 71h.9 addendum #2)', () => {
+  it('falls back to the whole-file /api/write CREATE only for an ABSENT file', () => {
+    expect(globalAddViaWholeFile('absent')).toBe(true);
+  });
+
+  it('uses the structured endpoint for a present file, and never targets loading/error', () => {
+    expect(globalAddViaWholeFile('ready')).toBe(false);
+    expect(globalAddViaWholeFile('loading')).toBe(false);
+    expect(globalAddViaWholeFile('error')).toBe(false);
+  });
+});
+
+describe('hookWriteTargets (create-form targets, bead 71h.10)', () => {
+  const src = { root: '/Users/x/.claude', path: '/Users/x/.claude/settings.json' };
+  const projects = ['.claude/settings.json', '.claude/settings.local.json'];
+
+  it('labels project paths as themselves and the global one with its scope', () => {
+    expect(hookWriteTargets(projects, src, 'ready')).toEqual([
+      { path: '.claude/settings.json', label: '.claude/settings.json', global: false },
+      { path: '.claude/settings.local.json', label: '.claude/settings.local.json', global: false },
+      { path: '/Users/x/.claude/settings.json', label: 'GLOBAL · ~/.claude', global: true },
+    ]);
+  });
+
+  it('offers the global target when the file is absent too (an ADD creates it)', () => {
+    const targets = hookWriteTargets([], src, 'absent');
+    expect(targets).toEqual([{ path: src.path, label: 'GLOBAL · ~/.claude', global: true }]);
+  });
+
+  it('omits the global target without a source, or while loading/errored', () => {
+    expect(hookWriteTargets(projects, undefined, undefined)).toHaveLength(2);
+    expect(hookWriteTargets(projects, src, 'loading')).toHaveLength(2);
+    expect(hookWriteTargets(projects, src, 'error')).toHaveLength(2);
   });
 });
 

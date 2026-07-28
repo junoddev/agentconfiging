@@ -26,6 +26,7 @@
  */
 
 import type { GlobalEntry, RedactionSpan } from '../../api/types.js';
+import { homeRel } from '../../lib/format.js';
 
 /** One hook command, flattened with its event + matcher context, for a card. */
 export interface HookEntry {
@@ -98,7 +99,7 @@ export function parseHooksBlock(content: string): HooksParse {
   return { ok: true, entries };
 }
 
-// ── Inherited global hooks (bead 71h.4) ─────────────────────────────────────
+// ── Inherited global hooks (beads 71h.4 / 71h.10) ───────────────────────────
 
 /** The inherited ~/.claude settings file that can carry hooks. */
 export interface GlobalHookSource {
@@ -110,39 +111,87 @@ export interface GlobalHookSource {
 
 /**
  * Derive the global Claude settings source from the machine-global report's
- * entries. Only the `.claude` home dir carries Claude Code hooks; its agent
- * `files` are RELATIVE to `root`, so the settings file appears as plain
- * 'settings.json'. Returns undefined when there is no `.claude` entry or it
- * carries no settings.json — the page then renders no global section at all.
- * The result is ALWAYS read-only for callers: it must never join the
- * writable/write-target lists.
+ * entries. Only the `.claude` home dir carries Claude Code hooks. Returns the
+ * source whenever a `.claude` entry exists — even when settings.json is not
+ * (yet) on disk: since bead 71h.10 the create-form can target it, and an
+ * absent file is CREATED via the whole-file write fallback (the actual load
+ * decides present vs absent; see {@link globalAddViaWholeFile}). Undefined
+ * only when the machine has no `.claude` home at all.
  */
 export function globalHookSource(
   entries: readonly Pick<GlobalEntry, 'root' | 'dir' | 'agents'>[],
 ): GlobalHookSource | undefined {
   const claude = entries.find((e) => e.dir === '.claude');
-  if (!claude) return undefined;
-  const hasSettings = claude.agents.some((a) => a.files.includes('settings.json'));
-  return hasSettings ? { root: claude.root, path: `${claude.root}/settings.json` } : undefined;
+  return claude ? { root: claude.root, path: `${claude.root}/settings.json` } : undefined;
 }
 
-/** A global hook card: a parsed entry pinned to its (read-only) source label. */
+/** A global hook card: a parsed entry pinned to its source label. Since bead
+ *  71h.10 these are REMOVABLE via the structured /api/hooks/edit op (gated by
+ *  {@link canRemoveHookEntry}); they still never join the whole-file editors. */
 export interface GlobalHookCard {
   entry: HookEntry;
   /** Display label for the owning file (e.g. '~/.claude/settings.json'). */
   source: string;
-  /** Always true — global hooks are never writable from a project view. */
-  readOnly: true;
 }
 
-/** Build the read-only cards for the global settings file's hooks. A failed or
+/** Build the cards for the global settings file's hooks. A failed or
  *  malformed parse yields [] (the page surfaces the error separately). */
 export function globalHookCards(
   parse: HooksParse | undefined,
   sourceLabel: string,
 ): GlobalHookCard[] {
   if (parse?.ok !== true) return [];
-  return parse.entries.map((entry) => ({ entry, source: sourceLabel, readOnly: true }));
+  return parse.entries.map((entry) => ({ entry, source: sourceLabel }));
+}
+
+/** Load status of the global settings file on the Hooks page. */
+export type GlobalHookStatus = 'loading' | 'ready' | 'absent' | 'error';
+
+/**
+ * True when a hook card can drive the structured REMOVE op. The endpoint
+ * addresses the hook by coordinates AND pins `expected.command` as a
+ * precondition, which must be a STRING — an entry without one would 400
+ * (71h.9 adversarial-review addendum #1), so its [REMOVE] is hidden instead.
+ */
+export function canRemoveHookEntry(entry: Pick<HookEntry, 'command'>): boolean {
+  return typeof entry.command === 'string';
+}
+
+/**
+ * How a GLOBAL hook ADD is written (71h.9 addendum #2): the structured
+ * endpoint intentionally 404s on an ABSENT file, so only an absent global
+ * settings.json takes the whole-file /api/write CREATE fallback (fresh client
+ * JSON — nothing redacted in a file that does not exist; the dry-run will show
+ * willCreate). A PRESENT file — even a redacted one — must use the structured
+ * /api/hooks/edit path.
+ */
+export function globalAddViaWholeFile(status: GlobalHookStatus): boolean {
+  return status === 'absent';
+}
+
+/** One create-form write target: the file path plus its display label. */
+export interface HookTargetOption {
+  path: string;
+  label: string;
+  global: boolean;
+}
+
+/**
+ * Compose the create-form targets: the writable project settings files plus —
+ * when the machine-global source is usable (loaded, or absent-and-creatable) —
+ * the global settings.json labeled with its scope (`GLOBAL · ~/.claude`).
+ * A loading or errored global source never becomes a target.
+ */
+export function hookWriteTargets(
+  projectPaths: readonly string[],
+  globalSrc: GlobalHookSource | undefined,
+  globalStatus: GlobalHookStatus | undefined,
+): HookTargetOption[] {
+  const out: HookTargetOption[] = projectPaths.map((p) => ({ path: p, label: p, global: false }));
+  if (globalSrc && (globalStatus === 'ready' || globalStatus === 'absent')) {
+    out.push({ path: globalSrc.path, label: `GLOBAL · ${homeRel(globalSrc.root)}`, global: true });
+  }
+  return out;
 }
 
 /** Group flattened entries by event, preserving first-seen event order. */

@@ -27,6 +27,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { type FileContent, type RedactionSpan } from '../api/index.js';
 import { Button, EmptyState, SourceBadge } from '../components/core/index.js';
+import { fileReadOnly } from '../lib/editable.js';
 import { homeRel } from '../lib/format.js';
 import { useAppState, useGlobalConfig } from '../state/index.js';
 import { WriteFlow, useWriteFlow } from '../write/index.js';
@@ -87,10 +88,11 @@ export function Memory() {
   const flow = useWriteFlow();
 
   const memoryPaths = useMemo(() => collectMemoryFiles(report), [report]);
-  // Inherited GLOBAL memory files (bead 71h.5): absolute root-joined paths,
-  // read via getFile only — never a write target. A failed global load only
-  // drops those cards (the bulk loader already tolerates per-file failures);
-  // absent global data ⇒ empty list and the page renders exactly as before.
+  // Inherited GLOBAL memory files (bead 71h.5): absolute root-joined paths.
+  // Since 71h.10 they are editable when served unredacted — saves take the
+  // same write flow, gated by its global-scope warning. A failed global load
+  // only drops those cards (the bulk loader already tolerates per-file
+  // failures); absent global data ⇒ empty list and the page is unchanged.
   const globalFiles = useMemo(() => collectGlobalMemoryFiles(globalDirs), [globalDirs]);
   const globalByPath = useMemo(
     () => new Map(globalFiles.map((f) => [f.path, f.root])),
@@ -152,10 +154,11 @@ export function Memory() {
 
   const activeFile = mode.kind === 'edit' ? files.get(mode.path) : undefined;
   const redacted = activeFile ? isRedacted(activeFile) : false;
-  // Inherited global file ⇒ read-only regardless of content: its absolute path
-  // must never reach the write flow from a project view.
+  // Inherited global file: kept for provenance (badge), but since bead 71h.10
+  // it is EDITABLE — the save goes through the same /api/write flow and the
+  // WriteFlow global-scope warning. Only redaction forces read-only.
   const inherited = mode.kind === 'edit' && globalByPath.has(mode.path);
-  const readOnly = redacted || inherited;
+  const readOnly = fileReadOnly({ redacted, inherited });
 
   // Re-baseline an open editor after our own commit lands (files reloads via the
   // stamp-keyed effect above), so the save button falls honestly idle.
@@ -263,7 +266,9 @@ export function Memory() {
                     {card.type === '' ? 'untyped' : card.type}
                   </span>
                   {card.redacted && <span className="mem__redact-tag micro-label">redacted</span>}
-                  {globalByPath.has(card.path) && <SourceBadge scope="global" readOnly />}
+                  {globalByPath.has(card.path) && (
+                    <SourceBadge scope="global" readOnly={card.redacted} />
+                  )}
                 </div>
                 <span className="mem__card-name">{card.name}</span>
                 {card.description !== '' && <p className="mem__card-desc">{card.description}</p>}
@@ -287,7 +292,7 @@ export function Memory() {
                 <SourceBadge
                   scope="global"
                   detail={homeRel(globalByPath.get(mode.path) ?? '')}
-                  readOnly
+                  readOnly={redacted}
                 />
               ) : (
                 activeFile && (
@@ -301,9 +306,7 @@ export function Memory() {
             {readOnly ? (
               <>
                 <p className="mem__note micro-label">
-                  {redacted
-                    ? 'contains redacted secrets — read-only; edit this file on disk'
-                    : 'inherited · read-only'}
+                  contains redacted secrets — read-only; edit this file on disk
                 </p>
                 <pre className="mem__source mono-data">
                   {activeFile && renderRedacted(activeFile.content, activeFile.spans)}

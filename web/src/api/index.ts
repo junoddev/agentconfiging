@@ -49,6 +49,7 @@ export type {
   InstalledRecord,
   FixKind,
   HealthResponse,
+  HookEditRequest,
   InstalledPlugin,
   InstalledPluginsResponse,
   InstallPluginResponse,

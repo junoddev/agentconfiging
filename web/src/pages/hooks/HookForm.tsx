@@ -1,6 +1,12 @@
 import { Button } from '../../components/core/index.js';
 import { findHookEvent, HOOK_EVENTS } from './events.js';
-import { HOOK_TEMPLATES, isDraftValid, type HookDraft, type HookTemplate } from './logic.js';
+import {
+  HOOK_TEMPLATES,
+  isDraftValid,
+  type HookDraft,
+  type HookTargetOption,
+  type HookTemplate,
+} from './logic.js';
 
 export interface HookFormProps {
   draft: HookDraft;
@@ -9,8 +15,9 @@ export interface HookFormProps {
   onTemplate: (template: HookTemplate) => void;
   onSubmit: () => void;
   onCancel: () => void;
-  /** Writable settings files the hook can be created in (radio choice). */
-  targets: readonly string[];
+  /** Writable settings files the hook can be created in (radio choice) — the
+   *  project files plus, when usable, the GLOBAL ~/.claude one (bead 71h.10). */
+  targets: readonly HookTargetOption[];
   target: string;
   onTargetChange: (path: string) => void;
   /** True while a preview/commit is in flight — disables the controls. */
@@ -111,17 +118,17 @@ export function HookForm({
       {targets.length > 1 && (
         <fieldset className="hook-form__field hook-form__targets">
           <legend className="micro-label">write to</legend>
-          {targets.map((path) => (
-            <label key={path} className="hook-form__radio mono-data">
+          {targets.map((t) => (
+            <label key={t.path} className="hook-form__radio mono-data">
               <input
                 type="radio"
                 name="hook-target"
-                value={path}
-                checked={path === target}
+                value={t.path}
+                checked={t.path === target}
                 disabled={busy}
-                onChange={() => onTargetChange(path)}
+                onChange={() => onTargetChange(t.path)}
               />
-              {path}
+              {t.label}
             </label>
           ))}
         </fieldset>

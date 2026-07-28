@@ -25,6 +25,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ApiError, type FileContent, type RedactionSpan } from '../api/index.js';
 import { Button, EmptyState, FileChip, SourceBadge } from '../components/core/index.js';
+import { fileReadOnly } from '../lib/editable.js';
 import { homeRel } from '../lib/format.js';
 import { useAppState, useGlobalConfig } from '../state/index.js';
 import { WriteFlow, useWriteFlow } from '../write/index.js';
@@ -92,9 +93,10 @@ export function Rules() {
   const claudeRules = entries.filter((e) => e.source === 'claude');
   const cursorRules = entries.filter((e) => e.source === 'cursor');
 
-  // Inherited GLOBAL rules (bead 71h.5): absolute root-joined paths, read via
-  // getFile only — never a write target. Absent/failed global data ⇒ empty
-  // lists and the page renders exactly as before.
+  // Inherited GLOBAL rules (bead 71h.5): absolute root-joined paths. Since
+  // 71h.10 they are editable when served unredacted — saves take the same
+  // write flow, gated by its global-scope warning. Absent/failed global data ⇒
+  // empty lists and the page renders exactly as before.
   const globalRules = useMemo(() => collectGlobalRules(globalDirs), [globalDirs]);
   const globalGroups = useMemo(() => groupGlobalRulesByRoot(globalRules), [globalRules]);
   const globalByPath = useMemo(() => new Map(globalRules.map((e) => [e.path, e])), [globalRules]);
@@ -178,10 +180,11 @@ export function Rules() {
   // ── Derived editor state ──────────────────────────────────────────────────
   const redacted =
     selection?.kind === 'file' && loaded !== undefined && isRedacted(loaded.spans, loaded.content);
-  // Inherited global rule ⇒ read-only regardless of content: its absolute path
-  // must never reach the write flow from a project view.
+  // Inherited global rule: kept for provenance (badge/note), but since bead
+  // 71h.10 it is EDITABLE — the save goes through the same /api/write flow and
+  // the WriteFlow global-scope warning. Only redaction forces read-only.
   const inherited = selection?.kind === 'file' && globalByPath.has(selection.entry.path);
-  const readOnly = redacted || inherited;
+  const readOnly = fileReadOnly({ redacted, inherited });
   const savePath = selection?.kind === 'template' ? newPath.trim() : selection?.entry.path;
   const busy = flow.phase === 'loading' || flow.phase === 'committing';
 
@@ -239,7 +242,7 @@ export function Rules() {
             {globalGroups.map((group) => (
               <div key={group.root} className="rules__group">
                 <span className="micro-label rules__group-label">
-                  <SourceBadge scope="global" detail={homeRel(group.root)} readOnly />
+                  <SourceBadge scope="global" detail={homeRel(group.root)} />
                 </span>
                 {group.rules.map((entry) => (
                   <span
@@ -312,7 +315,7 @@ export function Rules() {
                       <SourceBadge
                         scope="global"
                         detail={homeRel(globalByPath.get(selection.entry.path)?.root ?? '')}
-                        readOnly
+                        readOnly={redacted}
                       />
                     ) : (
                       loaded && (
@@ -329,7 +332,9 @@ export function Rules() {
                     </p>
                   )}
                   {inherited && !redacted && (
-                    <p className="rules__redact micro-label">inherited · read-only</p>
+                    <p className="rules__redact micro-label">
+                      inherited · edits apply to all projects on this machine
+                    </p>
                   )}
 
                   <div className="rules__toolbar">

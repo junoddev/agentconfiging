@@ -25,6 +25,7 @@ import type {
   GitStatusResponse,
   GlobalReport,
   HealthResponse,
+  HookEditRequest,
   Pipeline,
   PipelineListResponse,
   PipelineResponse,
@@ -212,6 +213,20 @@ export class ApiClient {
    */
   writeFile(path: string, content: string, dryRun: boolean): Promise<WriteResponse> {
     return this.#send<WriteResponse>('/api/write', 'POST', { path, content, dryRun });
+  }
+
+  /**
+   * STRUCTURED HOOK EDIT (bead 71h.10; server bead 71h.9) — add or remove one
+   * hook in a settings.json through POST /api/hooks/edit. Unlike
+   * {@link writeFile}, no file content crosses the wire: the server re-reads
+   * the RAW file and applies the surgical op, so a REDACTED settings file
+   * (secrets in `env`) stays editable without the redaction-save trap.
+   * `dryRun:true` returns the PRE-REDACTED diff preview; `dryRun:false`
+   * commits. A stale remove address/command is a 409 (`kind:'conflict'`); an
+   * absent file is a 404 (callers fall back to a whole-file create).
+   */
+  editHooks(req: HookEditRequest): Promise<WriteResponse> {
+    return this.#send<WriteResponse>('/api/hooks/edit', 'POST', req);
   }
 
   /**

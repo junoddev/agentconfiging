@@ -217,6 +217,26 @@ export interface WriteResponse {
 }
 
 /**
+ * POST /api/hooks/edit payload (src/server/hooks-edit.ts, beads 71h.9/71h.10) —
+ * the STRUCTURED hook mutation. Unlike /api/write, no file content crosses the
+ * wire: the server re-reads the RAW settings file and applies the op, so a
+ * REDACTED file stays editable without the redaction-save trap. `path` names
+ * the settings file (project-relative or absolute global); `remove` addresses
+ * the hook by the client's own parseHooksBlock coordinates and pins
+ * `expected.command` as a precondition (stale ⇒ 409). `dryRun` defaults to
+ * TRUE server-side. The response mirrors {@link WriteResponse}; its `diff` is
+ * PRE-REDACTED before serialization.
+ */
+export type HookEditRequest = { path: string; dryRun?: boolean } & (
+  | { op: 'add'; event: string; matcher?: string; hook: { type: 'command'; command: string } }
+  | {
+      op: 'remove';
+      address: { event: string; groupIndex: number; hookIndex: number };
+      expected: { command: string };
+    }
+);
+
+/**
  * One edit row in an apply-fix response (src/server/write.ts). `diff` is the
  * INTENDED disclosure of the fix's patch content — the preview the user approves
  * — carried as unified diff TEXT. `committed`/`error` are present only on a
