@@ -23,6 +23,7 @@ import type {
   GitLogResponse,
   GitMutationResponse,
   GitStatusResponse,
+  GlobalReport,
   HealthResponse,
   Pipeline,
   PipelineListResponse,
@@ -143,6 +144,17 @@ export class ApiClient {
   getReport(instance?: string): Promise<Report> {
     const qs = instance ? `?instance=${encodeURIComponent(instance)}` : '';
     return this.#get<Report>(`/api/report${qs}`);
+  }
+
+  /**
+   * GET the machine-global (inherited) config report (bead 71h.3) — one entry
+   * per well-known home config dir (~/.claude, …). The global scope is
+   * instance-independent (never an `instance` selector); `fresh` forces a
+   * server-side rescan instead of the cached report.
+   */
+  getGlobalReport(opts: { fresh?: boolean } = {}): Promise<GlobalReport> {
+    const qs = opts.fresh ? '?scope=global&fresh=1' : '?scope=global';
+    return this.#get<GlobalReport>(`/api/report${qs}`);
   }
 
   /** GET the hosted instance list. */

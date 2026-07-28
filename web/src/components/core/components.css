@@ -187,6 +187,17 @@ button.chip {
   margin-top: var(--gutter);
 }
 
+/* ── SourceBadge: scope-provenance micro-label (PROJECT / LOCAL / GLOBAL) ─ */
+
+.source-badge {
+  white-space: nowrap;
+  color: var(--fg-dim);
+  /* .micro-label uppercases; the detail slot carries filesystem paths whose
+     case is meaningful (~/.claude, case-sensitive on Linux). Scope/READ-ONLY
+     are pre-uppercased in sourceBadgeText. */
+  text-transform: none;
+}
+
 /* ── EmptyState: NO SIGNAL + flat-line trace ───────────────────────────── */
 
 .empty {

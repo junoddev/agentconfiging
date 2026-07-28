@@ -69,6 +69,50 @@ export interface Report {
   stats: ManifestStats;
 }
 
+/**
+ * MACHINE-GLOBAL REPORT (bead 71h.3, GET /api/report?scope=global). These MIRROR
+ * src/core/global.ts + src/server/store.ts (`ServedGlobalReport`). One entry per
+ * well-known home config dir (~/.claude, ~/.cursor, …); a per-dir scan failure is
+ * an inline `GlobalEntryError` so siblings survive. Content-free like the project
+ * report; global file CONTENT still arrives solely via GET /api/file. `root` is
+ * filesystem data — render as a text node only.
+ */
+
+/** One successfully scanned global config dir (src/core/global.ts, `GlobalEntry`). */
+export interface GlobalEntry {
+  /** Real path of the config dir (symlinks resolved by the scanner). */
+  root: string;
+  /** Well-known dir name under home (e.g. '.claude'). */
+  dir: string;
+  agents: DetectedAgent[];
+  findings: ReportFinding[];
+  stats: ManifestStats;
+}
+
+/** A global config dir whose scan failed (caps tripped); siblings survive. */
+export interface GlobalEntryError {
+  /** Logical path under home (join, not realpath — the dir may be unreadable). */
+  root: string;
+  /** Well-known dir name under home (e.g. '.cursor'). */
+  dir: string;
+  error: { name: string; code?: string; message: string };
+}
+
+/** Narrow a global entry to the error variant. */
+export function isGlobalEntryError(e: GlobalEntry | GlobalEntryError): e is GlobalEntryError {
+  return 'error' in e;
+}
+
+/** GET /api/report?scope=global payload (src/server/store.ts, `ServedGlobalReport`). */
+export interface GlobalReport {
+  version: string;
+  generatedAt: string;
+  scope: 'global';
+  /** Always true: global config is THIS machine's home dirs, never remote. */
+  localOnly: true;
+  entries: (GlobalEntry | GlobalEntryError)[];
+}
+
 /** One entry in GET /api/instances (src/server/registry.ts, `InstanceSummary`). */
 export interface InstanceSummary {
   id: string;

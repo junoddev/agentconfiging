@@ -8,6 +8,8 @@ export { FileChip, type FileChipProps } from './FileChip.js';
 export { DiffPanel, type DiffPanelProps } from './DiffPanel.js';
 export { Table, type TableProps } from './Table.js';
 export { EmptyState, type EmptyStateProps } from './EmptyState.js';
+export { SourceBadge, type SourceBadgeProps } from './SourceBadge.js';
+export { sourceBadgeText, type SourceScope } from './badge.js';
 export {
   Heatmap,
   heatmapLevel,

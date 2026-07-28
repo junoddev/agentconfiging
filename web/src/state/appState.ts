@@ -11,9 +11,13 @@
  *   loading          — a report fetch is in flight
  *   error            — a fatal-to-the-view error (unauthorized shows a re-launch
  *                      prompt; others are surfaced but non-crashing)
+ *   globalReport / globalLoading / globalError — the machine-global (inherited
+ *                      config) slice (bead 71h.3). Instance-independent and
+ *                      CONFINED: a global fetch failure lands in `globalError`
+ *                      only, never in `error` (the shell reacts only to `error`).
  */
 
-import type { InstanceSummary, Report } from '../api/types.js';
+import type { GlobalReport, InstanceSummary, Report } from '../api/types.js';
 import type { WsState } from '../ws/client.js';
 
 export type AppErrorKind = 'unauthorized' | 'network' | 'unknown';
@@ -30,6 +34,9 @@ export interface AppState {
   wsState: WsState;
   loading: boolean;
   error?: AppError;
+  globalReport?: GlobalReport;
+  globalLoading: boolean;
+  globalError?: AppError;
 }
 
 export type AppAction =
@@ -46,10 +53,16 @@ export type AppAction =
   /** A fatal-to-view error. */
   | { type: 'error'; error: AppError }
   /** Dismiss a non-fatal error. */
-  | { type: 'error:clear' };
+  | { type: 'error:clear' }
+  /** A machine-global report fetch has begun (fires alongside boot, non-blocking). */
+  | { type: 'global:loading' }
+  /** The machine-global report arrived. */
+  | { type: 'global:loaded'; report: GlobalReport }
+  /** The global fetch failed — confined to the global slice, never `error`. */
+  | { type: 'global:error'; error: AppError };
 
 export function initialAppState(): AppState {
-  return { instances: [], wsState: 'offline', loading: false };
+  return { instances: [], wsState: 'offline', loading: false, globalLoading: false };
 }
 
 export function appReducer(state: AppState, action: AppAction): AppState {
@@ -77,6 +90,18 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, loading: false, error: action.error };
     case 'error:clear':
       return { ...state, error: undefined };
+    case 'global:loading':
+      return { ...state, globalLoading: true };
+    case 'global:loaded':
+      return {
+        ...state,
+        globalReport: action.report,
+        globalLoading: false,
+        globalError: undefined,
+      };
+    case 'global:error':
+      // Confined: the project view's `error` is deliberately untouched.
+      return { ...state, globalLoading: false, globalError: action.error };
     default:
       return state;
   }

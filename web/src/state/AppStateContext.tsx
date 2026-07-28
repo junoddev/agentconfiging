@@ -27,9 +27,13 @@ import {
 } from 'react';
 import { ApiClient, ApiError } from '../api/client.js';
 import { bootstrapToken } from '../api/token.js';
+import { isGlobalEntryError } from '../api/types.js';
 import type {
   ApplyFixResponse,
   FileContent,
+  GlobalEntry,
+  GlobalEntryError,
+  GlobalReport,
   InstanceSummary,
   Report,
   WriteResponse,
@@ -51,6 +55,9 @@ export interface AppStateValue extends AppState {
   selectInstance: (id: string) => void;
   /** Re-fetch the current instance's report (also called on a WS report push). */
   refetch: () => void;
+  /** Re-fetch the machine-global report (bead 71h.3). Manual only — WS pushes
+   *  never target the global scope (no global watcher yet; bead 71h.7). */
+  refetchGlobal: () => void;
   /** Dismiss a non-fatal error. */
   clearError: () => void;
   /** Fetch one in-scope config file's REDACTED content for the artifact browser
@@ -161,6 +168,24 @@ export function AppStateProvider({ children, deps }: AppStateProviderProps) {
     void loadReport(currentIdRef.current);
   }, [loadReport]);
 
+  // Machine-global report (bead 71h.3): instance-independent and NON-BLOCKING —
+  // a failure lands in the global slice only (never `error`, which the shell
+  // reacts to), so the project view stays intact.
+  const loadGlobal = useCallback(async () => {
+    if (!client) return;
+    dispatch({ type: 'global:loading' });
+    try {
+      const report: GlobalReport = await client.getGlobalReport();
+      dispatch({ type: 'global:loaded', report });
+    } catch (err) {
+      dispatch({ type: 'global:error', error: toAppError(err) });
+    }
+  }, [client]);
+
+  const refetchGlobal = useCallback(() => {
+    void loadGlobal();
+  }, [loadGlobal]);
+
   const selectInstance = useCallback(
     (id: string) => {
       currentIdRef.current = id;
@@ -213,6 +238,10 @@ export function AppStateProvider({ children, deps }: AppStateProviderProps) {
     let cancelled = false;
     const boot = resolvedDeps;
 
+    // Fire the global fetch alongside the instances/report load — never awaited,
+    // so a global failure cannot delay or degrade the project boot.
+    void loadGlobal();
+
     void (async () => {
       try {
         const instances = await boot.client.getInstances();
@@ -245,7 +274,7 @@ export function AppStateProvider({ children, deps }: AppStateProviderProps) {
       cancelled = true;
       ws.close();
     };
-  }, [resolvedDeps, loadReport]);
+  }, [resolvedDeps, loadReport, loadGlobal]);
 
   const value = useMemo<AppStateValue>(
     () => ({
@@ -253,12 +282,13 @@ export function AppStateProvider({ children, deps }: AppStateProviderProps) {
       currentInstance: selectCurrentInstance(state),
       selectInstance,
       refetch,
+      refetchGlobal,
       clearError,
       getFile,
       applyFix,
       writeFile,
     }),
-    [state, selectInstance, refetch, clearError, getFile, applyFix, writeFile],
+    [state, selectInstance, refetch, refetchGlobal, clearError, getFile, applyFix, writeFile],
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
@@ -271,6 +301,34 @@ export function useAppState(): AppStateValue {
     throw new Error('useAppState must be used within an AppStateProvider');
   }
   return value;
+}
+
+/**
+ * Global-scope convenience selector (bead 71h.3) for pages that render the
+ * inherited (~/.claude etc.) config. `entries` are the successful per-dir scans;
+ * per-dir failures are separated into `errors` so pages render honest partial
+ * states. Global config is READ-ONLY from the project view — file content still
+ * comes through the existing getFile(absolutePath).
+ */
+export function useGlobalConfig(): {
+  globalReport?: GlobalReport;
+  globalLoading: boolean;
+  globalError?: AppError;
+  refetchGlobal: () => void;
+  entries: GlobalEntry[];
+  errors: GlobalEntryError[];
+} {
+  const { globalReport, globalLoading, globalError, refetchGlobal } = useAppState();
+  const { entries, errors } = useMemo(() => {
+    const entries: GlobalEntry[] = [];
+    const errors: GlobalEntryError[] = [];
+    for (const entry of globalReport?.entries ?? []) {
+      if (isGlobalEntryError(entry)) errors.push(entry);
+      else entries.push(entry);
+    }
+    return { entries, errors };
+  }, [globalReport]);
+  return { globalReport, globalLoading, globalError, refetchGlobal, entries, errors };
 }
 
 /** Report-focused convenience selector for pages that only need the report. */

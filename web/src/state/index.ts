@@ -2,6 +2,7 @@
 export {
   AppStateProvider,
   useAppState,
+  useGlobalConfig,
   useReport,
   type AppStateDeps,
   type AppStateProviderProps,

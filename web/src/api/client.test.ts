@@ -51,6 +51,23 @@ describe('ApiClient URL + header construction', () => {
     expect(url).toBe('/api/file?path=.claude%2Fsettings.json');
   });
 
+  it('builds the global report URL (no instance selector)', async () => {
+    const fetchImpl = stubFetch({ scope: 'global', localOnly: true, entries: [] });
+    const client = new ApiClient('tok', { fetchImpl });
+    await client.getGlobalReport();
+    const [url, init] = firstCall(fetchImpl);
+    expect(url).toBe('/api/report?scope=global');
+    expect(init.headers).toEqual({ Authorization: 'Bearer tok' });
+  });
+
+  it('appends fresh=1 to the global report URL when requested', async () => {
+    const fetchImpl = stubFetch({ scope: 'global', localOnly: true, entries: [] });
+    const client = new ApiClient('tok', { fetchImpl });
+    await client.getGlobalReport({ fresh: true });
+    const [url] = firstCall(fetchImpl);
+    expect(url).toBe('/api/report?scope=global&fresh=1');
+  });
+
   it('honors a baseUrl prefix', async () => {
     const fetchImpl = stubFetch({ instances: [] });
     const client = new ApiClient('tok', { fetchImpl, baseUrl: 'http://127.0.0.1:9' });
@@ -203,6 +220,14 @@ describe('ApiClient error mapping', () => {
   it('maps 401 to an unauthorized ApiError', async () => {
     const client = new ApiClient('tok', { fetchImpl: stubFetch({ error: 'unauthorized' }, 401) });
     await expect(client.getReport()).rejects.toMatchObject({ status: 401, kind: 'unauthorized' });
+  });
+
+  it('maps a 401 global report fetch to an unauthorized ApiError', async () => {
+    const client = new ApiClient('tok', { fetchImpl: stubFetch({ error: 'unauthorized' }, 401) });
+    await expect(client.getGlobalReport()).rejects.toMatchObject({
+      status: 401,
+      kind: 'unauthorized',
+    });
   });
 
   it('maps 404 to notfound', async () => {
