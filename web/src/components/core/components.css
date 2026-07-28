@@ -189,12 +189,15 @@ button.chip {
 
 /* ── SourceBadge: scope-provenance micro-label (PROJECT / LOCAL / GLOBAL) ─ */
 
-.source-badge {
+.source-badge,
+.source-badge.micro-label {
   white-space: nowrap;
   color: var(--fg-dim);
   /* .micro-label uppercases; the detail slot carries filesystem paths whose
      case is meaningful (~/.claude, case-sensitive on Linux). Scope/READ-ONLY
-     are pre-uppercased in sourceBadgeText. */
+     are pre-uppercased in sourceBadgeText. The compound selector outranks
+     .micro-label regardless of bundle order — plain .source-badge ties with
+     it and loses when type.css lands later. */
   text-transform: none;
 }
 
