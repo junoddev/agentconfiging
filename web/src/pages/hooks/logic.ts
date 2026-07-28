@@ -25,7 +25,7 @@
  * read-only when redaction is present.
  */
 
-import type { RedactionSpan } from '../../api/types.js';
+import type { GlobalEntry, RedactionSpan } from '../../api/types.js';
 
 /** One hook command, flattened with its event + matcher context, for a card. */
 export interface HookEntry {
@@ -96,6 +96,53 @@ export function parseHooksBlock(content: string): HooksParse {
     });
   }
   return { ok: true, entries };
+}
+
+// ── Inherited global hooks (bead 71h.4) ─────────────────────────────────────
+
+/** The inherited ~/.claude settings file that can carry hooks. */
+export interface GlobalHookSource {
+  /** Absolute root of the global config dir (e.g. '/Users/x/.claude'). */
+  root: string;
+  /** Absolute path of its settings.json — pass to getFile as-is. */
+  path: string;
+}
+
+/**
+ * Derive the global Claude settings source from the machine-global report's
+ * entries. Only the `.claude` home dir carries Claude Code hooks; its agent
+ * `files` are RELATIVE to `root`, so the settings file appears as plain
+ * 'settings.json'. Returns undefined when there is no `.claude` entry or it
+ * carries no settings.json — the page then renders no global section at all.
+ * The result is ALWAYS read-only for callers: it must never join the
+ * writable/write-target lists.
+ */
+export function globalHookSource(
+  entries: readonly Pick<GlobalEntry, 'root' | 'dir' | 'agents'>[],
+): GlobalHookSource | undefined {
+  const claude = entries.find((e) => e.dir === '.claude');
+  if (!claude) return undefined;
+  const hasSettings = claude.agents.some((a) => a.files.includes('settings.json'));
+  return hasSettings ? { root: claude.root, path: `${claude.root}/settings.json` } : undefined;
+}
+
+/** A global hook card: a parsed entry pinned to its (read-only) source label. */
+export interface GlobalHookCard {
+  entry: HookEntry;
+  /** Display label for the owning file (e.g. '~/.claude/settings.json'). */
+  source: string;
+  /** Always true — global hooks are never writable from a project view. */
+  readOnly: true;
+}
+
+/** Build the read-only cards for the global settings file's hooks. A failed or
+ *  malformed parse yields [] (the page surfaces the error separately). */
+export function globalHookCards(
+  parse: HooksParse | undefined,
+  sourceLabel: string,
+): GlobalHookCard[] {
+  if (parse?.ok !== true) return [];
+  return parse.entries.map((entry) => ({ entry, source: sourceLabel, readOnly: true }));
 }
 
 /** Group flattened entries by event, preserving first-seen event order. */

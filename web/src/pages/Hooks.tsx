@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ApiError, type FileContent } from '../api/index.js';
-import { EmptyState } from '../components/core/index.js';
-import { useAppState } from '../state/index.js';
+import { EmptyState, SourceBadge } from '../components/core/index.js';
+import { homeRel } from '../lib/format.js';
+import { useAppState, useGlobalConfig } from '../state/index.js';
 import { WriteFlow, useWriteFlow } from '../write/index.js';
 import { HookCard } from './hooks/HookCard.js';
 import { HookForm } from './hooks/HookForm.js';
@@ -11,6 +12,8 @@ import {
   contentHasRedactionMarks,
   draftFromTemplate,
   emptyDraft,
+  globalHookCards,
+  globalHookSource,
   isRedacted,
   parseHooksBlock,
   removeHookFromSettings,
@@ -46,6 +49,14 @@ function initialSources(): SourceState[] {
   return SETTINGS_PATHS.map((path) => ({ path, status: 'loading', redacted: false }));
 }
 
+/** Load + parse state for the inherited ~/.claude settings file (bead 71h.4).
+ *  Undefined = no global source / file absent → silently no global section. */
+interface GlobalSourceState {
+  status: 'loading' | 'ready' | 'error';
+  parse?: HooksParse;
+  message?: string;
+}
+
 /**
  * Hooks manager (rail `09 HOOKS`, route `#/hooks`, bead agentconfig-wmc.5).
  *
@@ -63,12 +74,19 @@ function initialSources(): SourceState[] {
  * secrets, so a redacted file is READ-ONLY here (its cards show, but create/remove
  * into it is disabled with a note). Only files served without redaction marks are
  * writable.
+ *
+ * INHERITED GLOBAL HOOKS (bead 71h.4): the machine-global ~/.claude/settings.json
+ * (from useGlobalConfig) is ALSO shown — its hooks fire for this project too —
+ * as ALWAYS-read-only cards under a GLOBAL SourceBadge. It never joins the
+ * writable/write-target lists; sidebar event counts include it.
  */
 export function Hooks() {
   const { getFile, report, currentInstance } = useAppState();
+  const { entries: globalEntries } = useGlobalConfig();
   const flow = useWriteFlow();
 
   const [sources, setSources] = useState<SourceState[]>(initialSources);
+  const [globalState, setGlobalState] = useState<GlobalSourceState | undefined>(undefined);
   const [selectedEvent, setSelectedEvent] = useState<string>('all');
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState<HookDraft>(() => emptyDraft(HOOK_EVENTS[0]?.name ?? 'Stop'));
@@ -109,6 +127,37 @@ export function Hooks() {
     // `report` is intentionally a dep so a live refetch re-pulls the files.
   }, [getFile, instanceId, report]);
 
+  // The inherited ~/.claude settings.json (bead 71h.4) — instance-independent.
+  // No global entry / no settings.json / a 404 ⇒ silently no global section;
+  // any other failure shows the page's normal per-source error note.
+  const globalSrc = useMemo(() => globalHookSource(globalEntries), [globalEntries]);
+  useEffect(() => {
+    if (!globalSrc) {
+      setGlobalState(undefined);
+      return;
+    }
+    let cancelled = false;
+    setGlobalState({ status: 'loading' });
+    getFile(globalSrc.path)
+      .then((file) => {
+        if (!cancelled) setGlobalState({ status: 'ready', parse: parseHooksBlock(file.content) });
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        if (err instanceof ApiError && err.kind === 'notfound') {
+          setGlobalState(undefined);
+          return;
+        }
+        setGlobalState({
+          status: 'error',
+          message: err instanceof ApiError ? err.message : 'could not load file',
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [getFile, globalSrc]);
+
   // Files we can safely write to: served without redaction. An absent file is
   // writable (the write creates it); a ready-but-redacted file is not.
   const writable = useMemo(
@@ -143,16 +192,36 @@ export function Hooks() {
     return out;
   }, [sources]);
 
-  // Live per-event counts for the sidebar.
+  // Inherited global hooks as ALWAYS-read-only cards (never write targets).
+  const globalCards = useMemo(
+    () =>
+      globalSrc && globalState?.status === 'ready'
+        ? globalHookCards(globalState.parse, homeRel(globalSrc.path))
+        : [],
+    [globalSrc, globalState],
+  );
+
+  const totalCount = cards.length + globalCards.length;
+
+  // Live per-event counts for the sidebar — global hooks fire too, so they count.
   const countByEvent = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const c of cards) counts.set(c.entry.event, (counts.get(c.entry.event) ?? 0) + 1);
+    for (const c of [...cards, ...globalCards]) {
+      counts.set(c.entry.event, (counts.get(c.entry.event) ?? 0) + 1);
+    }
     return counts;
-  }, [cards]);
+  }, [cards, globalCards]);
 
   const visibleCards = useMemo(
     () => (selectedEvent === 'all' ? cards : cards.filter((c) => c.entry.event === selectedEvent)),
     [cards, selectedEvent],
+  );
+  const visibleGlobalCards = useMemo(
+    () =>
+      selectedEvent === 'all'
+        ? globalCards
+        : globalCards.filter((c) => c.entry.event === selectedEvent),
+    [globalCards, selectedEvent],
   );
 
   const anyLoading = sources.some((s) => s.status === 'loading');
@@ -230,7 +299,7 @@ export function Hooks() {
     <Frame>
       <h1 className="title-page">
         HOOKS
-        <span className="hooks__count mono-data">{cards.length} CONFIGURED</span>
+        <span className="hooks__count mono-data">{totalCount} CONFIGURED</span>
       </h1>
 
       {anyRedacted && (
@@ -249,7 +318,7 @@ export function Hooks() {
             onClick={() => setSelectedEvent('all')}
           >
             <span className="mono-data">all events</span>
-            <span className="hooks__event-count micro-label">{cards.length}</span>
+            <span className="hooks__event-count micro-label">{totalCount}</span>
           </button>
           {HOOK_EVENTS.map((ev) => {
             const n = countByEvent.get(ev.name) ?? 0;
@@ -320,22 +389,41 @@ export function Hooks() {
 
           {anyLoading ? (
             <p className="micro-label">loading settings …</p>
-          ) : cards.length === 0 ? (
+          ) : totalCount === 0 ? (
             <EmptyState instruction="no hooks configured · add one to begin" />
-          ) : visibleCards.length === 0 ? (
+          ) : visibleCards.length === 0 && visibleGlobalCards.length === 0 ? (
             <EmptyState instruction={`no hooks for ${selectedEvent}`} />
           ) : (
-            <div className="hooks__cards">
-              {visibleCards.map((card) => (
-                <HookCard
-                  key={`${card.source}:${card.entry.event}:${card.entry.groupIndex}:${card.entry.hookIndex}`}
-                  entry={card.entry}
-                  source={card.source}
-                  readOnly={card.readOnly}
-                  onRemove={card.readOnly ? undefined : () => removeCard(card)}
-                />
-              ))}
-            </div>
+            <>
+              {visibleCards.length > 0 && (
+                <div className="hooks__cards">
+                  {visibleCards.map((card) => (
+                    <HookCard
+                      key={`${card.source}:${card.entry.event}:${card.entry.groupIndex}:${card.entry.hookIndex}`}
+                      entry={card.entry}
+                      source={card.source}
+                      readOnly={card.readOnly}
+                      onRemove={card.readOnly ? undefined : () => removeCard(card)}
+                    />
+                  ))}
+                </div>
+              )}
+              {globalSrc && visibleGlobalCards.length > 0 && (
+                <div className="hooks__global">
+                  <SourceBadge scope="global" detail={homeRel(globalSrc.root)} readOnly />
+                  <div className="hooks__cards">
+                    {visibleGlobalCards.map((card) => (
+                      <HookCard
+                        key={`global:${card.entry.event}:${card.entry.groupIndex}:${card.entry.hookIndex}`}
+                        entry={card.entry}
+                        source={card.source}
+                        readOnly
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {sources
@@ -348,6 +436,16 @@ export function Hooks() {
           {sources.some((s) => s.status === 'ready' && s.parse?.ok === false) && (
             <p className="hooks__note hooks__error micro-label">
               a settings file has a malformed hooks block — fix it in ARTIFACTS
+            </p>
+          )}
+          {globalSrc && globalState?.status === 'error' && (
+            <p className="hooks__note hooks__error micro-label">
+              {homeRel(globalSrc.path)} · {globalState.message ?? 'could not load'}
+            </p>
+          )}
+          {globalSrc && globalState?.status === 'ready' && globalState.parse?.ok === false && (
+            <p className="hooks__note hooks__error micro-label">
+              {homeRel(globalSrc.path)} has a malformed hooks block — its hooks are not shown
             </p>
           )}
         </div>

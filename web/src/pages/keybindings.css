@@ -35,6 +35,16 @@
   color: var(--warn);
 }
 
+/* ── Inherited global keybindings (read-only, bead 71h.4) ──────────────────── */
+
+.kb__global-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px var(--gutter);
+  margin-bottom: 4px;
+}
+
 /* ── Card grid ─────────────────────────────────────────────────────────────── */
 
 .kb__cards {

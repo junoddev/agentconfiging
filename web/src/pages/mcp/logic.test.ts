@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   collectCloudServers,
+  collectGlobalMcpCandidates,
   collectMcpCandidates,
   formatArgsText,
   formatKeyVals,
@@ -232,6 +233,49 @@ describe('candidate discovery', () => {
       '.claude/settings.local.json',
       '.mcp.json',
     ]);
+  });
+});
+
+describe('collectGlobalMcpCandidates (inherited home dirs, bead 71h.4)', () => {
+  it('joins entry roots and relative candidate files into absolute paths', () => {
+    const entries = [
+      {
+        root: '/Users/x/.claude',
+        agents: [{ files: ['settings.json', 'CLAUDE.md', '.mcp.json'] }],
+      },
+      { root: '/Users/x/.gemini', agents: [{ files: ['settings.json'] }] },
+    ];
+    expect(collectGlobalMcpCandidates(entries)).toEqual([
+      { root: '/Users/x/.claude', path: '/Users/x/.claude/.mcp.json' },
+      { root: '/Users/x/.claude', path: '/Users/x/.claude/settings.json' },
+      { root: '/Users/x/.gemini', path: '/Users/x/.gemini/settings.json' },
+    ]);
+  });
+
+  it('ignores non-candidate files and de-duplicates across agents', () => {
+    const entries = [
+      {
+        root: '/Users/x/.claude',
+        agents: [
+          { files: ['settings.json', 'agents/reviewer.md'] },
+          { files: ['settings.json', 'keybindings.json'] },
+        ],
+      },
+    ];
+    expect(collectGlobalMcpCandidates(entries)).toEqual([
+      { root: '/Users/x/.claude', path: '/Users/x/.claude/settings.json' },
+    ]);
+  });
+
+  it('yields absolute paths only — never a project-relative write target', () => {
+    const entries = [{ root: '/Users/x/.claude', agents: [{ files: ['settings.json'] }] }];
+    for (const c of collectGlobalMcpCandidates(entries)) {
+      expect(c.path.startsWith('/')).toBe(true);
+    }
+  });
+
+  it('is a no-op for empty entries', () => {
+    expect(collectGlobalMcpCandidates([])).toEqual([]);
   });
 });
 

@@ -4,6 +4,8 @@ import {
   contentHasRedactionMarks,
   draftFromTemplate,
   emptyDraft,
+  globalHookCards,
+  globalHookSource,
   groupByEvent,
   HOOK_TEMPLATES,
   isDraftValid,
@@ -100,6 +102,68 @@ describe('parseHooksBlock', () => {
       JSON.stringify({ hooks: { Stop: [{ hooks: [{ command: nasty }] }] } }),
     );
     expect(res.ok && res.entries[0]?.command).toBe(nasty);
+  });
+});
+
+describe('globalHookSource (inherited ~/.claude, bead 71h.4)', () => {
+  const claudeEntry = {
+    root: '/Users/x/.claude',
+    dir: '.claude',
+    agents: [
+      { kind: 'claude-code', confidence: 'high' as const, files: ['settings.json'], extras: {} },
+    ],
+  };
+  const codexEntry = {
+    root: '/Users/x/.codex',
+    dir: '.codex',
+    agents: [{ kind: 'codex', confidence: 'low' as const, files: ['settings.json'], extras: {} }],
+  };
+
+  it('derives the absolute settings.json path from the .claude entry', () => {
+    expect(globalHookSource([codexEntry, claudeEntry])).toEqual({
+      root: '/Users/x/.claude',
+      path: '/Users/x/.claude/settings.json',
+    });
+  });
+
+  it('is a no-op (undefined) when there is no .claude entry', () => {
+    expect(globalHookSource([])).toBeUndefined();
+    expect(globalHookSource([codexEntry])).toBeUndefined();
+  });
+
+  it('is a no-op when the .claude entry carries no settings.json', () => {
+    const noSettings = {
+      ...claudeEntry,
+      agents: [
+        { kind: 'claude-code', confidence: 'low' as const, files: ['CLAUDE.md'], extras: {} },
+      ],
+    };
+    expect(globalHookSource([noSettings])).toBeUndefined();
+  });
+
+  it('never yields a project-relative write-target path', () => {
+    const src = globalHookSource([claudeEntry]);
+    // Absolute (starts at /) — structurally distinct from the page's writable
+    // '.claude/settings.json' / '.claude/settings.local.json' targets.
+    expect(src?.path.startsWith('/')).toBe(true);
+    expect(['.claude/settings.json', '.claude/settings.local.json']).not.toContain(src?.path);
+  });
+});
+
+describe('globalHookCards', () => {
+  it('marks every card readOnly with the given source label', () => {
+    const parse = parseHooksBlock(RICH);
+    const cards = globalHookCards(parse, '~/.claude/settings.json');
+    expect(cards).toHaveLength(3);
+    for (const card of cards) {
+      expect(card.readOnly).toBe(true);
+      expect(card.source).toBe('~/.claude/settings.json');
+    }
+  });
+
+  it('yields no cards for an absent or failed parse', () => {
+    expect(globalHookCards(undefined, 'x')).toEqual([]);
+    expect(globalHookCards(parseHooksBlock('{ not json'), 'x')).toEqual([]);
   });
 });
 

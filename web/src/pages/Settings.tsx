@@ -7,7 +7,9 @@
  * rules, env vars, and statusLine; hooks are preserved but edited elsewhere
  * (wmc.5). Every save routes through the reusable write flow (dry-run diff →
  * commit). A storage panel breaks down agent-config disk usage and offers
- * recoverable, allowlisted cleanup.
+ * recoverable, allowlisted cleanup. Panel provenance tags are composed with
+ * sourceBadgeText (bead 71h.4) so scope wording matches the app-wide
+ * SourceBadge voice; the GLOBAL panel stays WRITABLE (SPEC §5 row 2).
  *
  * DATA-SAFETY (redaction-save trap): GET /api/file returns REDACTED content, so
  * a settings.json whose values include secrets arrives with `[REDACTED:*]`
@@ -25,7 +27,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ApiClient, ApiError, type FileContent, type StorageReport } from '../api/index.js';
 import { parseTokenHash } from '../api/token.js';
-import { EmptyState, formatBytes } from '../components/core/index.js';
+import { EmptyState, formatBytes, sourceBadgeText } from '../components/core/index.js';
 import { useAppState } from '../state/index.js';
 import { useWriteFlow, WriteFlow } from '../write/index.js';
 import { ScopePanel, type LoadStatus } from './settings/ScopePanel.js';
@@ -202,7 +204,7 @@ export function Settings() {
         <div className="settings__grid">
           <ScopePanel
             title="settings.json"
-            tag="SHARED · git-tracked"
+            tag={sourceBadgeText('project', 'git-tracked')}
             path={shared.path ?? '.claude/settings.json'}
             status={shared.status}
             file={shared.file}
@@ -212,7 +214,7 @@ export function Settings() {
           />
           <ScopePanel
             title="settings.local.json"
-            tag="LOCAL · gitignored"
+            tag={sourceBadgeText('local', 'gitignored')}
             path={local.path ?? '.claude/settings.local.json'}
             status={local.status}
             file={local.file}
@@ -226,7 +228,7 @@ export function Settings() {
       <section className="page__section">
         <ScopePanel
           title="~/.claude/settings.json"
-          tag="GLOBAL · all projects"
+          tag={sourceBadgeText('global', 'all projects')}
           path={globalScope.path}
           status={globalScope.status}
           file={globalScope.file}

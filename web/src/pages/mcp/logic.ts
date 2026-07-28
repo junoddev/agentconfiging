@@ -19,7 +19,7 @@
  * `mcpServers` key, so one parser serves both.
  */
 
-import type { DetectedAgent } from '../../api/types.js';
+import type { DetectedAgent, GlobalEntry } from '../../api/types.js';
 
 /** Transport bucket. `http` covers any URL-addressed remote (incl. `sse`). */
 export type Transport = 'stdio' | 'http';
@@ -208,6 +208,38 @@ export function collectMcpCandidates(agents: readonly Pick<DetectedAgent, 'files
     for (const file of agent.files) if (isMcpCandidate(file)) set.add(file);
   }
   return [...set].sort((a, b) => a.localeCompare(b));
+}
+
+/** One machine-global candidate MCP file (bead 71h.4): its home config dir's
+ *  absolute `root` plus the file's ABSOLUTE `path` (getFile takes it as-is). */
+export interface GlobalMcpCandidate {
+  root: string;
+  path: string;
+}
+
+/**
+ * Candidate MCP files across the machine-global report's entries (~/.claude,
+ * ~/.gemini, …). Entry agent `files` are RELATIVE to each entry's `root`, so
+ * candidates are joined to absolute paths. Same basename recognition as
+ * {@link collectMcpCandidates}; de-duplicated and path-sorted. Callers must
+ * treat every result READ-ONLY — a global file is never a write target.
+ */
+export function collectGlobalMcpCandidates(
+  entries: readonly (Pick<GlobalEntry, 'root'> & {
+    agents: readonly Pick<DetectedAgent, 'files'>[];
+  })[],
+): GlobalMcpCandidate[] {
+  const byPath = new Map<string, GlobalMcpCandidate>();
+  for (const entry of entries) {
+    for (const agent of entry.agents) {
+      for (const file of agent.files) {
+        if (!isMcpCandidate(file)) continue;
+        const path = `${entry.root}/${file}`;
+        if (!byPath.has(path)) byPath.set(path, { root: entry.root, path });
+      }
+    }
+  }
+  return [...byPath.values()].sort((a, b) => a.path.localeCompare(b.path));
 }
 
 /**

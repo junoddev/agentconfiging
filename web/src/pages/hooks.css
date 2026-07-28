@@ -113,6 +113,14 @@
   gap: 8px;
 }
 
+/* ── Inherited global hooks (read-only, bead 71h.4) ────────────────────── */
+
+.hooks__global {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 /* ── Hook card (collapsible) ───────────────────────────────────────────── */
 
 .hook-card {
