@@ -16,6 +16,7 @@
  */
 
 import {
+  buildGlobalEntries,
   buildReport,
   computeContextHealth,
   detect,
@@ -24,12 +25,15 @@ import {
   type ContextHealth,
   type DetectedAgent,
   type Fix,
+  type GlobalEntry,
+  type GlobalEntryError,
   type ManifestStats,
   type ReportFinding,
   type ScanOptions,
 } from '../core/index.js';
 
-/** Scopes the API can report on. v1 is project-only; 'global' is a later bead. */
+/** Scopes a per-instance ReportStore serves — project-only by design; the
+ *  machine-global report lives in the server-owned {@link GlobalStore}. */
 export type ReportScope = 'project';
 
 /** One scope's report as served by GET /api/report — paths/metadata/findings only. */
@@ -152,5 +156,62 @@ export class ReportStore {
     this.#fixes.set(scope, fixes);
     this.#contextHealth.set(scope, computeContextHealth(manifest));
     return report;
+  }
+}
+
+/** The machine-global report as served by GET /api/report?scope=global. */
+export interface ServedGlobalReport {
+  version: string;
+  generatedAt: string;
+  scope: 'global';
+  /** Always true: global config is THIS machine's home dirs, never remote. */
+  localOnly: true;
+  entries: (GlobalEntry | GlobalEntryError)[];
+}
+
+/**
+ * GlobalStore — the server-owned machine-global report cache (agentconfig-71h.2).
+ *
+ * ONE per server, NOT per instance: the global scope is instance-independent.
+ * What it scans is a FIXED server-side set — core KNOWN_DIRS under the home
+ * dir resolved ONCE at construction (os.homedir() in production, a fixture
+ * home in tests) — no request parameter ever influences the roots.
+ *
+ * Follows ReportStore's caching discipline: computed lazily on first access,
+ * cached until `fresh` is requested. Entries come from the shared core
+ * composition (buildGlobalEntries), which is CONTENT-FREE by construction —
+ * findings pass through toReportFinding (hasFix/fixKind only, never
+ * fix.edits[].patch) and a per-dir scan failure becomes an inline error entry
+ * instead of killing its siblings.
+ *
+ * Deliberately NO fix cache here: POST /api/apply-fix resolves finding ids
+ * only against a project instance's ReportStore, so a global finding id can
+ * never be applied (→ 404). No env bag either, matching ReportStore.
+ */
+export class GlobalStore {
+  readonly #homeDir: string;
+  readonly #version: string;
+  #cache: ServedGlobalReport | undefined;
+
+  constructor(homeDir: string, version: string) {
+    this.#homeDir = homeDir;
+    this.#version = version;
+  }
+
+  /**
+   * Return the cached global report, computing it on first access or when
+   * `fresh` is set. Throws only on an engine bug (per-dir scan failures are
+   * inline error entries) — the route maps that to a 500 without details.
+   */
+  get(opts: { fresh?: boolean } = {}): ServedGlobalReport {
+    if (!opts.fresh && this.#cache) return this.#cache;
+    this.#cache = {
+      version: this.#version,
+      generatedAt: new Date().toISOString(),
+      scope: 'global',
+      localOnly: true,
+      entries: buildGlobalEntries(this.#homeDir),
+    };
+    return this.#cache;
   }
 }

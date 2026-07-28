@@ -32,6 +32,7 @@ import { KNOWN_DIRS } from '../core/index.js';
 import { createApp } from './app.js';
 import { handleRequest } from './bridge.js';
 import { InstanceRegistry } from './registry.js';
+import { GlobalStore } from './store.js';
 import { WatcherSupervisor } from './watcher.js';
 import { WsHub, handleUpgrade } from './ws.js';
 import { PtyManager, handlePtyUpgrade } from './pty.js';
@@ -43,8 +44,8 @@ export { LOOPBACK_HOST, resolveServerOptions } from './options.js';
 export type { ServerOptions } from './options.js';
 export { createApp } from './app.js';
 export type { AppConfig } from './app.js';
-export { ReportStore } from './store.js';
-export type { ReportScope, ServedReport } from './store.js';
+export { GlobalStore, ReportStore } from './store.js';
+export type { ReportScope, ServedGlobalReport, ServedReport } from './store.js';
 export { InstanceRegistry, InvalidRootError, MAX_INSTANCES } from './registry.js';
 export type { RegistryInstance, InstanceSummary, StoreFactory } from './registry.js';
 export { registerApplyFixRoute, registerWriteRoutes } from './write.js';
@@ -382,6 +383,9 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
     distDir,
     registry,
     version,
+    // GLOBAL REPORT (71h.2): ONE server-owned store over this machine's home —
+    // a fixed root set (KNOWN_DIRS under os.homedir()), instance-independent.
+    globalStore: new GlobalStore(os.homedir(), version),
     scopes: buildWriteScopes(opts.root),
     trashDir: defaultTrashDir(),
     interactive,

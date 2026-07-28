@@ -52,10 +52,12 @@
 
 import { createHash, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { DiscoveryError, discoverProjects, RegistryClient } from '../core/index.js';
+import { GlobalStore } from './store.js';
 import { InstanceRegistry, InvalidRootError } from './registry.js';
 import { registerApplyFixRoute, registerWriteRoutes } from './write.js';
 import { registerStorageRoutes } from './storage.js';
@@ -92,6 +94,14 @@ export interface AppConfig {
    */
   registry: InstanceRegistry;
   version: string;
+  /**
+   * GLOBAL REPORT (71h.2): the server-owned machine-global report cache — ONE
+   * per server, NOT per instance. Defaults to a store over os.homedir();
+   * injectable so tests point it at a fixture home. Its roots are a FIXED
+   * server-side set (core KNOWN_DIRS under that home) — no request parameter
+   * ever selects what it scans.
+   */
+  globalStore?: GlobalStore;
   /**
    * WRITE-API scopes (bead gxo.3): the project root + any agent home config
    * dirs, each realpath'd. Optional and defaults to [] — with no scopes every
@@ -384,9 +394,27 @@ export function createApp(config: AppConfig): Hono {
       : jsonError(404, 'unknown instance'),
   );
 
+  // GLOBAL REPORT (71h.2): one server-owned store over THIS machine's home,
+  // instance-independent by design (see AppConfig.globalStore).
+  const globalStore = config.globalStore ?? new GlobalStore(os.homedir(), config.version);
+
   app.get('/api/report', (c) => {
     const url = new URL(c.req.url);
     const scope = url.searchParams.get('scope') ?? 'project';
+    if (scope === 'global') {
+      // Global is instance-independent — mixing in an instance selector is a
+      // contract error, rejected rather than silently ignored.
+      if (url.searchParams.get('instance') !== null) {
+        return jsonError(400, 'scope=global takes no instance');
+      }
+      try {
+        return c.json(globalStore.get({ fresh: url.searchParams.get('fresh') === '1' }));
+      } catch (err) {
+        // Details to stderr only — no stack traces or messages in responses.
+        console.error(`agentconfiging server: global report failed: ${String(err)}`);
+        return jsonError(500, 'report failed');
+      }
+    }
     if (scope !== 'project') return jsonError(400, 'unsupported scope');
     const fresh = url.searchParams.get('fresh') === '1';
     // Selector resolves ONLY against registered instances — an unknown id or

@@ -54,7 +54,7 @@ import path from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from './app.js';
 import { InstanceRegistry } from './registry.js';
-import { ReportStore } from './store.js';
+import { GlobalStore, ReportStore } from './store.js';
 import { WsHub, handleUpgrade } from './ws.js';
 import { startServer, type RunningServer } from './index.js';
 import type { WriteScope } from './pathguard.js';
@@ -828,11 +828,13 @@ describe('wire-level attacks against the real server', () => {
     flood.sendRaw(Buffer.alloc(1024 * 1024 + 1));
     await flood.waitForClose();
     // Fail-close is the property under test. A flooded socket may be RST before
-    // the 1009 close frame is read back, so the code is asserted only if it
-    // arrived (the deterministic 1009 code is pinned in ws.test.ts).
+    // a close frame is read back, and the raw zero-byte flood races the buffer
+    // cap (1009) against frame parsing (zeros decode as an unmasked frame →
+    // 1002) depending on TCP chunking — so any arriving code must be one of the
+    // two fail-close codes (the deterministic 1009 is pinned in ws.test.ts).
     expect(flood.closed).toBe(true);
     const code = closeCode(flood);
-    if (code !== undefined) expect(code).toBe(1009);
+    if (code !== undefined) expect([1002, 1009]).toContain(code);
     flood.close();
 
     // The server is still alive and answering after all the abuse.
@@ -1017,5 +1019,111 @@ describe('T8 content discipline: report summarizes fixes, never their patch cont
     expect(Object.keys(json)).not.toContain('edits');
     expect(Object.keys(json)).not.toContain('patch');
     expect(JSON.stringify(json)).not.toContain(SECRET);
+  });
+});
+
+// ===========================================================================
+// T8 — GLOBAL REPORT (agentconfig-71h.2): content-free, fixed roots, no
+// instance mixing, apply-fix cannot reach a global finding
+// ===========================================================================
+describe('T9 global report: scope=global over a FIXTURE home, content-free', () => {
+  /**
+   * A fixture FAKE home (never the real ~): .claude with a stale model id —
+   * which makes stale-model-ref emit a replace-file fix whose patch is the
+   * COMPLETE settings.json, canary secret included — plus an oversized
+   * .cursor (250 files trips CAPS.maxFiles=200) to prove per-dir isolation.
+   */
+  function makeGlobalFixture() {
+    const home = fs.realpathSync(fs.mkdtempSync(path.join(staticBase, 'fakehome-')));
+    const settings = path.join(home, '.claude', 'settings.json');
+    fs.mkdirSync(path.dirname(settings), { recursive: true });
+    fs.writeFileSync(
+      settings,
+      JSON.stringify({ model: 'claude-3-opus-20240229', env: { MY_API_KEY: SECRET } }),
+    );
+    for (let i = 0; i < 250; i += 1) {
+      const file = path.join(home, '.cursor', `r${i}.md`);
+      if (i === 0) fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, 'x\n');
+    }
+    // Runtime-state junk that GLOBAL_SKIP_DIRS must prune from the wire.
+    for (const junk of ['projects/session-notes.md', 'paste-cache/p1.txt']) {
+      const file = path.join(home, '.claude', junk);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, 'junk\n');
+    }
+    const app = createApp({
+      tokenHash,
+      port: () => PORT,
+      distDir: dist,
+      registry: registryFor(path.join(trees, 'claude-rich')),
+      version: '9.9.9',
+      globalStore: new GlobalStore(home, '9.9.9'),
+    });
+    return { home, settings, app };
+  }
+
+  it('serialized response carries localOnly:true and NEVER the planted secret or patch keys', async () => {
+    const { app } = makeGlobalFixture();
+    const res = await get(app, '/api/report?scope=global', AUTH);
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).not.toContain(SECRET); // grep the whole wire payload
+    const json = JSON.parse(body) as {
+      localOnly: boolean;
+      entries: { dir: string; findings?: { id: string; hasFix?: boolean }[] }[];
+    };
+    expect(json.localOnly).toBe(true);
+    expect(bannedKeys(json)).toEqual([]); // no patch/content/edits anywhere
+    // Skip-dir hygiene holds at the wire: runtime-state junk never serializes.
+    expect(body).not.toContain('session-notes.md');
+    expect(body).not.toContain('paste-cache');
+    // The fix-bearing finding survives only as a summary.
+    const claude = json.entries.find((e) => e.dir === '.claude');
+    expect(claude?.findings?.some((f) => f.hasFix)).toBe(true);
+  });
+
+  it('caps hold per dir: the oversized .cursor is an inline error entry, .claude survives', async () => {
+    const { app } = makeGlobalFixture();
+    const json = (await (await get(app, '/api/report?scope=global', AUTH)).json()) as {
+      entries: ({ dir: string } & Record<string, unknown>)[];
+    };
+    const cursor = json.entries.find((e) => e.dir === '.cursor');
+    expect(cursor).toMatchObject({ error: { name: 'ScanError', code: 'E_TOO_MANY_FILES' } });
+    expect('findings' in (cursor as object)).toBe(false);
+    const claude = json.entries.find((e) => e.dir === '.claude');
+    expect(claude).toHaveProperty('findings'); // healthy sibling still reports
+  });
+
+  it('no token → 401; instance mixing → 400 (global is instance-independent)', async () => {
+    const { app } = makeGlobalFixture();
+    expect((await get(app, '/api/report?scope=global')).status).toBe(401);
+    expect(
+      (await get(app, '/api/report?scope=global&instance=deadbeefdeadbeef', AUTH)).status,
+    ).toBe(400);
+  });
+
+  it('apply-fix cannot name a global finding: 404, fixture settings.json untouched', async () => {
+    const { settings, app } = makeGlobalFixture();
+    const before = fs.readFileSync(settings, 'utf-8');
+    // Take the REAL fix-bearing global finding id off the wire, then try to
+    // apply it — the fix lives only in the (separate) global store, which
+    // apply-fix never consults, so the id is unknown → 404, no oracle.
+    const json = (await (await get(app, '/api/report?scope=global', AUTH)).json()) as {
+      entries: { findings?: { id: string; hasFix?: boolean }[] }[];
+    };
+    const globalFinding = json.entries.flatMap((e) => e.findings ?? []).find((f) => f.hasFix) as {
+      id: string;
+    };
+    expect(globalFinding).toBeDefined();
+    const res = await req(
+      app,
+      '/api/apply-fix',
+      'POST',
+      { ...AUTH, origin: ORIGIN, 'content-type': 'application/json' },
+      { findingId: globalFinding.id, dryRun: true },
+    );
+    expect(res.status).toBe(404);
+    expect(fs.readFileSync(settings, 'utf-8')).toBe(before); // nothing applied
   });
 });

@@ -12,7 +12,7 @@ import path from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { createApp } from './app.js';
 import { InstanceRegistry } from './registry.js';
-import { ReportStore } from './store.js';
+import { GlobalStore, ReportStore } from './store.js';
 
 /** A registry whose default instance is `root` (the v1 single-store shape). */
 function registryFor(root: string, version = '1.2.3'): InstanceRegistry {
@@ -224,9 +224,9 @@ describe('GET /api/report', () => {
     expect(bannedKeys(json)).toEqual([]); // no patch/content/edits anywhere
   });
 
-  it('defaults to scope=project; other scopes → 400', async () => {
+  it('defaults to scope=project; unsupported scopes → 400', async () => {
     expect((await get('/api/report', AUTH)).status).toBe(200);
-    expect((await get('/api/report?scope=global', AUTH)).status).toBe(400);
+    expect((await get('/api/report?scope=bogus', AUTH)).status).toBe(400);
     expect((await get('/api/report?scope=..', AUTH)).status).toBe(400);
   });
 
@@ -273,6 +273,111 @@ describe('GET /api/report', () => {
       }),
     );
     expect(post.status).toBe(404); // read-only v1: no POST routes exist
+  });
+});
+
+describe('GET /api/report?scope=global (agentconfig-71h.2)', () => {
+  /** A canary planted in the fixture home's settings.json env — must never cross the wire. */
+  const SECRET = 'sk-GLOBAL-CANARY-do-not-leak-9c41';
+
+  /**
+   * FIXTURE fake home (never the real ~) with a .claude dir whose stale model
+   * id makes stale-model-ref emit a replace-file fix embedding the secret —
+   * exactly the payload the wire contract must strip.
+   */
+  function makeGlobalApp() {
+    const home = fs.realpathSync(fs.mkdtempSync(path.join(base, 'fakehome-')));
+    fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+    fs.writeFileSync(
+      path.join(home, '.claude', 'settings.json'),
+      JSON.stringify({ model: 'claude-3-opus-20240229', env: { MY_API_KEY: SECRET } }),
+    );
+    const globalApp = createApp({
+      tokenHash,
+      port: () => PORT,
+      distDir: dist,
+      registry: registryFor(path.join(trees, 'claude-rich')),
+      version: '1.2.3',
+      globalStore: new GlobalStore(home, '1.2.3'),
+    });
+    const gget = (pathname: string, headers: Record<string, string> = AUTH) =>
+      Promise.resolve(
+        globalApp.fetch(
+          new Request(`http://${HOST}${pathname}`, { headers: { host: HOST, ...headers } }),
+        ),
+      );
+    return { home, gget };
+  }
+
+  it('200 with the wire contract: version/generatedAt/scope/localOnly:true/entries', async () => {
+    const { home, gget } = makeGlobalApp();
+    const res = await gget('/api/report?scope=global');
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as Record<string, unknown>;
+    expect(json).toMatchObject({ version: '1.2.3', scope: 'global', localOnly: true });
+    expect(typeof json['generatedAt']).toBe('string');
+    const entries = json['entries'] as Record<string, unknown>[];
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ root: path.join(home, '.claude'), dir: '.claude' });
+    expect((entries[0]!['agents'] as { kind: string }[]).map((a) => a.kind)).toContain(
+      'claude-code',
+    );
+    expect(Array.isArray(entries[0]!['findings'])).toBe(true);
+    expect(entries[0]!['stats']).toMatchObject({ fileCount: 1 });
+  });
+
+  it('scope=global with an instance selector → 400 (global is instance-independent)', async () => {
+    const { gget } = makeGlobalApp();
+    expect((await gget('/api/report?scope=global&instance=deadbeefdeadbeef')).status).toBe(400);
+    expect((await gget('/api/report?scope=global&instance=')).status).toBe(400);
+  });
+
+  it('unauthenticated → 401 like every /api route', async () => {
+    const { gget } = makeGlobalApp();
+    expect((await gget('/api/report?scope=global', {})).status).toBe(401);
+  });
+
+  it('content-free: fixes summarized, no patch/content/edits, planted secret absent', async () => {
+    const { gget } = makeGlobalApp();
+    const body = await (await gget('/api/report?scope=global')).text();
+    expect(body).not.toContain(SECRET);
+    const json = JSON.parse(body) as {
+      entries: { findings: { id: string; hasFix?: boolean; fixKind?: string }[] }[];
+    };
+    expect(bannedKeys(json)).toEqual([]); // no patch/content/edits anywhere
+    const stale = json.entries[0]!.findings.find((f) => f.id.startsWith('stale-model-ref'));
+    expect(stale).toMatchObject({ hasFix: true, fixKind: 'replace-file' });
+  });
+
+  it('caches until fresh=1: a fixture mutation is visible only after fresh', async () => {
+    const { home, gget } = makeGlobalApp();
+    const first = (await (await gget('/api/report?scope=global')).json()) as {
+      entries: unknown[];
+    };
+    expect(first.entries).toHaveLength(1);
+    fs.mkdirSync(path.join(home, '.codex'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.codex', 'config.toml'), 'model = "gpt-5-codex"\n');
+    const cached = (await (await gget('/api/report?scope=global')).json()) as {
+      entries: unknown[];
+    };
+    expect(cached.entries).toHaveLength(1); // cached — the new dir is not yet visible
+    const rebuilt = (await (await gget('/api/report?scope=global&fresh=1')).json()) as {
+      entries: unknown[];
+    };
+    expect(rebuilt.entries).toHaveLength(2); // fresh=1 rebuilt over the fixed home
+  });
+
+  it('roots are FIXED server-side: crafted root=/path=/dir= params change nothing', async () => {
+    const { gget } = makeGlobalApp();
+    const plain = (await (await gget('/api/report?scope=global')).json()) as {
+      entries: unknown[];
+    };
+    for (const probe of ['&root=%2Fetc', '&path=%2Fetc%2Fpasswd', '&dir=..%2F..', '&home=%2F']) {
+      const res = await gget(`/api/report?scope=global${probe}&fresh=1`);
+      expect(res.status).toBe(200);
+      const json = (await res.json()) as { entries: unknown[] };
+      expect(json.entries).toEqual(plain.entries); // same fixed home, nothing extra scanned
+    }
   });
 });
 
