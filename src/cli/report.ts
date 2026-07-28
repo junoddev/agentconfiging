@@ -24,13 +24,10 @@
 
 import fs from 'node:fs';
 import os from 'node:os';
-import path from 'node:path';
 import {
+  buildGlobalEntries,
   buildReport,
   detect,
-  KNOWN_DIRS,
-  ScanError,
-  scanGlobal,
   scanProject,
   toReportFinding,
   type AnalyzerEnv,
@@ -168,48 +165,33 @@ function scopeReport(manifest: Manifest, env: AnalyzerEnv | undefined): ScopeRep
 }
 
 /**
- * Scan the global config dirs with per-dir error isolation. scanGlobal is
- * all-or-nothing (one oversized ~/.cursor would abort every dir), so on
- * ScanError we rescan each candidate dir in isolation — via a throwaway
- * temp home containing a single symlink, which scanGlobal explicitly
- * supports (dotfile-manager symlinks are realpath'd) — salvaging healthy
- * dirs and reporting offenders as inline error entries.
+ * Global entries via the shared core composition (buildGlobalEntries in
+ * src/core/global.ts — per-dir ScanError isolation lives there now,
+ * agentconfig-71h.1). This adapter keeps the CLI envelope shape exactly as
+ * before: scope/localOnly per entry instead of the core `dir` field, and
+ * failures surfaced as a stderr diagnostic.
  */
 function scanGlobalEntries(
   homeDir: string,
   env: AnalyzerEnv | undefined,
   io: ReportIo,
 ): GlobalEntry[] {
-  try {
-    return scanGlobal(homeDir).map((m) => scopeReport(m, env));
-  } catch (err) {
-    if (!(err instanceof ScanError)) throw err;
-  }
-
-  const entries: GlobalEntry[] = [];
-  for (const dir of KNOWN_DIRS) {
-    const target = path.join(homeDir, dir);
-    try {
-      if (!fs.statSync(target).isDirectory()) continue;
-    } catch {
-      continue; // missing dir — same silent skip as scanGlobal
+  return buildGlobalEntries(homeDir, env).map((entry): GlobalEntry => {
+    if ('error' in entry) {
+      io.stderr(
+        `agentconfiging report: skipping global dir ${entry.root}: ${entry.error.message}\n`,
+      );
+      return { root: entry.root, scope: 'global', localOnly: true, error: entry.error };
     }
-
-    const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'agentconfiging-global-'));
-    try {
-      const link = path.join(fakeHome, dir);
-      fs.mkdirSync(path.dirname(link), { recursive: true });
-      fs.symlinkSync(target, link, process.platform === 'win32' ? 'junction' : 'dir');
-      entries.push(...scanGlobal(fakeHome).map((m) => scopeReport(m, env)));
-    } catch (err) {
-      const error = serializeError(err);
-      entries.push({ root: target, scope: 'global', localOnly: true, error });
-      io.stderr(`agentconfiging report: skipping global dir ${target}: ${error.message}\n`);
-    } finally {
-      fs.rmSync(fakeHome, { recursive: true, force: true });
-    }
-  }
-  return entries;
+    return {
+      root: entry.root,
+      scope: 'global',
+      localOnly: true,
+      agents: entry.agents,
+      findings: entry.findings,
+      stats: entry.stats,
+    };
+  });
 }
 
 function exitCodeFor(findings: readonly ReportFinding[]): 0 | 1 | 2 {

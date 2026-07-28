@@ -149,6 +149,9 @@ export const SKIP_DIRS: ReadonlySet<string> = new Set([
  * state dirs under ~/.claude, ~/.codex, ~/.gemini etc. that hold session
  * history, logs, and caches — not configuration — and can contain thousands
  * of files (which would trip CAPS.maxFiles on any real machine).
+ * `cache` / `paste-cache` (agentconfig-71h.1): real ~/.claude junk
+ * (cache/changelog.md, paste-cache/*.txt) that would otherwise pollute
+ * detected agents' file lists.
  *
  * NOTE: the `plugins` exclusion is a size tradeoff — ~/.claude/plugins holds
  * real config (marketplace clones with skills/commands) and may need
@@ -167,6 +170,8 @@ export const GLOBAL_SKIP_DIRS: ReadonlySet<string> = new Set([
   'plugins',
   'sessions',
   'tmp',
+  'cache',
+  'paste-cache',
 ]);
 
 /**
