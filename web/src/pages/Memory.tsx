@@ -26,11 +26,13 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { type FileContent, type RedactionSpan } from '../api/index.js';
-import { Button, EmptyState } from '../components/core/index.js';
-import { useAppState } from '../state/index.js';
+import { Button, EmptyState, SourceBadge } from '../components/core/index.js';
+import { homeRel } from '../lib/format.js';
+import { useAppState, useGlobalConfig } from '../state/index.js';
 import { WriteFlow, useWriteFlow } from '../write/index.js';
 import {
   buildCard,
+  collectGlobalMemoryFiles,
   collectMemoryFiles,
   isRedacted,
   MEMORY_TYPES,
@@ -81,10 +83,24 @@ const EMPTY_FIELDS: MemoryFields = {
 
 export function Memory() {
   const { report, getFile } = useAppState();
+  const { entries: globalDirs } = useGlobalConfig();
   const flow = useWriteFlow();
 
   const memoryPaths = useMemo(() => collectMemoryFiles(report), [report]);
-  const pathsKey = memoryPaths.join('|');
+  // Inherited GLOBAL memory files (bead 71h.5): absolute root-joined paths,
+  // read via getFile only — never a write target. A failed global load only
+  // drops those cards (the bulk loader already tolerates per-file failures);
+  // absent global data ⇒ empty list and the page renders exactly as before.
+  const globalFiles = useMemo(() => collectGlobalMemoryFiles(globalDirs), [globalDirs]);
+  const globalByPath = useMemo(
+    () => new Map(globalFiles.map((f) => [f.path, f.root])),
+    [globalFiles],
+  );
+  const allPaths = useMemo(
+    () => [...memoryPaths, ...globalFiles.map((f) => f.path)],
+    [memoryPaths, globalFiles],
+  );
+  const pathsKey = allPaths.join('|');
   // A cheap live-reactivity key: the report's timestamp changes on every
   // (re)scan, so an edit/create that keeps the same path set still re-loads.
   const stamp = report?.generatedAt ?? '';
@@ -123,8 +139,8 @@ export function Memory() {
 
   const cards = useMemo<MemoryCard[]>(
     () =>
-      memoryPaths.filter((p) => files.has(p)).map((p) => buildCard(p, files.get(p) as FileContent)),
-    [memoryPaths, files],
+      allPaths.filter((p) => files.has(p)).map((p) => buildCard(p, files.get(p) as FileContent)),
+    [allPaths, files],
   );
 
   // ── Editor / create state ──────────────────────────────────────────────────
@@ -136,6 +152,10 @@ export function Memory() {
 
   const activeFile = mode.kind === 'edit' ? files.get(mode.path) : undefined;
   const redacted = activeFile ? isRedacted(activeFile) : false;
+  // Inherited global file ⇒ read-only regardless of content: its absolute path
+  // must never reach the write flow from a project view.
+  const inherited = mode.kind === 'edit' && globalByPath.has(mode.path);
+  const readOnly = redacted || inherited;
 
   // Re-baseline an open editor after our own commit lands (files reloads via the
   // stamp-keyed effect above), so the save button falls honestly idle.
@@ -186,7 +206,7 @@ export function Memory() {
   const canSave =
     !busy &&
     effectivePath !== '' &&
-    (mode.kind === 'create' ? draft.name.trim() !== '' : !redacted && dirty);
+    (mode.kind === 'create' ? draft.name.trim() !== '' : !readOnly && dirty);
 
   function onSave() {
     if (!canSave) return;
@@ -205,7 +225,7 @@ export function Memory() {
       <section className="page__section">
         <h1 className="title-page">
           MEMORY
-          <span className="mem__count mono-data">{memoryPaths.length} FILES</span>
+          <span className="mem__count mono-data">{allPaths.length} FILES</span>
         </h1>
         <div className="mem__tabs">
           <Button
@@ -217,7 +237,7 @@ export function Memory() {
       </section>
 
       <section className="page__section">
-        {memoryPaths.length === 0 ? (
+        {allPaths.length === 0 ? (
           <EmptyState
             title="NO MEMORY"
             instruction="no memory files yet — create one to capture a persistent fact"
@@ -243,6 +263,7 @@ export function Memory() {
                     {card.type === '' ? 'untyped' : card.type}
                   </span>
                   {card.redacted && <span className="mem__redact-tag micro-label">redacted</span>}
+                  {globalByPath.has(card.path) && <SourceBadge scope="global" readOnly />}
                 </div>
                 <span className="mem__card-name">{card.name}</span>
                 {card.description !== '' && <p className="mem__card-desc">{card.description}</p>}
@@ -262,17 +283,27 @@ export function Memory() {
               <span className="mono-data">
                 {mode.kind === 'create' ? 'new memory' : (mode.kind === 'edit' && mode.path) || ''}
               </span>
-              {activeFile && (
-                <span className="mem__scope micro-label">scope · {activeFile.pathScope}</span>
+              {inherited && mode.kind === 'edit' ? (
+                <SourceBadge
+                  scope="global"
+                  detail={homeRel(globalByPath.get(mode.path) ?? '')}
+                  readOnly
+                />
+              ) : (
+                activeFile && (
+                  <span className="mem__scope micro-label">scope · {activeFile.pathScope}</span>
+                )
               )}
               <span className="mem__editor-spacer" />
               <Button label="close" onClick={closeEditor} />
             </div>
 
-            {redacted ? (
+            {readOnly ? (
               <>
                 <p className="mem__note micro-label">
-                  contains redacted secrets — read-only; edit this file on disk
+                  {redacted
+                    ? 'contains redacted secrets — read-only; edit this file on disk'
+                    : 'inherited · read-only'}
                 </p>
                 <pre className="mem__source mono-data">
                   {activeFile && renderRedacted(activeFile.content, activeFile.spans)}

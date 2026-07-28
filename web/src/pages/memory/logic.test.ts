@@ -3,10 +3,12 @@ import type { DetectedAgent, FileContent, Report } from '../../api/types.js';
 import {
   bodyPreview,
   buildCard,
+  collectGlobalMemoryFiles,
   collectMemoryFiles,
   hasRedactionMarks,
   isMemoryFile,
   isRedacted,
+  joinGlobalPath,
   memoryName,
   parseMemory,
   serializeMemory,
@@ -73,6 +75,40 @@ describe('collectMemoryFiles', () => {
 
   it('returns empty for an undefined report', () => {
     expect(collectMemoryFiles(undefined)).toEqual([]);
+  });
+});
+
+describe('joinGlobalPath', () => {
+  it('joins a root and a root-relative path, normalizing stray slashes', () => {
+    expect(joinGlobalPath('/Users/x/.claude', 'memory/a.md')).toBe('/Users/x/.claude/memory/a.md');
+    expect(joinGlobalPath('/Users/x/.claude/', '/memory/a.md')).toBe(
+      '/Users/x/.claude/memory/a.md',
+    );
+  });
+});
+
+describe('collectGlobalMemoryFiles', () => {
+  it('applies the memory filter, joins absolute paths, de-dupes, and sorts', () => {
+    const files = collectGlobalMemoryFiles([
+      {
+        root: '/u/.claude',
+        agents: [
+          { files: ['memory/z.md', 'CLAUDE.md'] },
+          { files: ['memory/z.md', 'memory/a.md'] },
+        ],
+      },
+    ]);
+    expect(files).toEqual([
+      { path: '/u/.claude/memory/a.md', root: '/u/.claude' },
+      { path: '/u/.claude/memory/z.md', root: '/u/.claude' },
+    ]);
+  });
+
+  it('returns [] with no global entries or no memory files (page no-op)', () => {
+    expect(collectGlobalMemoryFiles([])).toEqual([]);
+    expect(
+      collectGlobalMemoryFiles([{ root: '/u/.codex', agents: [{ files: ['AGENTS.md'] }] }]),
+    ).toEqual([]);
   });
 });
 

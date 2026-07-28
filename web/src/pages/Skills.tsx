@@ -24,13 +24,20 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { ApiError, type FileContent } from '../api/index.js';
-import { Button, EmptyState, FileChip } from '../components/core/index.js';
-import { useAppState } from '../state/index.js';
+import { Button, EmptyState, FileChip, SourceBadge } from '../components/core/index.js';
+import { homeRel } from '../lib/format.js';
+import { useAppState, useGlobalConfig } from '../state/index.js';
 import { WriteFlow, useWriteFlow } from '../write/index.js';
 import { ConnectionsGraph } from './skills/ConnectionsGraph.js';
 import { FrontmatterCards } from './skills/FrontmatterCards.js';
 import { parseFrontmatter, splitFrontmatter } from './skills/frontmatter.js';
-import { collectEntries, deriveGraph, toCard, type SkillEntry } from './skills/logic.js';
+import {
+  collectEntries,
+  collectGlobalEntries,
+  deriveGraph,
+  toCard,
+  type SkillEntry,
+} from './skills/logic.js';
 import { STARTER_TEMPLATES, type StarterTemplate } from './skills/templates.js';
 import './skills.css';
 
@@ -61,12 +68,23 @@ function cardFor(content: string, name: string) {
 
 export function Skills() {
   const { report, getFile } = useAppState();
+  const { entries: globalDirs } = useGlobalConfig();
   const flow = useWriteFlow();
 
   const entries = useMemo(() => collectEntries(report), [report]);
   const entriesKey = entries.map((e) => e.path).join('|');
   const skills = entries.filter((e) => e.kind === 'skill');
   const agents = entries.filter((e) => e.kind === 'agent');
+
+  // Inherited GLOBAL skills/agents (bead 71h.5): absolute root-joined paths,
+  // read via getFile only — never a write target. They are EXCLUDED from the
+  // connections graph (the graph maps THIS instance's config; the bulk loader
+  // stays project-only). Absent global data ⇒ [] and the page is unchanged.
+  const globalEntries = useMemo(() => collectGlobalEntries(globalDirs), [globalDirs]);
+  const globalByPath = useMemo(
+    () => new Map(globalEntries.map((e) => [e.path, e])),
+    [globalEntries],
+  );
 
   const [tab, setTab] = useState<Tab>('edit');
   const [selection, setSelection] = useState<Selection>(undefined);
@@ -165,6 +183,10 @@ export function Skills() {
 
   // ── Editor derived state ──────────────────────────────────────────────────
   const redacted = selection?.kind === 'file' && (loaded?.spans.length ?? 0) > 0;
+  // Inherited global file ⇒ read-only regardless of content: its absolute path
+  // must never reach the write flow from a project view.
+  const inherited = selection?.kind === 'file' && globalByPath.has(selection.entry.path);
+  const readOnly = redacted || inherited;
   const savePath = selection?.kind === 'template' ? newPath.trim() : selection?.entry.path;
   const draftCard = useMemo(
     () => cardFor(draft, selection?.kind === 'file' ? selection.entry.name : 'new'),
@@ -173,7 +195,7 @@ export function Skills() {
 
   const canSave =
     selection !== undefined &&
-    !redacted &&
+    !readOnly &&
     savePath !== undefined &&
     savePath !== '' &&
     flow.phase !== 'loading' &&
@@ -217,7 +239,7 @@ export function Skills() {
         </section>
       ) : (
         <section className="page__section">
-          {entries.length === 0 ? (
+          {entries.length === 0 && globalEntries.length === 0 ? (
             <EmptyState instruction="no skills or agents detected — start from a template below" />
           ) : null}
 
@@ -254,6 +276,31 @@ export function Skills() {
                   />
                 </span>
               ))}
+
+              {globalEntries.length > 0 && (
+                <>
+                  <div className="micro-label skills__group">
+                    <SourceBadge
+                      scope="global"
+                      detail={homeRel(globalEntries[0]?.root ?? '')}
+                      readOnly
+                    />
+                  </div>
+                  {globalEntries.map((entry) => (
+                    <span
+                      key={entry.path}
+                      {...(selection?.kind === 'file' && selection.entry.path === entry.path
+                        ? { 'aria-current': 'true' }
+                        : {})}
+                    >
+                      <FileChip
+                        path={entry.name}
+                        onClick={() => setSelection({ kind: 'file', entry })}
+                      />
+                    </span>
+                  ))}
+                </>
+              )}
 
               <div className="micro-label skills__group">TEMPLATES</div>
               {STARTER_TEMPLATES.map((template) => (
@@ -303,10 +350,18 @@ export function Skills() {
                       ) : (
                         <span className="mono-data">{selection.entry.path}</span>
                       )}
-                      {loaded && (
-                        <span className="skills__scope micro-label">
-                          scope · {loaded.pathScope}
-                        </span>
+                      {inherited && selection.kind === 'file' ? (
+                        <SourceBadge
+                          scope="global"
+                          detail={homeRel(globalByPath.get(selection.entry.path)?.root ?? '')}
+                          readOnly
+                        />
+                      ) : (
+                        loaded && (
+                          <span className="skills__scope micro-label">
+                            scope · {loaded.pathScope}
+                          </span>
+                        )
                       )}
                     </div>
 
@@ -316,6 +371,9 @@ export function Skills() {
                         {loaded && loaded.spans.length === 1 ? '' : 's'}; saving would overwrite the
                         real value with the placeholder
                       </p>
+                    )}
+                    {inherited && !redacted && (
+                      <p className="skills__redact micro-label">inherited · read-only</p>
                     )}
 
                     <div className="skills__views">
@@ -337,7 +395,7 @@ export function Skills() {
                       <textarea
                         className="mono-data skills__raw"
                         value={draft}
-                        readOnly={redacted}
+                        readOnly={readOnly}
                         spellCheck={false}
                         onChange={(e) => setDraft(e.target.value)}
                         aria-label="raw file editor"

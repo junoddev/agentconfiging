@@ -55,6 +55,47 @@ export function collectMemoryFiles(report: Report | undefined): string[] {
   return [...set].sort((a, b) => a.localeCompare(b));
 }
 
+// ── Inherited global memory files (bead 71h.5) ──────────────────────────────
+
+/** The slice of a machine-global report entry this page consumes. */
+export interface GlobalMemorySource {
+  /** Absolute path of the global config dir (e.g. '/Users/x/.claude'). */
+  root: string;
+  agents: readonly { files: string[] }[];
+}
+
+/** One inherited memory file. `path` is ABSOLUTE (root-joined) and only ever
+ *  fed to getFile — it must never enter any write-target list or save flow. */
+export interface GlobalMemoryFile {
+  path: string;
+  /** The global config dir the file came from. */
+  root: string;
+}
+
+/** Join a global root and a root-relative path into one absolute path. */
+export function joinGlobalPath(root: string, rel: string): string {
+  return `${root.replace(/\/+$/, '')}/${rel.replace(/^\/+/, '')}`;
+}
+
+/** Every global entry's memory files (same `memory/*.md` filter as the project
+ *  list), absolute-joined, de-duped, and sorted. No global entries ⇒ [] (the
+ *  page renders exactly as before). */
+export function collectGlobalMemoryFiles(
+  entries: readonly GlobalMemorySource[],
+): GlobalMemoryFile[] {
+  const byPath = new Map<string, GlobalMemoryFile>();
+  for (const entry of entries) {
+    for (const agent of entry.agents) {
+      for (const rel of agent.files) {
+        if (!isMemoryFile(rel)) continue;
+        const path = joinGlobalPath(entry.root, rel);
+        if (!byPath.has(path)) byPath.set(path, { path, root: entry.root });
+      }
+    }
+  }
+  return [...byPath.values()].sort((a, b) => a.path.localeCompare(b.path));
+}
+
 // ── Redaction trap ───────────────────────────────────────────────────────────
 
 /** Matches a server-inserted `[REDACTED:*]` placeholder mark. */

@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { DetectedAgent, Report } from '../../api/types.js';
 import {
+  classifyGlobalRule,
   classifyRule,
+  collectGlobalRules,
   collectRules,
+  groupGlobalRulesByRoot,
   hasRedactionMarks,
   isRedacted,
+  joinGlobalPath,
   parseBool,
   parseGlobs,
   parseRule,
@@ -77,6 +81,63 @@ describe('collectRules', () => {
 
   it('returns empty for an undefined report', () => {
     expect(collectRules(undefined)).toEqual([]);
+  });
+});
+
+describe('joinGlobalPath', () => {
+  it('joins a root and a root-relative path, normalizing stray slashes', () => {
+    expect(joinGlobalPath('/Users/x/.claude', 'rules/style.md')).toBe(
+      '/Users/x/.claude/rules/style.md',
+    );
+    expect(joinGlobalPath('/Users/x/.cursor/', '/rules/ts.mdc')).toBe(
+      '/Users/x/.cursor/rules/ts.mdc',
+    );
+  });
+});
+
+describe('classifyGlobalRule', () => {
+  it('matches .claude rules/*.md and .cursor rules/*.mdc (root-relative)', () => {
+    expect(classifyGlobalRule('.claude', 'rules/style.md')).toEqual({
+      source: 'claude',
+      name: 'style',
+    });
+    expect(classifyGlobalRule('.cursor', 'rules/ts.mdc')).toEqual({
+      source: 'cursor',
+      name: 'ts',
+    });
+  });
+
+  it('rejects wrong extensions, other dirs, and non-rule paths', () => {
+    expect(classifyGlobalRule('.claude', 'rules/ts.mdc')).toBeNull();
+    expect(classifyGlobalRule('.cursor', 'rules/style.md')).toBeNull();
+    expect(classifyGlobalRule('.codex', 'rules/style.md')).toBeNull();
+    expect(classifyGlobalRule('.claude', 'CLAUDE.md')).toBeNull();
+  });
+});
+
+describe('collectGlobalRules / groupGlobalRulesByRoot', () => {
+  const entries = [
+    {
+      root: '/u/.claude',
+      dir: '.claude',
+      agents: [{ files: ['rules/style.md', 'CLAUDE.md'] }, { files: ['rules/style.md'] }],
+    },
+    { root: '/u/.cursor', dir: '.cursor', agents: [{ files: ['rules/ts.mdc'] }] },
+  ];
+
+  it('joins absolute paths, de-dupes, and sorts (source, name, path)', () => {
+    expect(collectGlobalRules(entries)).toEqual([
+      { source: 'claude', name: 'style', path: '/u/.claude/rules/style.md', root: '/u/.claude' },
+      { source: 'cursor', name: 'ts', path: '/u/.cursor/rules/ts.mdc', root: '/u/.cursor' },
+    ]);
+  });
+
+  it('groups per root and emits nothing for empty input (page no-op)', () => {
+    const groups = groupGlobalRulesByRoot(collectGlobalRules(entries));
+    expect(groups.map((g) => g.root)).toEqual(['/u/.claude', '/u/.cursor']);
+    expect(groups[0]?.rules.map((r) => r.name)).toEqual(['style']);
+    expect(collectGlobalRules([])).toEqual([]);
+    expect(groupGlobalRulesByRoot([])).toEqual([]);
   });
 });
 

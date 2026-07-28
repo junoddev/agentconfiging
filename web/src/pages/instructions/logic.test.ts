@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  collectGlobalInstructionFiles,
   collectInstructionFiles,
   extractImports,
   groupByScope,
+  groupGlobalByRoot,
   hasRedactionMarks,
   isInstructionFile,
+  joinGlobalPath,
   resolveImport,
   resolveImports,
   scopeOf,
@@ -63,6 +66,52 @@ describe('collectInstructionFiles', () => {
   it('returns [] when no agents reference instruction files', () => {
     expect(collectInstructionFiles([{ files: ['package.json'] }])).toEqual([]);
     expect(collectInstructionFiles([])).toEqual([]);
+  });
+});
+
+describe('joinGlobalPath', () => {
+  it('joins a root and a root-relative path into one absolute path', () => {
+    expect(joinGlobalPath('/Users/x/.claude', 'CLAUDE.md')).toBe('/Users/x/.claude/CLAUDE.md');
+  });
+
+  it('normalizes stray slashes on either side of the join', () => {
+    expect(joinGlobalPath('/Users/x/.claude/', '/CLAUDE.md')).toBe('/Users/x/.claude/CLAUDE.md');
+  });
+});
+
+describe('collectGlobalInstructionFiles', () => {
+  it('joins each root, applies the instruction-basename filter, de-dupes, sorts', () => {
+    const files = collectGlobalInstructionFiles([
+      {
+        root: '/Users/x/.claude',
+        agents: [{ files: ['CLAUDE.md', 'settings.json'] }, { files: ['CLAUDE.md'] }],
+      },
+      { root: '/Users/x/.codex', agents: [{ files: ['AGENTS.md'] }] },
+    ]);
+    expect(files).toEqual([
+      { path: '/Users/x/.claude/CLAUDE.md', rel: 'CLAUDE.md', root: '/Users/x/.claude' },
+      { path: '/Users/x/.codex/AGENTS.md', rel: 'AGENTS.md', root: '/Users/x/.codex' },
+    ]);
+  });
+
+  it('returns [] with no global entries or no instruction files (page no-op)', () => {
+    expect(collectGlobalInstructionFiles([])).toEqual([]);
+    expect(
+      collectGlobalInstructionFiles([{ root: '/u/.claude', agents: [{ files: ['x.json'] }] }]),
+    ).toEqual([]);
+  });
+});
+
+describe('groupGlobalByRoot', () => {
+  it('groups files per root and never emits an empty group', () => {
+    const claude = { path: '/u/.claude/CLAUDE.md', rel: 'CLAUDE.md', root: '/u/.claude' };
+    const codex = { path: '/u/.codex/AGENTS.md', rel: 'AGENTS.md', root: '/u/.codex' };
+    const groups = groupGlobalByRoot([claude, codex]);
+    expect(groups).toEqual([
+      { root: '/u/.claude', files: [claude] },
+      { root: '/u/.codex', files: [codex] },
+    ]);
+    expect(groupGlobalByRoot([])).toEqual([]);
   });
 });
 

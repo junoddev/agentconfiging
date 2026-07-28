@@ -75,6 +75,92 @@ export function collectRules(report: Report | undefined): RuleEntry[] {
   );
 }
 
+// ── Inherited global rules (bead 71h.5) ─────────────────────────────────────
+
+/** The slice of a machine-global report entry this page consumes. */
+export interface GlobalRuleSource {
+  /** Absolute path of the global config dir (e.g. '/Users/x/.claude'). */
+  root: string;
+  /** Well-known dir name under home (e.g. '.claude', '.cursor'). */
+  dir: string;
+  agents: readonly { files: string[] }[];
+}
+
+/** An inherited rule. `path` is ABSOLUTE (root-joined) and only ever fed to
+ *  getFile — it must never enter any write-target list. */
+export interface GlobalRuleEntry extends RuleEntry {
+  /** The global config dir the file came from. */
+  root: string;
+}
+
+/** Join a global root and a root-relative path into one absolute path. */
+export function joinGlobalPath(root: string, rel: string): string {
+  return `${root.replace(/\/+$/, '')}/${rel.replace(/^\/+/, '')}`;
+}
+
+// Global paths are RELATIVE TO THE CONFIG DIR (no `.claude/` prefix): a rule
+// under ~/.claude is `rules/x.md`; under ~/.cursor it is `rules/x.mdc`.
+const GLOBAL_CLAUDE_RULE_RE = /(?:^|\/)rules\/([^/]+)\.md$/i;
+const GLOBAL_CURSOR_RULE_RE = /(?:^|\/)rules\/([^/]+)\.mdc$/i;
+
+/** Classify a global entry's root-relative path as a rule for that runtime dir,
+ *  or null. Only `.claude` (rules/*.md) and `.cursor` (rules/*.mdc) carry rules. */
+export function classifyGlobalRule(
+  dir: string,
+  relPath: string,
+): { source: RuleSource; name: string } | null {
+  const norm = relPath.replace(/\\/g, '/');
+  if (dir === '.claude') {
+    const m = GLOBAL_CLAUDE_RULE_RE.exec(norm);
+    return m ? { source: 'claude', name: m[1] as string } : null;
+  }
+  if (dir === '.cursor') {
+    const m = GLOBAL_CURSOR_RULE_RE.exec(norm);
+    return m ? { source: 'cursor', name: m[1] as string } : null;
+  }
+  return null;
+}
+
+/** Inherited rules from the global `.claude`/`.cursor` entries, absolute-joined,
+ *  de-duped, and ordered like collectRules. No matches ⇒ [] (page unchanged). */
+export function collectGlobalRules(entries: readonly GlobalRuleSource[]): GlobalRuleEntry[] {
+  const byPath = new Map<string, GlobalRuleEntry>();
+  for (const entry of entries) {
+    for (const agent of entry.agents) {
+      for (const rel of agent.files) {
+        const classified = classifyGlobalRule(entry.dir, rel);
+        if (!classified) continue;
+        const path = joinGlobalPath(entry.root, rel);
+        if (!byPath.has(path)) byPath.set(path, { ...classified, path, root: entry.root });
+      }
+    }
+  }
+  return [...byPath.values()].sort(
+    (a, b) =>
+      a.source.localeCompare(b.source) ||
+      a.name.localeCompare(b.name) ||
+      a.path.localeCompare(b.path),
+  );
+}
+
+/** One global root's inherited rules, for a `GLOBAL · ~/.claude` list heading. */
+export interface GlobalRuleGroup {
+  root: string;
+  rules: GlobalRuleEntry[];
+}
+
+/** Group inherited rules by their global root, preserving the collector's
+ *  order. Empty input ⇒ no groups (never an empty GLOBAL heading). */
+export function groupGlobalRulesByRoot(rules: readonly GlobalRuleEntry[]): GlobalRuleGroup[] {
+  const groups = new Map<string, GlobalRuleGroup>();
+  for (const rule of rules) {
+    const group = groups.get(rule.root) ?? { root: rule.root, rules: [] };
+    group.rules.push(rule);
+    groups.set(rule.root, group);
+  }
+  return [...groups.values()];
+}
+
 // ── Path-filter (glob) parsing ─────────────────────────────────────────────
 
 /**

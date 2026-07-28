@@ -24,11 +24,19 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ApiError, type FileContent, type RedactionSpan } from '../api/index.js';
-import { Button, EmptyState, FileChip } from '../components/core/index.js';
-import { useAppState } from '../state/index.js';
+import { Button, EmptyState, FileChip, SourceBadge } from '../components/core/index.js';
+import { homeRel } from '../lib/format.js';
+import { useAppState, useGlobalConfig } from '../state/index.js';
 import { WriteFlow, useWriteFlow } from '../write/index.js';
 import { RulePreview } from './rules/RulePreview.js';
-import { collectRules, isRedacted, type RuleEntry, type RuleSource } from './rules/logic.js';
+import {
+  collectGlobalRules,
+  collectRules,
+  groupGlobalRulesByRoot,
+  isRedacted,
+  type RuleEntry,
+  type RuleSource,
+} from './rules/logic.js';
 import { STARTER_TEMPLATES, type StarterTemplate } from './rules/templates.js';
 import './rules.css';
 
@@ -77,11 +85,19 @@ function renderRedacted(content: string, spans: readonly RedactionSpan[]): React
 
 export function Rules() {
   const { report, getFile } = useAppState();
+  const { entries: globalDirs } = useGlobalConfig();
   const flow = useWriteFlow();
 
   const entries = useMemo(() => collectRules(report), [report]);
   const claudeRules = entries.filter((e) => e.source === 'claude');
   const cursorRules = entries.filter((e) => e.source === 'cursor');
+
+  // Inherited GLOBAL rules (bead 71h.5): absolute root-joined paths, read via
+  // getFile only — never a write target. Absent/failed global data ⇒ empty
+  // lists and the page renders exactly as before.
+  const globalRules = useMemo(() => collectGlobalRules(globalDirs), [globalDirs]);
+  const globalGroups = useMemo(() => groupGlobalRulesByRoot(globalRules), [globalRules]);
+  const globalByPath = useMemo(() => new Map(globalRules.map((e) => [e.path, e])), [globalRules]);
 
   const [selection, setSelection] = useState<Selection>(undefined);
   const [mode, setMode] = useState<Mode>('preview');
@@ -162,12 +178,16 @@ export function Rules() {
   // ── Derived editor state ──────────────────────────────────────────────────
   const redacted =
     selection?.kind === 'file' && loaded !== undefined && isRedacted(loaded.spans, loaded.content);
+  // Inherited global rule ⇒ read-only regardless of content: its absolute path
+  // must never reach the write flow from a project view.
+  const inherited = selection?.kind === 'file' && globalByPath.has(selection.entry.path);
+  const readOnly = redacted || inherited;
   const savePath = selection?.kind === 'template' ? newPath.trim() : selection?.entry.path;
   const busy = flow.phase === 'loading' || flow.phase === 'committing';
 
   const canSave =
     selection !== undefined &&
-    !redacted &&
+    !readOnly &&
     savePath !== undefined &&
     savePath !== '' &&
     !busy &&
@@ -209,13 +229,33 @@ export function Rules() {
       <section className="page__section">
         <div className="rules">
           <div className="rules__list">
-            {entries.length === 0 && (
+            {entries.length === 0 && globalRules.length === 0 && (
               <p className="micro-label rules__none">
                 no contextual rules detected — start from a template
               </p>
             )}
             {renderList(SOURCE_LABEL.claude, claudeRules)}
             {renderList(SOURCE_LABEL.cursor, cursorRules)}
+            {globalGroups.map((group) => (
+              <div key={group.root} className="rules__group">
+                <span className="micro-label rules__group-label">
+                  <SourceBadge scope="global" detail={homeRel(group.root)} readOnly />
+                </span>
+                {group.rules.map((entry) => (
+                  <span
+                    key={entry.path}
+                    {...(selection?.kind === 'file' && selection.entry.path === entry.path
+                      ? { 'aria-current': 'true' }
+                      : {})}
+                  >
+                    <FileChip
+                      path={entry.name}
+                      onClick={() => setSelection({ kind: 'file', entry })}
+                    />
+                  </span>
+                ))}
+              </div>
+            ))}
 
             <div className="rules__group">
               <span className="micro-label rules__group-label">TEMPLATES</span>
@@ -268,8 +308,16 @@ export function Rules() {
                     ) : (
                       <span className="mono-data">{selection.entry.path}</span>
                     )}
-                    {loaded && (
-                      <span className="rules__scope micro-label">scope · {loaded.pathScope}</span>
+                    {inherited && selection.kind === 'file' ? (
+                      <SourceBadge
+                        scope="global"
+                        detail={homeRel(globalByPath.get(selection.entry.path)?.root ?? '')}
+                        readOnly
+                      />
+                    ) : (
+                      loaded && (
+                        <span className="rules__scope micro-label">scope · {loaded.pathScope}</span>
+                      )
                     )}
                   </div>
 
@@ -280,6 +328,9 @@ export function Rules() {
                       real value with the placeholder
                     </p>
                   )}
+                  {inherited && !redacted && (
+                    <p className="rules__redact micro-label">inherited · read-only</p>
+                  )}
 
                   <div className="rules__toolbar">
                     <Button
@@ -288,12 +339,12 @@ export function Rules() {
                       onClick={() => setMode('preview')}
                     />
                     <Button
-                      label={redacted ? 'source' : 'edit'}
+                      label={readOnly ? 'source' : 'edit'}
                       variant={mode === 'edit' ? 'primary' : 'default'}
                       onClick={() => setMode('edit')}
                     />
                     <span className="rules__toolbar-spacer" />
-                    {!redacted && (
+                    {!readOnly && (
                       <Button label="save" variant="primary" onClick={onSave} disabled={!canSave} />
                     )}
                   </div>
@@ -301,7 +352,7 @@ export function Rules() {
                   {mode === 'preview' && <RulePreview content={draft} />}
 
                   {mode === 'edit' &&
-                    (redacted && loaded ? (
+                    (readOnly && loaded ? (
                       <pre className="rules__source mono-data">
                         {renderRedacted(loaded.content, loaded.spans)}
                       </pre>

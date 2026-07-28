@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ApiError, type FileContent, type RedactionSpan } from '../api/index.js';
-import { Button, EmptyState, FileChip } from '../components/core/index.js';
-import { useAppState } from '../state/index.js';
+import { Button, EmptyState, FileChip, SourceBadge } from '../components/core/index.js';
+import { homeRel } from '../lib/format.js';
+import { useAppState, useGlobalConfig } from '../state/index.js';
 import { WriteFlow, useWriteFlow } from '../write/index.js';
 import {
+  collectGlobalInstructionFiles,
   collectInstructionFiles,
   extractImports,
   groupByScope,
+  groupGlobalByRoot,
   hasRedactionMarks,
   resolveImports,
   tokenizeMarkdown,
@@ -125,6 +128,7 @@ function MarkdownPreview({ content }: { content: string }) {
  */
 export function Instructions() {
   const { report, getFile } = useAppState();
+  const { entries: globalEntries } = useGlobalConfig();
   const flow = useWriteFlow();
 
   // Every instance file (not just instruction files) — the set an @import is
@@ -137,6 +141,13 @@ export function Instructions() {
 
   const instructionFiles = useMemo(() => collectInstructionFiles(report?.agents ?? []), [report]);
   const groups = useMemo(() => groupByScope(instructionFiles), [instructionFiles]);
+
+  // Inherited GLOBAL instruction files (bead 71h.5): absolute root-joined paths,
+  // read via getFile only — they NEVER enter the save flow. Absent/failed global
+  // data ⇒ empty lists and the page renders exactly as before.
+  const globalFiles = useMemo(() => collectGlobalInstructionFiles(globalEntries), [globalEntries]);
+  const globalGroups = useMemo(() => groupGlobalByRoot(globalFiles), [globalFiles]);
+  const globalByPath = useMemo(() => new Map(globalFiles.map((f) => [f.path, f])), [globalFiles]);
 
   const [selected, setSelected] = useState<string | undefined>(undefined);
   const [file, setFile] = useState<FileContent | undefined>(undefined);
@@ -198,13 +209,20 @@ export function Instructions() {
   }, [flow.phase, selected, getFile]);
 
   const redacted = file ? isRedacted(file) : false;
-  const dirty = file !== undefined && !redacted && draft !== file.content;
+  // Inherited global file ⇒ read-only, whatever its content: its absolute path
+  // must never reach the write flow from a project view.
+  const inherited = selected !== undefined && globalByPath.has(selected);
+  const readOnly = redacted || inherited;
+  const dirty = file !== undefined && !readOnly && draft !== file.content;
   const busy = flow.phase === 'loading' || flow.phase === 'committing';
 
   const imports = useMemo<ResolvedImport[]>(() => {
-    if (!file || selected === undefined) return [];
+    // Global files' relative imports resolve against THEIR root, not the
+    // project file set — resolving here would only show misleading BROKEN
+    // chips, so inherited files render without the imports strip.
+    if (!file || selected === undefined || inherited) return [];
     return resolveImports(extractImports(file.content), selected, knownFiles);
-  }, [file, selected, knownFiles]);
+  }, [file, selected, knownFiles, inherited]);
 
   function onSave() {
     if (selected === undefined || !dirty) return;
@@ -221,12 +239,14 @@ export function Instructions() {
       <section className="page__section">
         <h1 className="title-page">
           INSTRUCTIONS
-          <span className="instr__count mono-data">{instructionFiles.length} FILES</span>
+          <span className="instr__count mono-data">
+            {instructionFiles.length + globalFiles.length} FILES
+          </span>
         </h1>
       </section>
 
       <section className="page__section">
-        {instructionFiles.length === 0 ? (
+        {instructionFiles.length === 0 && globalFiles.length === 0 ? (
           <EmptyState instruction="no instruction files (CLAUDE.md, AGENTS.md, …) in this instance" />
         ) : (
           <div className="instr">
@@ -237,6 +257,21 @@ export function Instructions() {
                   {group.files.map((path) => (
                     <span key={path} {...(path === selected ? { 'aria-current': 'true' } : {})}>
                       <FileChip path={path} onClick={() => setSelected(path)} />
+                    </span>
+                  ))}
+                </div>
+              ))}
+              {globalGroups.map((group) => (
+                <div key={group.root} className="instr__group">
+                  <span className="instr__group-label">
+                    <SourceBadge scope="global" detail={homeRel(group.root)} readOnly />
+                  </span>
+                  {group.files.map((gf) => (
+                    <span
+                      key={gf.path}
+                      {...(gf.path === selected ? { 'aria-current': 'true' } : {})}
+                    >
+                      <FileChip path={gf.rel} onClick={() => setSelected(gf.path)} />
                     </span>
                   ))}
                 </div>
@@ -257,7 +292,15 @@ export function Instructions() {
                 <>
                   <div className="instr__head">
                     <span className="mono-data">{file.path}</span>
-                    <span className="instr__scope micro-label">scope · {file.pathScope}</span>
+                    {inherited ? (
+                      <SourceBadge
+                        scope="global"
+                        detail={homeRel(globalByPath.get(selected)?.root ?? '')}
+                        readOnly
+                      />
+                    ) : (
+                      <span className="instr__scope micro-label">scope · {file.pathScope}</span>
+                    )}
                     {redacted && (
                       <span className="instr__scope micro-label">{file.spans.length} redacted</span>
                     )}
@@ -265,7 +308,7 @@ export function Instructions() {
 
                   <div className="instr__toolbar">
                     <Button
-                      label={redacted ? 'source' : 'edit'}
+                      label={readOnly ? 'source' : 'edit'}
                       variant={mode === 'edit' ? 'primary' : 'default'}
                       onClick={() => setMode('edit')}
                     />
@@ -275,7 +318,7 @@ export function Instructions() {
                       onClick={() => setMode('preview')}
                     />
                     <span className="instr__toolbar-spacer" />
-                    {!redacted && (
+                    {!readOnly && (
                       <Button
                         label="save"
                         variant="primary"
@@ -290,9 +333,12 @@ export function Instructions() {
                       contains redacted secrets — read-only; edit this file on disk
                     </p>
                   )}
+                  {inherited && !redacted && (
+                    <p className="instr__note micro-label">inherited · read-only</p>
+                  )}
 
                   {mode === 'edit' &&
-                    (redacted ? (
+                    (readOnly ? (
                       <pre className="instr__source mono-data">
                         {renderRedacted(file.content, file.spans)}
                       </pre>
@@ -307,7 +353,7 @@ export function Instructions() {
                     ))}
 
                   {mode === 'preview' && (
-                    <MarkdownPreview content={redacted ? file.content : draft} />
+                    <MarkdownPreview content={readOnly ? file.content : draft} />
                   )}
 
                   {flow.phase !== 'idle' && <WriteFlow flow={flow} />}

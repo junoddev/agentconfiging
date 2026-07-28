@@ -4,8 +4,10 @@ import { parseFrontmatter } from './frontmatter.js';
 import {
   classifyFile,
   collectEntries,
+  collectGlobalEntries,
   deriveGraph,
   extractMcpServers,
+  joinGlobalPath,
   toCard,
   type SkillEntry,
 } from './logic.js';
@@ -72,6 +74,53 @@ describe('collectEntries', () => {
 
   it('returns empty for an undefined report', () => {
     expect(collectEntries(undefined)).toEqual([]);
+  });
+});
+
+describe('joinGlobalPath', () => {
+  it('joins a root and a root-relative path, normalizing stray slashes', () => {
+    expect(joinGlobalPath('/Users/x/.claude', 'agents/r.md')).toBe('/Users/x/.claude/agents/r.md');
+    expect(joinGlobalPath('/Users/x/.claude/', '/agents/r.md')).toBe(
+      '/Users/x/.claude/agents/r.md',
+    );
+  });
+});
+
+describe('collectGlobalEntries', () => {
+  it('collects ~/.claude skills + agents as absolute paths, de-duped and sorted', () => {
+    const entries = collectGlobalEntries([
+      {
+        root: '/Users/x/.claude',
+        dir: '.claude',
+        agents: [
+          { files: ['skills/deploy/SKILL.md', 'agents/zeta.md', 'settings.json'] },
+          { files: ['agents/zeta.md'] },
+        ],
+      },
+    ]);
+    expect(entries).toEqual([
+      {
+        kind: 'agent',
+        name: 'zeta',
+        path: '/Users/x/.claude/agents/zeta.md',
+        root: '/Users/x/.claude',
+      },
+      {
+        kind: 'skill',
+        name: 'deploy',
+        path: '/Users/x/.claude/skills/deploy/SKILL.md',
+        root: '/Users/x/.claude',
+      },
+    ]);
+  });
+
+  it('ignores non-.claude global dirs and returns [] when nothing matches', () => {
+    expect(
+      collectGlobalEntries([
+        { root: '/Users/x/.codex', dir: '.codex', agents: [{ files: ['agents/a.md'] }] },
+      ]),
+    ).toEqual([]);
+    expect(collectGlobalEntries([])).toEqual([]);
   });
 });
 
