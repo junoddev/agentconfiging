@@ -8,6 +8,13 @@
   min-height: 0;
 }
 
+/* The shell keeps the terminal mounted on every route and hides it off-route
+   via the `hidden` attribute; the `display: flex` above outranks the UA
+   [hidden] rule, so the off-route state must be restated here. */
+.terminal-page[hidden] {
+  display: none;
+}
+
 .terminal-scope {
   color: var(--fg-dim);
   margin-top: 4px;
