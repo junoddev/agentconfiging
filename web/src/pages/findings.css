@@ -67,3 +67,20 @@
   font-size: var(--size-body);
   line-height: var(--leading-body);
 }
+
+/* ── Global (inherited) findings group, E12: heading + per-layer tally. ───── */
+.findings__global {
+  margin-top: var(--gutter);
+}
+
+.findings__global-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--gutter);
+  padding: 8px 0;
+}
+
+.findings__global-tally {
+  color: var(--fg-dim);
+}

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { EmptyState, FindingRow, SignalStrip, StatBlock } from '../components/core/index.js';
 import { SweepOverlay } from '../components/signal/index.js';
-import { useReport } from '../state/index.js';
+import { useGlobalConfig, useReport } from '../state/index.js';
 import type { AppError } from '../state/index.js';
 import {
   buildAgentSignals,
   computeStats,
+  inheritedSummary,
   severitySummary,
   severityToBlock,
   topFindings,
@@ -29,6 +30,11 @@ function ErrorPanel({ error }: { error: AppError }) {
  *  so a WS-driven refetch updates it automatically. */
 export function Overview() {
   const { report, loading, error } = useReport();
+  // Inherited (machine-global) presence, one micro-line (E12). Absent global
+  // data ⇒ undefined ⇒ the page renders exactly as before; a global load
+  // failure only ever leaves `entries` empty and never touches `error`.
+  const { entries: globalEntries } = useGlobalConfig();
+  const inherited = inheritedSummary(globalEntries);
 
   // Run one rescan sweep on each loading rising edge (a refetch over an existing
   // report). No skeleton loaders (§9) — the sweep is the loading affordance.
@@ -93,6 +99,11 @@ export function Overview() {
             <StatBlock value={stats.fileCount} label="ARTIFACTS" size="md" />
           </div>
         </div>
+        {inherited !== undefined && (
+          <a className="micro-label overview__inherited" href="#/agents">
+            {inherited}
+          </a>
+        )}
       </section>
 
       <section className="page__section">

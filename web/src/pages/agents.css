@@ -13,6 +13,15 @@
   color: var(--signal);
 }
 
+/* ── Global (inherited) section, E12 ─────────────────────────────────────
+   One SourceBadge heading per home config dir, then that dir's strips. The
+   strips are informational (not linked) — detail routes resolve against the
+   project report. */
+
+.agents__global-head {
+  margin: var(--gutter) 0 8px;
+}
+
 /* ── Detail head: kind + confidence rating over its VU meter ───────────── */
 
 .agent-detail__head {
@@ -46,6 +55,11 @@
 /* Section caption for FILES / METADATA / FINDINGS. */
 .agent-detail__caption {
   margin-bottom: 8px;
+}
+
+/* PROJECT / GLOBAL · <dir> micro-headings between chip groups (E12). */
+.agent-detail__filegroup {
+  margin: 8px 0;
 }
 
 .agent-detail__chips {

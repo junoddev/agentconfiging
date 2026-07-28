@@ -6,7 +6,13 @@
  *  of it attacker-controlled): values only ever become plain strings, never
  *  markup. The pages then emit them as text nodes. */
 
-import type { Confidence, DetectedAgent, Report, ReportFinding } from '../../api/types.js';
+import type {
+  Confidence,
+  DetectedAgent,
+  GlobalEntry,
+  Report,
+  ReportFinding,
+} from '../../api/types.js';
 import type { ConfigSource } from '../../components/signal/index.js';
 import type { Severity as RowSeverity } from '../../components/core/index.js';
 
@@ -57,6 +63,52 @@ export function toConfigSources(files: readonly string[]): ConfigSource[] {
  *  through the query string without breaking the hash route. */
 export function artifactHref(path: string): string {
   return `#/artifacts?path=${encodeURIComponent(path)}`;
+}
+
+/** Global (inherited) entries worth listing on the agent pages: only dirs where
+ *  the scanner actually detected agents. Preserves server order. Pure filter —
+ *  an empty result means the pages render exactly as they do today. */
+export function globalAgentEntries(entries: readonly GlobalEntry[]): GlobalEntry[] {
+  return entries.filter((e) => e.agents.length > 0);
+}
+
+/** One global config file for an agent kind: the entry-relative path the report
+ *  carries, plus the absolute path (root + rel) the file API is addressed by. */
+export interface GlobalKindFile {
+  rel: string;
+  abs: string;
+}
+
+/** The global files contributed to one agent kind by one global config dir. */
+export interface GlobalKindGroup {
+  /** Real path of the global config dir (filesystem data — text nodes only). */
+  root: string;
+  files: GlobalKindFile[];
+}
+
+/** Join a global entry root and an entry-relative file into an absolute path.
+ *  Roots are realpaths (no trailing slash), but normalize defensively. */
+function joinGlobalPath(root: string, rel: string): string {
+  return `${root.replace(/\/+$/, '')}/${rel}`;
+}
+
+/** Per-global-dir file groups for one agent kind (E12, AgentDetail FILES
+ *  grouping). Only entries where the SAME kind was detected with at least one
+ *  file contribute a group; entry order is preserved. */
+export function globalFilesForKind(
+  entries: readonly GlobalEntry[],
+  kind: string,
+): GlobalKindGroup[] {
+  const groups: GlobalKindGroup[] = [];
+  for (const entry of entries) {
+    const match = entry.agents.find((a) => a.kind === kind);
+    if (!match || match.files.length === 0) continue;
+    groups.push({
+      root: entry.root,
+      files: match.files.map((rel) => ({ rel, abs: joinGlobalPath(entry.root, rel) })),
+    });
+  }
+  return groups;
 }
 
 /** One flattened extras entry: a dotted key and its stringified value. */

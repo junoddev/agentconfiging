@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { ReportFinding } from '../../api/types.js';
+import type { GlobalEntry, ReportFinding } from '../../api/types.js';
 import {
+  canApply,
   countBySeverity,
   filterFindings,
+  globalFindingRows,
+  globalTallyLine,
   hasApplicableFix,
   rowSeverity,
   severityCountLabel,
@@ -86,6 +89,59 @@ describe('filterFindings', () => {
 
   it('returns nothing when no band is active', () => {
     expect(filterFindings(SAMPLE, new Set())).toEqual([]);
+  });
+});
+
+function globalEntry(over: Partial<GlobalEntry> = {}): GlobalEntry {
+  return {
+    root: '/Users/x/.claude',
+    dir: '.claude',
+    agents: [],
+    findings: [],
+    stats: { fileCount: 0, totalBytes: 0 },
+    ...over,
+  };
+}
+
+describe('canApply', () => {
+  it('offers APPLY only for project findings with a machine fix', () => {
+    expect(canApply(SAMPLE[0]!, 'project')).toBe(true);
+    expect(canApply(SAMPLE[1]!, 'project')).toBe(false);
+  });
+
+  it('NEVER offers APPLY for a global finding, even with hasFix set', () => {
+    expect(canApply(SAMPLE[0]!, 'global')).toBe(false);
+    expect(canApply({ hasFix: true }, 'global')).toBe(false);
+  });
+});
+
+describe('globalFindingRows', () => {
+  it('flattens entries into root-annotated rows, entry order then finding order', () => {
+    const rows = globalFindingRows([
+      globalEntry({ root: '/u/.claude', findings: [SAMPLE[0]!, SAMPLE[2]!] }),
+      globalEntry({ root: '/u/.cursor', dir: '.cursor', findings: [SAMPLE[3]!] }),
+    ]);
+    expect(rows).toEqual([
+      { root: '/u/.claude', finding: SAMPLE[0]! },
+      { root: '/u/.claude', finding: SAMPLE[2]! },
+      { root: '/u/.cursor', finding: SAMPLE[3]! },
+    ]);
+  });
+
+  it('is empty for no entries or finding-free entries — page renders unchanged', () => {
+    expect(globalFindingRows([])).toEqual([]);
+    expect(globalFindingRows([globalEntry()])).toEqual([]);
+  });
+});
+
+describe('globalTallyLine', () => {
+  it('tallies the global layer in severity order, non-zero bands only', () => {
+    expect(globalTallyLine(SAMPLE)).toBe('2 ERRORS · 1 WARNING · 1 INFO');
+    expect(globalTallyLine([SAMPLE[0]!, SAMPLE[3]!])).toBe('1 ERROR · 1 INFO');
+  });
+
+  it('is empty when the global layer has no findings', () => {
+    expect(globalTallyLine([])).toBe('');
   });
 });
 

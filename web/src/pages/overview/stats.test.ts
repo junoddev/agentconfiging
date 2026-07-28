@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { DetectedAgent, Report, ReportFinding } from '../../api/types.js';
+import type { DetectedAgent, GlobalEntry, Report, ReportFinding } from '../../api/types.js';
 import {
   buildAgentSignals,
   computeStats,
   confidenceLevel,
   deriveAgentSources,
   displayKind,
+  inheritedSummary,
   severitySummary,
   severityToBlock,
   tallyFindings,
@@ -38,6 +39,15 @@ const report = (over: Partial<Report> = {}): Report => ({
   agents: [agent()],
   findings: [],
   stats: { fileCount: 14, totalBytes: 4096 },
+  ...over,
+});
+
+const globalEntry = (over: Partial<GlobalEntry> = {}): GlobalEntry => ({
+  root: '/Users/x/.claude',
+  dir: '.claude',
+  agents: [agent()],
+  findings: [],
+  stats: { fileCount: 2, totalBytes: 128 },
   ...over,
 });
 
@@ -147,6 +157,40 @@ describe('topFindings', () => {
     ];
     topFindings(findings);
     expect(findings.map((f) => f.id)).toEqual(['a', 'b']);
+  });
+});
+
+describe('inheritedSummary', () => {
+  it('is undefined with no global entries — the overview renders unchanged', () => {
+    expect(inheritedSummary([])).toBeUndefined();
+  });
+
+  it('sums dirs, agents, and findings across entries in the §7 voice', () => {
+    const entries = [
+      globalEntry({
+        agents: [agent(), agent({ kind: 'codex' })],
+        findings: [finding(), finding({ severity: 'warning' })],
+      }),
+      globalEntry({
+        root: '/Users/x/.cursor',
+        dir: '.cursor',
+        agents: [agent({ kind: 'cursor' })],
+        findings: [finding({ severity: 'error' }), finding({ severity: 'info' })],
+      }),
+    ];
+    expect(inheritedSummary(entries)).toBe('INHERITED · 2 GLOBAL DIRS · 3 AGENTS · 4 FINDINGS');
+  });
+
+  it('uses singular forms for single counts', () => {
+    expect(inheritedSummary([globalEntry({ findings: [finding()] })])).toBe(
+      'INHERITED · 1 GLOBAL DIR · 1 AGENT · 1 FINDING',
+    );
+  });
+
+  it('reports honest zeros for a dir with nothing detected', () => {
+    expect(inheritedSummary([globalEntry({ agents: [], findings: [] })])).toBe(
+      'INHERITED · 1 GLOBAL DIR · 0 AGENTS · 0 FINDINGS',
+    );
   });
 });
 

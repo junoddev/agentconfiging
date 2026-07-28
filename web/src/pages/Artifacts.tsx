@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ApiError, type FileContent, type RedactionSpan } from '../api/index.js';
-import { Button, EmptyState, FileChip } from '../components/core/index.js';
-import { useAppState } from '../state/index.js';
+import { Button, EmptyState, FileChip, SourceBadge } from '../components/core/index.js';
+import { homeRel } from '../lib/format.js';
+import { useAppState, useGlobalConfig } from '../state/index.js';
+import { globalFileGroups } from './artifacts/logic.js';
 import './artifacts.css';
 
 /** Which panel of a loaded file is showing. */
@@ -67,6 +69,13 @@ export function Artifacts() {
 
   const files = useMemo(() => collectFiles(report?.agents ?? []), [report]);
 
+  // Inherited (machine-global) chip groups (E12): one group per home config
+  // dir. Chips select by ABSOLUTE path — the address getFile() serves global
+  // files under — and READ-ONLY: no write flow ever sees these paths. Empty
+  // entries (absent or failed global load) leave the page exactly as today.
+  const { entries } = useGlobalConfig();
+  const globalGroups = useMemo(() => globalFileGroups(entries), [entries]);
+
   const [selected, setSelected] = useState<string | undefined>(initialPath);
   const [file, setFile] = useState<FileContent | undefined>(undefined);
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
@@ -128,15 +137,35 @@ export function Artifacts() {
       </section>
 
       <section className="page__section">
-        {files.length === 0 ? (
+        {files.length === 0 && globalGroups.length === 0 ? (
           <EmptyState instruction="no artifacts referenced by any detected agent" />
         ) : (
           <div className="artifact">
             <div className="artifact__list">
+              {/* With global groups present the project chips gain a PROJECT
+                  micro-heading so the layers stay visually distinct. */}
+              {globalGroups.length > 0 && files.length > 0 && (
+                <h2 className="micro-label artifact__group-head">PROJECT</h2>
+              )}
               {files.map((path) => (
                 <span key={path} {...(path === selected ? { 'aria-current': 'true' } : {})}>
                   <FileChip path={path} onClick={() => setSelected(path)} />
                 </span>
+              ))}
+              {globalGroups.map((group) => (
+                <Fragment key={group.root}>
+                  <h2 className="artifact__group-head">
+                    <SourceBadge scope="global" detail={homeRel(group.root)} readOnly />
+                  </h2>
+                  {group.files.map((file) => (
+                    <span
+                      key={file.abs}
+                      {...(file.abs === selected ? { 'aria-current': 'true' } : {})}
+                    >
+                      <FileChip path={file.rel} onClick={() => setSelected(file.abs)} />
+                    </span>
+                  ))}
+                </Fragment>
               ))}
             </div>
 

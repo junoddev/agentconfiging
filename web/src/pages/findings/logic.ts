@@ -8,7 +8,7 @@
  * ('ok' | 'warn' | 'error'). `rowSeverity` bridges them.
  */
 
-import type { ReportFinding, Severity } from '../../api/types.js';
+import type { GlobalEntry, ReportFinding, Severity } from '../../api/types.js';
 import type { Severity as RowSeverity } from '../../components/core/index.js';
 
 /** Severities in rail/report order — the order chips and tallies render in. */
@@ -61,6 +61,46 @@ export function filterFindings(
   active: ReadonlySet<Severity>,
 ): ReportFinding[] {
   return findings.filter((f) => active.has(f.severity));
+}
+
+/** Which config layer a finding came from. Drives the APPLY affordance. */
+export type FindingLayer = 'project' | 'global';
+
+/**
+ * APPLY suppression predicate (E12): a fix is offered ONLY for project-layer
+ * findings that carry a machine fix. Global (inherited) findings are never
+ * applicable — /api/fix resolves finding ids against the project report and
+ * cannot reach the global store BY DESIGN, so the button must never be offered.
+ */
+export function canApply(finding: Pick<ReportFinding, 'hasFix'>, layer: FindingLayer): boolean {
+  return layer === 'project' && hasApplicableFix(finding);
+}
+
+/** One global finding annotated with the config dir it came from. */
+export interface GlobalFindingRow {
+  /** Real path of the global config dir (filesystem data — text nodes only). */
+  root: string;
+  finding: ReportFinding;
+}
+
+/** Flatten global entries into badge-ready finding rows, preserving entry
+ *  order then each entry's (already severity-sorted) finding order. */
+export function globalFindingRows(entries: readonly GlobalEntry[]): GlobalFindingRow[] {
+  const rows: GlobalFindingRow[] = [];
+  for (const entry of entries) {
+    for (const finding of entry.findings) rows.push({ root: entry.root, finding });
+  }
+  return rows;
+}
+
+/** Terse severity tally for the global layer ('1 ERROR · 2 INFO'); empty string
+ *  when the global layer has no findings. Rendered next to the GLOBAL heading
+ *  so the layers' tallies stay visually distinct. */
+export function globalTallyLine(findings: readonly ReportFinding[]): string {
+  const counts = countBySeverity(findings);
+  return SEVERITY_ORDER.filter((sev) => counts[sev] > 0)
+    .map((sev) => severityCountLabel(sev, counts[sev]))
+    .join(' · ');
 }
 
 /** Singular/plural label per severity ('info' does not pluralize). */

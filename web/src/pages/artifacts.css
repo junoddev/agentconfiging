@@ -32,6 +32,16 @@
   overflow-y: auto;
 }
 
+/* Scope group headings inside the chip list (E12): PROJECT, then one
+   GLOBAL · <dir> SourceBadge per home config dir. */
+.artifact__group-head {
+  margin: 8px 0 2px;
+}
+
+.artifact__group-head:first-child {
+  margin-top: 0;
+}
+
 .artifact__list .chip {
   max-width: 100%;
   overflow: hidden;

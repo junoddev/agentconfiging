@@ -8,7 +8,13 @@
 import type { Severity as BlockSeverity } from '../../components/core/index.js';
 import type { ConfigSource } from '../../components/signal/index.js';
 import { pluralize } from '../../lib/format.js';
-import type { Confidence, DetectedAgent, Report, ReportFinding } from '../../api/types.js';
+import type {
+  Confidence,
+  DetectedAgent,
+  GlobalEntry,
+  Report,
+  ReportFinding,
+} from '../../api/types.js';
 
 /** Findings tallied by severity — the summary numbers the dashboard shows. */
 export interface SeverityTally {
@@ -119,6 +125,22 @@ export function topFindings(findings: readonly ReportFinding[], limit = 4): Repo
     )
     .slice(0, limit)
     .map((entry) => entry.finding);
+}
+
+/** One-line inherited-config presence summary (E12, DESIGN §5–§7 restraint):
+ *  `INHERITED · 2 GLOBAL DIRS · 3 AGENTS · 4 FINDINGS`. Counts span every
+ *  successfully scanned global dir. `undefined` when there is no global data —
+ *  the Overview then renders exactly as before (invariant: absent = no-op). */
+export function inheritedSummary(entries: readonly GlobalEntry[]): string | undefined {
+  if (entries.length === 0) return undefined;
+  const agents = entries.reduce((n, e) => n + e.agents.length, 0);
+  const findings = entries.reduce((n, e) => n + e.findings.length, 0);
+  const parts = [
+    pluralize(entries.length, 'global dir'),
+    pluralize(agents, 'agent'),
+    pluralize(findings, 'finding'),
+  ];
+  return `INHERITED · ${parts.join(' · ').toUpperCase()}`;
 }
 
 /** One-line severity summary in the §7 voice, e.g. "1 ERROR · 3 WARNINGS".

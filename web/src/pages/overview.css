@@ -28,6 +28,19 @@
   }
 }
 
+/* Inherited-config micro-line under the stat row (E12): one line of provenance,
+   linking to the agents page. Dim chassis text; signal color on hover only. */
+.overview__inherited {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--fg-dim);
+  text-decoration: none;
+}
+
+.overview__inherited:hover {
+  color: var(--signal);
+}
+
 /* Section captions above the agent strips and findings summary. */
 .overview__heading {
   margin-bottom: 8px;

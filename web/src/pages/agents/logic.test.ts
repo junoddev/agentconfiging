@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import type { DetectedAgent, Report, ReportFinding } from '../../api/types.js';
+import type { DetectedAgent, GlobalEntry, Report, ReportFinding } from '../../api/types.js';
 import {
   artifactHref,
   confidenceLevel,
   extrasToRows,
   findAgent,
   findingsForAgent,
+  globalAgentEntries,
+  globalFilesForKind,
   toConfigSources,
   toRowSeverity,
 } from './logic.js';
@@ -38,6 +40,77 @@ function report(over: Partial<Report> = {}): Report {
     ...over,
   };
 }
+
+function globalEntry(over: Partial<GlobalEntry> = {}): GlobalEntry {
+  return {
+    root: '/Users/x/.claude',
+    dir: '.claude',
+    agents: [],
+    findings: [],
+    stats: { fileCount: 0, totalBytes: 0 },
+    ...over,
+  };
+}
+
+describe('globalAgentEntries', () => {
+  it('keeps only entries with detected agents, preserving order', () => {
+    const a = globalEntry({ root: '/u/.claude', agents: [agent()] });
+    const b = globalEntry({ root: '/u/.cursor', dir: '.cursor' });
+    const c = globalEntry({ root: '/u/.codex', dir: '.codex', agents: [agent({ kind: 'codex' })] });
+    expect(globalAgentEntries([a, b, c])).toEqual([a, c]);
+  });
+
+  it('is empty for no entries — the agents page renders unchanged', () => {
+    expect(globalAgentEntries([])).toEqual([]);
+  });
+});
+
+describe('globalFilesForKind', () => {
+  it('yields one group per entry where the SAME kind has files, rel + abs paths', () => {
+    const entries = [
+      globalEntry({
+        root: '/Users/x/.claude',
+        agents: [agent({ kind: 'claude-code', files: ['CLAUDE.md', 'settings.json'] })],
+      }),
+      globalEntry({
+        root: '/Users/x/.cursor',
+        dir: '.cursor',
+        agents: [agent({ kind: 'cursor', files: ['rules.md'] })],
+      }),
+    ];
+    expect(globalFilesForKind(entries, 'claude-code')).toEqual([
+      {
+        root: '/Users/x/.claude',
+        files: [
+          { rel: 'CLAUDE.md', abs: '/Users/x/.claude/CLAUDE.md' },
+          { rel: 'settings.json', abs: '/Users/x/.claude/settings.json' },
+        ],
+      },
+    ]);
+  });
+
+  it('normalizes a trailing-slash root when joining absolute paths', () => {
+    const entries = [
+      globalEntry({
+        root: '/Users/x/.claude/',
+        agents: [agent({ kind: 'claude-code', files: ['CLAUDE.md'] })],
+      }),
+    ];
+    expect(globalFilesForKind(entries, 'claude-code')[0]?.files[0]?.abs).toBe(
+      '/Users/x/.claude/CLAUDE.md',
+    );
+  });
+
+  it('skips entries where the kind matched with zero files', () => {
+    const entries = [globalEntry({ agents: [agent({ kind: 'claude-code', files: [] })] })];
+    expect(globalFilesForKind(entries, 'claude-code')).toEqual([]);
+  });
+
+  it('is empty for an unknown kind or no entries — detail renders unchanged', () => {
+    expect(globalFilesForKind([globalEntry({ agents: [agent()] })], 'nope')).toEqual([]);
+    expect(globalFilesForKind([], 'claude-code')).toEqual([]);
+  });
+});
 
 describe('findAgent', () => {
   it('finds the agent whose kind matches', () => {
