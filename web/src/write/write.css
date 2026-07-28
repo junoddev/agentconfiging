@@ -23,12 +23,17 @@
    whenever the pending write's pathScope is 'global' — an unmissable flag that
    the edit lands in ~/.claude-style config affecting every project and agent
    on this machine. Severity palette only (DESIGN §2); no new colors. */
-.write-flow__global {
+.write-flow__global,
+.write-flow__global.micro-label {
   margin: 0;
   padding: 6px 10px;
   color: var(--warn);
   border: var(--hairline-w) solid var(--warn);
   border-radius: 2px;
+  /* The message embeds a filesystem path whose case matters (~/.claude);
+     the fixed words are already uppercase in the source string. Compound
+     selector outranks .micro-label's uppercase regardless of bundle order. */
+  text-transform: none;
 }
 
 .write-flow__status--ok {
