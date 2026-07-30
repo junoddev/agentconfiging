@@ -1,220 +1,120 @@
-/* Git panel (#/git, bead ngs.1). Chassis only — Signal-Grid tokens, hairlines,
-   mono. Nothing here animates; every branch/path/subject is adversarial git
-   output rendered as text nodes / by DiffPanel, never markup. */
-
-.git__sub {
-  margin-left: 8px;
-  color: var(--fg-dim);
-}
-
-.git__lede {
-  color: var(--fg-dim);
-  margin-top: 6px;
-}
+/* Git panel (#/git, bead ngs.1) — Console page-layout CSS only. The chassis
+   (list-cards, pills, buttons, notices, table, diff) comes from the §5 contract
+   in components.css; everything here is arrangement. All branch/path/subject
+   content is adversarial git output rendered as text nodes, never markup. */
 
 /* ── Head: branch switcher + push/pull ──────────────────────────────────── */
 
-.git__head {
+.git-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--gutter);
+  gap: 12px;
 }
 
-.git__branchline {
+.git-branchline {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px var(--gutter);
+  gap: 8px 12px;
 }
 
-.git__head-actions {
+.git-head-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--gutter);
-}
-
-.git__ab {
-  color: var(--signal);
-}
-
-.git__upstream {
-  color: var(--fg-dim);
-}
-
-.git__select,
-.git__input {
-  font: inherit;
-  color: var(--fg);
-  background: var(--bg);
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: 4px 8px;
-}
-
-.git__input--grow {
-  flex: 1 1 12rem;
-  min-width: 8rem;
-}
-
-/* ── Notices ─────────────────────────────────────────────────────────────── */
-
-.git__notice {
-  color: var(--warn);
-}
-
-/* ── Change groups ──────────────────────────────────────────────────────── */
-
-.git__changes {
-  display: flex;
-  flex-direction: column;
-  gap: var(--gutter);
-}
-
-.git__group {
-  display: flex;
-  flex-direction: column;
   gap: 8px;
 }
 
-.git__group-label {
-  color: var(--fg-dim);
-  letter-spacing: var(--tracking-micro);
+/* Width caps for the inline controls (the `.input` contract is 100%-wide). */
+select.input.git-select {
+  width: auto;
+  min-width: 10rem;
 }
 
-.git__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.input.git-newbranch {
+  width: 11rem;
 }
 
-.git__row {
+.git-upstream {
+  overflow-wrap: anywhere;
+}
+
+/* ── Change rows ────────────────────────────────────────────────────────── */
+
+.git-path {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.git-row-actions {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px var(--gutter);
-  padding: 6px var(--gutter);
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-}
-
-.git__badge {
-  letter-spacing: var(--tracking-micro);
-  text-transform: uppercase;
-  min-width: 5.5rem;
-}
-
-.git__badge--add {
-  color: var(--signal);
-}
-
-.git__badge--del {
-  color: var(--red);
-}
-
-.git__badge--mod {
-  color: var(--warn);
-}
-
-.git__path {
-  flex: 1 1 12rem;
-  color: var(--fg);
-  word-break: break-all;
-}
-
-.git__row-actions {
-  display: flex;
-  gap: 8px;
+  gap: 4px;
+  flex: none;
 }
 
 /* ── Conventional-commit builder ────────────────────────────────────────── */
 
-.git__commit {
+.git-commit {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.git__commit-fields {
+.git-commit-fields {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: var(--gutter);
+  align-items: flex-end;
+  gap: 12px;
 }
 
-.git__breaking {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--fg-dim);
-  cursor: pointer;
+.git-commit-fields .field {
+  margin-bottom: 0;
+  flex: 0 1 auto;
 }
 
-.git__body {
-  font: inherit;
-  color: var(--fg);
-  background: var(--bg);
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: 8px;
+/* Subject stretches; the switch column stays compact. */
+.git-commit-fields .field:nth-child(3) {
+  flex: 1 1 14rem;
+}
+
+.git-breaking {
+  align-items: flex-start;
+}
+
+.git-body {
   resize: vertical;
 }
 
-.git__preview {
+.git-preview {
   margin: 0;
-  padding: 8px;
-  border: var(--hairline-w) solid var(--hairline);
+  padding: 10px 12px;
+  background: var(--fg-soft);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  color: var(--signal);
+  color: var(--accent);
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
-.git__commit-actions {
+.git-commit-actions {
   display: flex;
   align-items: center;
-  gap: var(--gutter);
-}
-
-.git__hint {
-  color: var(--fg-dim);
+  gap: 12px;
 }
 
 /* ── Commit timeline ────────────────────────────────────────────────────── */
 
-.git__log {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.git-section-head {
+  margin-bottom: 10px;
 }
 
-.git__log-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px var(--gutter);
-  padding: 4px 0;
-  border-bottom: var(--hairline-w) solid var(--hairline);
+.git-subject {
+  overflow-wrap: anywhere;
 }
 
-.git__hash {
-  color: var(--fg-dim);
-}
-
-.git__subject {
-  flex: 1 1 16rem;
-  color: var(--fg);
-  word-break: break-word;
-}
-
-.git__log-meta {
-  color: var(--fg-dim);
+.git-log-meta {
+  white-space: nowrap;
 }

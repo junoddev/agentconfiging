@@ -54,7 +54,7 @@ export function NodeConfigPanel({
 
       <Field label="NAME (the {{name}} template key)">
         <input
-          className="pipeline-input mono-data"
+          className="input mono-data"
           value={node.name}
           onChange={(e) => set({ name: e.target.value })}
         />
@@ -64,7 +64,7 @@ export function NodeConfigPanel({
         <>
           <Field label="PROMPT">
             <textarea
-              className="pipeline-input mono-data"
+              className="input mono-data"
               rows={4}
               value={node.prompt}
               onChange={(e) => set({ prompt: e.target.value })}
@@ -72,7 +72,7 @@ export function NodeConfigPanel({
           </Field>
           <Field label="MODEL (optional)">
             <input
-              className="pipeline-input mono-data"
+              className="input mono-data"
               value={node.model ?? ''}
               onChange={(e) => set({ model: e.target.value })}
             />
@@ -83,7 +83,7 @@ export function NodeConfigPanel({
       {node.type === 'bash' && (
         <Field label="SCRIPT">
           <textarea
-            className="pipeline-input mono-data"
+            className="input mono-data"
             rows={5}
             value={node.script}
             onChange={(e) => set({ script: e.target.value })}
@@ -95,14 +95,14 @@ export function NodeConfigPanel({
         <>
           <Field label="WORKFLOW">
             <input
-              className="pipeline-input mono-data"
+              className="input mono-data"
               value={node.workflow}
               onChange={(e) => set({ workflow: e.target.value })}
             />
           </Field>
           <Field label="REF (optional)">
             <input
-              className="pipeline-input mono-data"
+              className="input mono-data"
               value={node.ref ?? ''}
               onChange={(e) => set({ ref: e.target.value })}
             />
@@ -114,7 +114,7 @@ export function NodeConfigPanel({
         <>
           <Field label="METHOD">
             <select
-              className="pipeline-input mono-data"
+              className="input mono-data"
               value={node.method ?? 'GET'}
               onChange={(e) => set({ method: e.target.value })}
             >
@@ -127,14 +127,14 @@ export function NodeConfigPanel({
           </Field>
           <Field label="URL">
             <input
-              className="pipeline-input mono-data"
+              className="input mono-data"
               value={node.url}
               onChange={(e) => set({ url: e.target.value })}
             />
           </Field>
           <Field label="BODY (optional)">
             <textarea
-              className="pipeline-input mono-data"
+              className="input mono-data"
               rows={3}
               value={node.body ?? ''}
               onChange={(e) => set({ body: e.target.value })}
@@ -146,7 +146,7 @@ export function NodeConfigPanel({
       {node.type === 'transform' && (
         <Field label="OPERATIONS (JSON)">
           <textarea
-            className="pipeline-input mono-data"
+            className="input mono-data"
             rows={6}
             value={opsText}
             onChange={(e) => {
@@ -171,7 +171,7 @@ export function NodeConfigPanel({
       {node.type === 'delay' && (
         <Field label="MS">
           <input
-            className="pipeline-input mono-data"
+            className="input mono-data"
             type="number"
             value={node.ms}
             onChange={(e) => set({ ms: Number(e.target.value) })}
@@ -183,7 +183,7 @@ export function NodeConfigPanel({
         <>
           <Field label="SUBCOMMAND">
             <select
-              className="pipeline-input mono-data"
+              className="input mono-data"
               value={node.subcommand}
               onChange={(e) => set({ subcommand: e.target.value })}
             >
@@ -196,7 +196,7 @@ export function NodeConfigPanel({
           </Field>
           <Field label="ARGS (comma-separated)">
             <input
-              className="pipeline-input mono-data"
+              className="input mono-data"
               value={(node.args ?? []).join(', ')}
               onChange={(e) =>
                 set({
@@ -215,14 +215,14 @@ export function NodeConfigPanel({
         <>
           <Field label="FIELD">
             <input
-              className="pipeline-input mono-data"
+              className="input mono-data"
               value={node.predicate.field}
               onChange={(e) => set({ predicate: { ...node.predicate, field: e.target.value } })}
             />
           </Field>
           <Field label="OP">
             <select
-              className="pipeline-input mono-data"
+              className="input mono-data"
               value={node.predicate.op}
               onChange={(e) =>
                 set({ predicate: { ...node.predicate, op: e.target.value as FilterOp } })
@@ -238,7 +238,7 @@ export function NodeConfigPanel({
           {node.predicate.op !== 'exists' && (
             <Field label="VALUE">
               <input
-                className="pipeline-input mono-data"
+                className="input mono-data"
                 value={String(node.predicate.value ?? '')}
                 onChange={(e) => set({ predicate: { ...node.predicate, value: e.target.value } })}
               />
@@ -250,7 +250,7 @@ export function NodeConfigPanel({
       {(node.type === 'read-file' || node.type === 'json-extract') && (
         <Field label="PATH">
           <input
-            className="pipeline-input mono-data"
+            className="input mono-data"
             value={node.path}
             onChange={(e) => set({ path: e.target.value })}
           />
@@ -261,14 +261,14 @@ export function NodeConfigPanel({
         <>
           <Field label="PATH">
             <input
-              className="pipeline-input mono-data"
+              className="input mono-data"
               value={node.path}
               onChange={(e) => set({ path: e.target.value })}
             />
           </Field>
           <Field label="CONTENT">
             <textarea
-              className="pipeline-input mono-data"
+              className="input mono-data"
               rows={4}
               value={node.content}
               onChange={(e) => set({ content: e.target.value })}
@@ -281,14 +281,14 @@ export function NodeConfigPanel({
         <>
           <Field label="MESSAGE">
             <input
-              className="pipeline-input mono-data"
+              className="input mono-data"
               value={node.message}
               onChange={(e) => set({ message: e.target.value })}
             />
           </Field>
           <Field label="LEVEL">
             <select
-              className="pipeline-input mono-data"
+              className="input mono-data"
               value={node.level ?? 'info'}
               onChange={(e) => set({ level: e.target.value as 'info' | 'warn' | 'error' })}
             >

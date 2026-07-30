@@ -3,18 +3,28 @@ import { displayVersion, resolveInitialTheme, shouldShowOnboarding } from './the
 
 describe('resolveInitialTheme', () => {
   it('honours a valid stored choice regardless of the system preference', () => {
-    expect(resolveInitialTheme('ink', false)).toBe('ink');
-    expect(resolveInitialTheme('paper', true)).toBe('paper');
+    expect(resolveInitialTheme('dark', false)).toBe('dark');
+    expect(resolveInitialTheme('light', true)).toBe('light');
+  });
+
+  it('migrates legacy Signal Grid values: paper→light, ink→dark', () => {
+    expect(resolveInitialTheme('paper', true)).toBe('light');
+    expect(resolveInitialTheme('ink', false)).toBe('dark');
   });
 
   it('falls back to the system preference when nothing is stored', () => {
-    expect(resolveInitialTheme(null, true)).toBe('ink');
-    expect(resolveInitialTheme(null, false)).toBe('paper');
+    expect(resolveInitialTheme(null, true)).toBe('dark');
+    expect(resolveInitialTheme(null, false)).toBe('light');
+  });
+
+  it('defaults to dark when neither a stored choice nor an OS preference exists', () => {
+    expect(resolveInitialTheme(null, null)).toBe('dark');
+    expect(resolveInitialTheme('neon', null)).toBe('dark');
   });
 
   it('treats an invalid stored value as unset and falls back to the system', () => {
-    expect(resolveInitialTheme('neon', true)).toBe('ink');
-    expect(resolveInitialTheme('', false)).toBe('paper');
+    expect(resolveInitialTheme('neon', true)).toBe('dark');
+    expect(resolveInitialTheme('', false)).toBe('light');
   });
 });
 

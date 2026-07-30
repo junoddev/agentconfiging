@@ -42,27 +42,64 @@ describe('parseTokenHash', () => {
   });
 });
 
+/** Minimal in-memory Storage stand-in so cases don't leak through jsdom's real one. */
+function fakeStore(seed?: string): Pick<Storage, 'getItem' | 'setItem'> & { value?: string } {
+  const box: { value?: string } = { value: seed };
+  return {
+    value: seed,
+    getItem: () => box.value ?? null,
+    setItem: (_key: string, val: string) => {
+      box.value = val;
+    },
+  };
+}
+
 describe('bootstrapToken', () => {
-  it('reads the token and strips it from the address bar', () => {
+  it('reads the token, strips it, and persists it for refresh', () => {
     const replaceState = vi.fn();
+    const store = fakeStore();
     const loc = { hash: '#token=secret', pathname: '/', search: '' };
-    const token = bootstrapToken(loc, { replaceState });
+    const token = bootstrapToken(loc, { replaceState }, store);
     expect(token).toBe('secret');
     expect(replaceState).toHaveBeenCalledWith(null, '', '/');
+    expect(store.getItem('any')).toBe('secret');
   });
 
   it('preserves path, query, and route hash when stripping', () => {
     const replaceState = vi.fn();
     const loc = { hash: '#token=secret&/gallery', pathname: '/app', search: '?x=1' };
-    const token = bootstrapToken(loc, { replaceState });
+    const token = bootstrapToken(loc, { replaceState }, fakeStore());
     expect(token).toBe('secret');
     expect(replaceState).toHaveBeenCalledWith(null, '', '/app?x=1#/gallery');
   });
 
-  it('returns undefined and does not touch history when no token', () => {
+  it('recovers the persisted token on refresh (no fragment, no history write)', () => {
     const replaceState = vi.fn();
     const loc = { hash: '#/gallery', pathname: '/', search: '' };
-    expect(bootstrapToken(loc, { replaceState })).toBeUndefined();
+    const token = bootstrapToken(loc, { replaceState }, fakeStore('secret'));
+    expect(token).toBe('secret');
     expect(replaceState).not.toHaveBeenCalled();
+  });
+
+  it('returns undefined when neither a fragment nor storage has a token', () => {
+    const replaceState = vi.fn();
+    const loc = { hash: '#/gallery', pathname: '/', search: '' };
+    expect(bootstrapToken(loc, { replaceState }, fakeStore())).toBeUndefined();
+    expect(replaceState).not.toHaveBeenCalled();
+  });
+
+  it('still returns the token and strips when storage is unavailable', () => {
+    const replaceState = vi.fn();
+    const loc = { hash: '#token=secret', pathname: '/', search: '' };
+    const throwingStore = {
+      getItem: () => {
+        throw new Error('blocked');
+      },
+      setItem: () => {
+        throw new Error('blocked');
+      },
+    };
+    expect(bootstrapToken(loc, { replaceState }, throwingStore)).toBe('secret');
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/');
   });
 });

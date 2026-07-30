@@ -2,7 +2,7 @@
  *  Inspector routes plus the internal component gallery. `agent/:kind` carries a
  *  param, so a Route is a small discriminated union rather than a bare string. */
 
-/** Every routable page. `overview` is the default (rail item `01 SIGNAL`).
+/** Every routable page. `overview` is the default (sidebar item Overview).
  *  The E5 editor routes (settings…sync) are write-back config editors. */
 export type RouteName =
   | 'overview'
@@ -24,7 +24,6 @@ export type RouteName =
   | 'marketplace'
   | 'dashboard'
   | 'sessions'
-  | 'analytics'
   | 'search'
   | 'context'
   | 'git'
@@ -33,6 +32,40 @@ export type RouteName =
   | 'gallery';
 
 export type Route = { name: Exclude<RouteName, 'agent'> } | { name: 'agent'; kind: string };
+
+/**
+ * Display labels — the single label seam (Console §7: labels are nouns, sans,
+ * sentence case). The sidebar (shell/Sidebar), the command palette
+ * (command/commands) and any breadcrumb all read from here so the three nav
+ * seams can never drift.
+ */
+export const ROUTE_LABELS: Record<RouteName, string> = {
+  overview: 'Overview',
+  agents: 'Agents',
+  agent: 'Agent detail',
+  findings: 'Findings',
+  artifacts: 'Artifacts',
+  instances: 'Instances',
+  settings: 'Settings',
+  instructions: 'Instructions',
+  skills: 'Skills',
+  hooks: 'Hooks',
+  rules: 'Rules',
+  memory: 'Memory',
+  mcp: 'MCP',
+  keybindings: 'Keybindings',
+  sync: 'Sync',
+  catalog: 'Catalog',
+  marketplace: 'Marketplace',
+  dashboard: 'Dashboard',
+  sessions: 'Sessions',
+  search: 'Search',
+  context: 'Context',
+  git: 'Git',
+  terminal: 'Terminal',
+  pipelines: 'Pipelines',
+  gallery: 'Gallery',
+};
 
 /** The E5 editor route names, in rail order — simple (no-param) routes. */
 export const EDITOR_ROUTES = [
@@ -69,7 +102,6 @@ export function parseRoute(hash: string): Route {
   if (path === '/marketplace') return { name: 'marketplace' };
   if (path === '/dashboard') return { name: 'dashboard' };
   if (path === '/sessions') return { name: 'sessions' };
-  if (path === '/analytics') return { name: 'analytics' };
   if (path === '/search') return { name: 'search' };
   if (path === '/context') return { name: 'context' };
   if (path === '/git') return { name: 'git' };

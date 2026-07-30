@@ -1,125 +1,31 @@
-/* Session replay (rail 18 SESSIONS, docs/DESIGN.md §5–§7, bead 7yb.3).
-   Page-local styles only; the shared chassis lives in app.css / styles/ and
-   components.css. Tokens only — no raw hex, no shadows, no gradients. */
+/* Sessions (#/sessions) — Console page-layout styles only (opendesign/
+   DESIGN.md). All primitives (.ds-table, .pill, .code, .search, .pager,
+   .perm-chip, buttons) come from components.css; tokens only, no raw hex. */
 
-.sx__lede {
-  margin-top: 8px;
-  color: var(--fg-dim);
-  max-width: 66ch;
+/* ── Browse table ────────────────────────────────────────────────────────── */
+
+.sess-row--selected {
+  background: var(--fg-soft);
+  box-shadow: inset 2px 0 0 0 var(--accent);
 }
 
-.sx__acquiring {
-  padding: var(--gutter) 0;
-}
-
-/* Two-column browse | replay layout; collapses to one column when narrow. */
-.sx__layout {
-  display: grid;
-  grid-template-columns: 300px 1fr;
-  gap: var(--gutter);
-  align-items: start;
-}
-
-@media (max-width: 900px) {
-  .sx__layout {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* ── Browse list ─────────────────────────────────────────────────────────── */
-
-.sx__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  max-height: 72vh;
-  overflow: auto;
-  border-top: var(--hairline-w) solid var(--hairline);
-}
-
-.sx__row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 100%;
-  text-align: left;
-  padding: 10px 8px;
-  background: none;
-  border: none;
-  border-bottom: var(--hairline-w) solid var(--hairline);
-  cursor: pointer;
-  color: var(--fg);
-}
-
-.sx__row:hover {
-  background: var(--surface);
-}
-
-.sx__row[aria-current='true'] {
-  background: var(--surface);
-  box-shadow: inset 2px 0 0 0 var(--signal);
-}
-
-.sx__row-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.sx__row-title {
-  font-weight: 600;
-  word-break: break-word;
-}
-
-.sx__row-cwd {
-  color: var(--fg-dim);
-  font-size: var(--size-micro);
-  word-break: break-all;
-}
-
-.sx__row-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  color: var(--fg-dim);
-}
-
-.sx__row-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.sx__tag {
-  border: var(--hairline-w) solid var(--hairline);
-  padding: 0 6px;
-  color: var(--fg-dim);
-}
-
-.sx__tag--editable {
+.sess-title {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  color: var(--fg);
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.sx__tag-x {
-  background: none;
-  border: none;
-  color: var(--fg-dim);
-  cursor: pointer;
-  padding: 0;
-  line-height: 1;
+/* Path chips can carry long cwd values — ellipsize inside the chip. */
+.sess-cwd .code {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-block;
+  vertical-align: bottom;
 }
 
-.sx__tag-x:hover {
-  color: var(--red);
-}
-
-/* ── Replay column ───────────────────────────────────────────────────────── */
+/* ── Replay ──────────────────────────────────────────────────────────────── */
 
 .sx__replay {
   min-width: 0;
@@ -129,8 +35,8 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding-bottom: 8px;
-  border-bottom: var(--hairline-w) solid var(--hairline);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
 }
 
 .sx__detail-title {
@@ -139,52 +45,41 @@
   gap: 12px;
 }
 
-.sx__detail-meta {
-  color: var(--fg-dim);
+.sx__row-title {
+  font-weight: 600;
+  word-break: break-word;
 }
 
 .sx__tags-editor {
-  display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  margin: 10px 0;
+  margin: 12px 0;
 }
 
 .sx__tag-input {
-  border: var(--hairline-w) solid var(--hairline);
-  background: none;
-  color: var(--fg);
-  padding: 2px 6px;
-  width: 8ch;
+  width: 9ch;
+  padding: 3px 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
 }
 
 .sx__controls {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--gutter);
+  gap: 16px;
   align-items: center;
-  padding: 8px 0;
-  border-bottom: var(--hairline-w) solid var(--hairline);
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
 }
 
-.sx__step,
-.sx__page,
-.sx__export {
+.sx__step {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .sx__step-pos {
-  color: var(--fg-dim);
   min-width: 8ch;
   text-align: center;
-}
-
-.sx__export-note {
-  color: var(--signal);
-  margin-top: 6px;
 }
 
 /* ── Message cards ───────────────────────────────────────────────────────── */
@@ -192,33 +87,34 @@
 .sx__messages {
   display: flex;
   flex-direction: column;
-  gap: var(--gutter);
-  margin-top: var(--gutter);
+  gap: 14px;
+  margin-top: 16px;
 }
 
 .sx__msg {
-  border: var(--hairline-w) solid var(--hairline);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-left-width: 2px;
-  padding: 10px;
+  border-radius: var(--radius);
+  padding: 12px 14px;
 }
 
 .sx__msg--user {
-  border-left-color: var(--fg-dim);
+  border-left-color: var(--muted);
 }
 
 .sx__msg--assistant {
-  border-left-color: var(--signal);
+  border-left-color: var(--accent);
 }
 
-/* Subagent (sidechain) entries render DISTINCTLY: indented + warn accent. */
+/* Subagent (sidechain) entries render DISTINCTLY: indented + warn edge. */
 .sx__msg--sidechain {
   margin-left: 24px;
   border-left-color: var(--warn);
-  background: var(--surface);
 }
 
 .sx__msg--focus {
-  outline: 1px solid var(--signal);
+  outline: 1px solid var(--accent);
   outline-offset: 1px;
 }
 
@@ -232,12 +128,6 @@
 
 .sx__msg-role {
   color: var(--fg);
-  letter-spacing: var(--tracking-micro);
-}
-
-.sx__msg-model,
-.sx__msg-when {
-  color: var(--fg-dim);
 }
 
 .sx__block {
@@ -245,7 +135,6 @@
 }
 
 .sx__block-kind {
-  color: var(--fg-dim);
   display: block;
   margin-bottom: 2px;
 }
@@ -260,24 +149,24 @@
 }
 
 .sx__block--thinking .sx__block-body {
-  color: var(--fg-dim);
+  color: var(--muted);
   font-style: italic;
 }
 
 .sx__block--tool_result .sx__block-body {
-  color: var(--fg-dim);
+  color: var(--muted);
 }
 
 .sx__spill,
 .sx__block-note {
-  color: var(--fg-dim);
   display: block;
   margin-top: 4px;
 }
 
+/* Server-side `[REDACTED:*]` marks — warn wash, never a raw secret. */
 .sx__redact {
-  background: var(--warn);
-  color: var(--bg);
-  padding: 0 2px;
-  border-radius: var(--radius);
+  background: var(--warn-soft);
+  color: var(--warn);
+  padding: 0 3px;
+  border-radius: 4px;
 }

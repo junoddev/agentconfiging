@@ -11,7 +11,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export type LogLevel = 'info' | 'signal' | 'warn' | 'error';
+export type LogLevel = 'info' | 'ok' | 'warn' | 'error';
 
 export interface LogEntry {
   time: Date;
@@ -19,10 +19,10 @@ export interface LogEntry {
   text: string;
 }
 
-/** Terminal-safe token mapping (DESIGN §8): signal green, warn yellow, error red, dim gray. */
+/** Terminal-safe token mapping (DESIGN §8): ok green, warn yellow, error red, dim gray. */
 export function levelColor(level: LogLevel): 'green' | 'yellow' | 'red' | 'gray' {
   switch (level) {
-    case 'signal':
+    case 'ok':
       return 'green';
     case 'warn':
       return 'yellow';

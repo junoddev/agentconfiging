@@ -2,33 +2,36 @@ import { deltaTone, formatDelta } from './stat.js';
 import './components.css';
 
 export interface StatBlockProps {
-  /** The hero numeral (or short figure like "98%"). */
+  /** The stat figure (22px mono), e.g. 14 or "98%". */
   value: number | string;
-  /** Micro-label under the numeral, e.g. "AGENTS". */
+  /** 12px muted label under the number, e.g. "Rules". */
   label: string;
-  /** Optional mono delta, e.g. +3 since last scan. */
+  /** Optional mono delta beside the label, e.g. +3 since last scan. */
   delta?: number;
-  /** Numeral size: 96px (xl, default) or 64px (md). */
-  size?: 'xl' | 'md';
+  /** Makes the tile a button — clickable wayfinding into the section. */
+  onClick?: () => void;
 }
 
-/** Stat block (DESIGN.md §6): giant numeral + micro-label + optional mono
- *  delta, hairline-boxed. The numeral is the hero. */
-export function StatBlock({ value, label, delta, size = 'xl' }: StatBlockProps) {
-  return (
-    <div className="statblock">
-      <div className={size === 'xl' ? 'numeral-giant' : 'numeral-giant numeral-giant--sm'}>
-        {value}
-      </div>
-      <div className="micro-label">
+/** Stat tile (DESIGN.md §5 `.tile`): 22px mono number + 12px muted label;
+ *  hover raises the border to `--muted`. Wayfinding, not marketing stats. */
+export function StatBlock({ value, label, delta, onClick }: StatBlockProps) {
+  const body = (
+    <>
+      <div className="t-num">{value}</div>
+      <div className="t-label">
         {label}
         {delta !== undefined && (
-          <span className={`mono-data statblock__delta statblock__delta--${deltaTone(delta)}`}>
-            {' '}
-            {formatDelta(delta)}
-          </span>
+          <span className={`t-delta t-delta--${deltaTone(delta)}`}> {formatDelta(delta)}</span>
         )}
       </div>
-    </div>
+    </>
   );
+  if (onClick) {
+    return (
+      <button type="button" className="tile" onClick={onClick}>
+        {body}
+      </button>
+    );
+  }
+  return <div className="tile">{body}</div>;
 }

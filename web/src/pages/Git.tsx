@@ -1,9 +1,9 @@
 /**
- * Git (rail `22 GIT`, route `#/git`) — the GIT PANEL (SPEC §5 row 10, bead
- * agentconfig-ngs.1), SCOPED to the launched repo (the current instance root):
- * a branch switcher, grouped changes (staged / unstaged / untracked) with
- * stage/unstage + a diff view, a CONVENTIONAL-COMMIT helper, push/pull with an
- * ahead/behind indicator, and the commit timeline.
+ * Git (route `#/git`) — the GIT PANEL (SPEC §5 row 10, bead agentconfig-ngs.1),
+ * SCOPED to the launched repo (the current instance root): a branch switcher,
+ * grouped changes (staged / unstaged / untracked) as Console list-cards with a
+ * diff view, a CONVENTIONAL-COMMIT helper, push/pull with an ahead/behind
+ * indicator, and the commit timeline.
  *
  * The server SHELLS OUT to `git` (execFile, no shell, cwd pinned to the repo
  * root, every ref/path validated, the commit message piped on stdin). Every
@@ -29,8 +29,23 @@ import {
   type GitFileChange,
   type GitStatusResponse,
 } from '../api/index.js';
-import { parseTokenHash } from '../api/token.js';
-import { Button, DiffPanel, EmptyState } from '../components/core/index.js';
+import { bootstrapToken } from '../api/token.js';
+import {
+  Button,
+  DiffPanel,
+  EmptyState,
+  Field,
+  Input,
+  ListCard,
+  ListRow,
+  Notice,
+  Pill,
+  Select,
+  Switch,
+  Table,
+  useToast,
+  type PillTone,
+} from '../components/core/index.js';
 import { useAppState } from '../state/index.js';
 import { parseDiff } from '../write/index.js';
 import {
@@ -43,10 +58,16 @@ import {
 } from './git/logic.js';
 import './git.css';
 
-const bootToken =
-  typeof window !== 'undefined' ? parseTokenHash(window.location.hash).token : undefined;
+const bootToken = typeof window !== 'undefined' ? bootstrapToken() : undefined;
 
 type Phase = 'loading' | 'ok' | 'error';
+
+/** Console pill tone for a porcelain status-tone token. */
+const TONE_PILL: Record<ReturnType<typeof statusTone>, PillTone> = {
+  add: 'ok',
+  mod: 'warn',
+  del: 'err',
+};
 
 /** Identifies the file whose diff is open (path + which side). */
 interface OpenDiff {
@@ -63,7 +84,7 @@ function loadError(err: unknown): string {
   return 'could not read git status';
 }
 
-/** One change row: the path (text), a status badge, and stage/unstage + diff. */
+/** One change row: the path (text), a status pill, and stage/unstage + diff. */
 function ChangeRow({
   change,
   action,
@@ -76,61 +97,62 @@ function ChangeRow({
   onDiff: () => void;
 }) {
   return (
-    <li className="git__row">
-      <span className={`git__badge micro-label git__badge--${statusTone(change.status)}`}>
-        {statusLabel(change.status)}
-      </span>
-      <span className="mono-data git__path">
-        {change.orig ? `${change.orig} → ${change.path}` : change.path}
-      </span>
-      <span className="git__row-actions">
-        <Button label="diff" onClick={onDiff} />
-        <Button
-          label={action}
-          variant={action === 'stage' ? 'primary' : 'default'}
-          onClick={onAction}
-        />
-      </span>
-    </li>
+    <ListRow
+      title={
+        <span className="mono-data git-path">
+          {change.orig ? `${change.orig} → ${change.path}` : change.path}
+        </span>
+      }
+      badge={<Pill tone={TONE_PILL[statusTone(change.status)]}>{statusLabel(change.status)}</Pill>}
+      trailing={
+        <span className="git-row-actions">
+          <Button label="Diff" variant="ghost" onClick={onDiff} />
+          <Button label={action === 'stage' ? 'Stage' : 'Unstage'} onClick={onAction} />
+        </span>
+      }
+    />
   );
 }
 
 /** One untracked-file row (no diff — nothing tracked yet). */
 function UntrackedRow({ path, onStage }: { path: string; onStage: () => void }) {
   return (
-    <li className="git__row">
-      <span className="git__badge micro-label git__badge--add">untracked</span>
-      <span className="mono-data git__path">{path}</span>
-      <span className="git__row-actions">
-        <Button label="stage" variant="primary" onClick={onStage} />
-      </span>
-    </li>
+    <ListRow
+      title={<span className="mono-data git-path">{path}</span>}
+      badge={<Pill tone="off">untracked</Pill>}
+      trailing={
+        <span className="git-row-actions">
+          <Button label="Stage" onClick={onStage} />
+        </span>
+      }
+    />
   );
 }
 
 function CommitTimeline({ commits }: { commits: GitCommit[] }) {
   if (commits.length === 0) {
-    return <p className="micro-label">no commits yet</p>;
+    return <EmptyState instruction="no commits yet" />;
   }
   return (
-    <ul className="git__log">
+    <Table headers={['HASH', 'SUBJECT', 'AUTHOR · DATE']}>
       {commits.map((commit) => (
-        <li key={commit.hash} className="git__log-row">
-          <span className="mono-data git__hash">{commit.hash.slice(0, 8)}</span>
-          <span className="git__subject">{commit.subject}</span>
-          <span className="micro-label git__log-meta">
+        <tr key={commit.hash}>
+          <td className="mono muted">{commit.hash.slice(0, 8)}</td>
+          <td className="git-subject">{commit.subject}</td>
+          <td className="mono muted git-log-meta">
             {commit.author} · {commit.date.slice(0, 10)}
-          </span>
-        </li>
+          </td>
+        </tr>
       ))}
-    </ul>
+    </Table>
   );
 }
 
-export function Git() {
+function GitPanel() {
   const { currentInstance, report } = useAppState();
   const client = useMemo(() => (bootToken ? new ApiClient(bootToken) : undefined), []);
   const instanceId = currentInstance?.id;
+  const toast = useToast();
 
   const [phase, setPhase] = useState<Phase>('loading');
   const [errMsg, setErrMsg] = useState('');
@@ -187,8 +209,12 @@ export function Git() {
   const diffHunks = useMemo(() => parseDiff(diffText), [diffText]);
 
   // Run a mutation, surface its (untrusted) message, then refresh from git.
+  // Success confirms via toast; a refusal surfaces as a warn notice.
   const runMutation = useCallback(
-    async (op: () => Promise<{ ok?: boolean; message?: string } & Record<string, unknown>>) => {
+    async (
+      op: () => Promise<{ ok?: boolean; message?: string } & Record<string, unknown>>,
+      confirm?: string,
+    ) => {
       if (busy) return;
       setBusy(true);
       setNotice(undefined);
@@ -196,6 +222,8 @@ export function Git() {
         const res = await op();
         if ('ok' in res && res.ok === false) {
           setNotice(res.message && res.message !== '' ? res.message : 'git refused the operation');
+        } else if (confirm !== undefined) {
+          toast(confirm);
         }
       } catch (err) {
         setNotice(err instanceof ApiError ? `refused (${err.kind})` : 'operation failed');
@@ -204,7 +232,7 @@ export function Git() {
         await refresh();
       }
     },
-    [busy, refresh],
+    [busy, refresh, toast],
   );
 
   const onViewDiff = useCallback(
@@ -237,15 +265,17 @@ export function Git() {
         setBreaking(false);
       }
       return res;
-    });
+    }, 'Committed');
   }, [client, commitMessage, instanceId, runMutation]);
 
   if (phase === 'error') {
     return (
       <main className="layout-main page">
         <section className="page__section">
-          <h1 className="title-page">GIT</h1>
-          <EmptyState title="NO SIGNAL" instruction={errMsg} />
+          <div className="page-head">
+            <h1>Git</h1>
+          </div>
+          <EmptyState title="Git unavailable" instruction={errMsg} />
         </section>
       </main>
     );
@@ -258,52 +288,56 @@ export function Git() {
   return (
     <main className="layout-main page">
       <section className="page__section">
-        <h1 className="title-page">
-          GIT
-          <span className="git__sub micro-label">
-            {currentInstance ? currentInstance.name : 'no instance'}
-          </span>
-        </h1>
-        <p className="git__lede micro-label">
-          branches, changes, conventional commits, and timeline
-        </p>
+        <div className="page-head">
+          <div>
+            <h1>Git</h1>
+            <p className="page-sub">
+              Branches, changes, conventional commits, and the timeline for{' '}
+              <span className="mono">{currentInstance ? currentInstance.name : 'no instance'}</span>
+              .
+            </p>
+          </div>
+        </div>
       </section>
 
       {phase === 'loading' && (
         <section className="page__section">
-          <p className="micro-label">reading git…</p>
+          <p className="meta">reading git…</p>
         </section>
       )}
 
       {gitAbsent && (
         <section className="page__section">
-          <EmptyState title="NO GIT" instruction="git is not installed on this machine" />
+          <Notice>git is not installed on this machine — the git panel needs a git binary.</Notice>
         </section>
       )}
 
       {notRepo && (
         <section className="page__section">
-          <EmptyState
-            title="NOT A REPO"
-            instruction="the launched instance is not a git repository"
-          />
+          <Notice>
+            The launched instance is not a git repository — initialize one with{' '}
+            <span className="code">git init</span> to use this panel.
+          </Notice>
         </section>
       )}
 
       {repo && (
         <>
-          <section className="page__section git__head">
-            <div className="git__branchline">
+          <section className="page__section git-head">
+            <div className="git-branchline">
               <span className="micro-label">BRANCH</span>
-              <select
-                className="git__select mono-data"
+              <Select
+                className="git-select mono"
                 aria-label="switch branch"
                 value={repo.detached ? '' : repo.branch}
                 disabled={busy}
                 onChange={(e) => {
                   const branch = e.target.value;
                   if (branch !== '' && branch !== repo.branch && client) {
-                    void runMutation(() => client.gitCheckout(branch, false, instanceId));
+                    void runMutation(
+                      () => client.gitCheckout(branch, false, instanceId),
+                      'Switched branch',
+                    );
                   }
                 }}
               >
@@ -313,118 +347,136 @@ export function Git() {
                     {b.name}
                   </option>
                 ))}
-              </select>
+              </Select>
               {syncSummary(repo.ahead, repo.behind) !== '' && (
-                <span className="git__ab mono-data">{syncSummary(repo.ahead, repo.behind)}</span>
+                <span className="mono win">{syncSummary(repo.ahead, repo.behind)}</span>
               )}
               {repo.upstream !== undefined && (
-                <span className="micro-label git__upstream">→ {repo.upstream}</span>
+                <span className="meta git-upstream">→ {repo.upstream}</span>
               )}
             </div>
 
-            <div className="git__head-actions">
-              <input
-                className="git__input mono-data"
+            <div className="git-head-actions">
+              <Input
+                className="git-newbranch mono"
                 placeholder="new-branch"
                 aria-label="new branch name"
                 value={newBranch}
                 onChange={(e) => setNewBranch(e.target.value)}
               />
               <Button
-                label="create + switch"
+                label="Create + switch"
                 disabled={busy || newBranch.trim() === ''}
                 onClick={() => {
                   if (client && newBranch.trim() !== '') {
                     const name = newBranch.trim();
-                    void runMutation(() => client.gitCheckout(name, true, instanceId));
+                    void runMutation(
+                      () => client.gitCheckout(name, true, instanceId),
+                      'Created branch',
+                    );
                     setNewBranch('');
                   }
                 }}
               />
               <Button
-                label="pull"
+                label="Pull"
                 disabled={busy}
-                onClick={() => client && void runMutation(() => client.gitPull(instanceId))}
+                onClick={() =>
+                  client && void runMutation(() => client.gitPull(instanceId), 'Pulled')
+                }
               />
               <Button
-                label="push"
+                label="Push"
                 variant="primary"
                 disabled={busy}
-                onClick={() => client && void runMutation(() => client.gitPush(instanceId))}
+                onClick={() =>
+                  client && void runMutation(() => client.gitPush(instanceId), 'Pushed')
+                }
               />
             </div>
           </section>
 
           {notice !== undefined && (
             <section className="page__section">
-              <p className="git__notice mono-data" role="status">
-                {notice}
-              </p>
+              <Notice>
+                <span role="status">{notice}</span>
+              </Notice>
             </section>
           )}
 
           <section className="page__section">
             {!hasChanges(repo.staged, repo.unstaged, repo.untracked) ? (
-              <p className="micro-label">working tree clean</p>
+              <EmptyState instruction="working tree clean — nothing to stage or commit" />
             ) : (
-              <div className="git__changes">
+              <>
                 {repo.staged.length > 0 && (
-                  <div className="git__group">
-                    <span className="micro-label git__group-label">STAGED</span>
-                    <ul className="git__list">
-                      {repo.staged.map((change) => (
-                        <ChangeRow
-                          key={`s:${change.path}`}
-                          change={change}
-                          action="unstage"
-                          onAction={() =>
-                            client &&
-                            void runMutation(() => client.gitUnstage([change.path], instanceId))
-                          }
-                          onDiff={() => void onViewDiff(change.path, true)}
-                        />
-                      ))}
-                    </ul>
-                  </div>
+                  <ListCard
+                    head="STAGED"
+                    headMeta={`${repo.staged.length} file${repo.staged.length === 1 ? '' : 's'}`}
+                  >
+                    {repo.staged.map((change) => (
+                      <ChangeRow
+                        key={`s:${change.path}`}
+                        change={change}
+                        action="unstage"
+                        onAction={() =>
+                          client &&
+                          void runMutation(
+                            () => client.gitUnstage([change.path], instanceId),
+                            'Unstaged',
+                          )
+                        }
+                        onDiff={() => void onViewDiff(change.path, true)}
+                      />
+                    ))}
+                  </ListCard>
                 )}
 
                 {repo.unstaged.length > 0 && (
-                  <div className="git__group">
-                    <span className="micro-label git__group-label">CHANGED</span>
-                    <ul className="git__list">
-                      {repo.unstaged.map((change) => (
-                        <ChangeRow
-                          key={`u:${change.path}`}
-                          change={change}
-                          action="stage"
-                          onAction={() =>
-                            client &&
-                            void runMutation(() => client.gitStage([change.path], instanceId))
-                          }
-                          onDiff={() => void onViewDiff(change.path, false)}
-                        />
-                      ))}
-                    </ul>
-                  </div>
+                  <ListCard
+                    head="CHANGED"
+                    headMeta={`${repo.unstaged.length} file${
+                      repo.unstaged.length === 1 ? '' : 's'
+                    }`}
+                  >
+                    {repo.unstaged.map((change) => (
+                      <ChangeRow
+                        key={`u:${change.path}`}
+                        change={change}
+                        action="stage"
+                        onAction={() =>
+                          client &&
+                          void runMutation(
+                            () => client.gitStage([change.path], instanceId),
+                            'Staged',
+                          )
+                        }
+                        onDiff={() => void onViewDiff(change.path, false)}
+                      />
+                    ))}
+                  </ListCard>
                 )}
 
                 {repo.untracked.length > 0 && (
-                  <div className="git__group">
-                    <span className="micro-label git__group-label">UNTRACKED</span>
-                    <ul className="git__list">
-                      {repo.untracked.map((path) => (
-                        <UntrackedRow
-                          key={`t:${path}`}
-                          path={path}
-                          onStage={() =>
-                            client && void runMutation(() => client.gitStage([path], instanceId))
-                          }
-                        />
-                      ))}
-                    </ul>
-                  </div>
+                  <ListCard
+                    head="UNTRACKED"
+                    headMeta={`${repo.untracked.length} file${
+                      repo.untracked.length === 1 ? '' : 's'
+                    }`}
+                  >
+                    {repo.untracked.map((path) => (
+                      <UntrackedRow
+                        key={`t:${path}`}
+                        path={path}
+                        onStage={() =>
+                          client &&
+                          void runMutation(() => client.gitStage([path], instanceId), 'Staged')
+                        }
+                      />
+                    ))}
+                  </ListCard>
                 )}
-              </div>
+              </>
             )}
 
             {openDiff !== undefined && diffHunks.length > 0 && (
@@ -435,76 +487,89 @@ export function Git() {
             )}
           </section>
 
-          <section className="page__section git__commit">
-            <span className="micro-label git__group-label">CONVENTIONAL COMMIT</span>
-            <div className="git__commit-fields">
-              <select
-                className="git__select mono-data"
-                aria-label="commit type"
-                value={ctype}
-                onChange={(e) => setCtype(e.target.value)}
-              >
-                {COMMIT_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-              <input
-                className="git__input mono-data"
-                placeholder="scope (optional)"
-                aria-label="commit scope"
-                value={scope}
-                onChange={(e) => setScope(e.target.value)}
-              />
-              <input
-                className="git__input git__input--grow mono-data"
-                placeholder="subject"
-                aria-label="commit subject"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-              />
-              <label className="git__breaking micro-label">
-                <input
-                  type="checkbox"
-                  checked={breaking}
-                  onChange={(e) => setBreaking(e.target.checked)}
+          <section className="page__section">
+            <div className="card git-commit">
+              <h2>Conventional commit</h2>
+              <div className="git-commit-fields">
+                <Field label="Type" htmlFor="git-commit-type">
+                  <Select
+                    id="git-commit-type"
+                    className="mono"
+                    value={ctype}
+                    onChange={(e) => setCtype(e.target.value)}
+                  >
+                    {COMMIT_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Scope (optional)" htmlFor="git-commit-scope">
+                  <Input
+                    id="git-commit-scope"
+                    className="mono"
+                    placeholder="scope"
+                    value={scope}
+                    onChange={(e) => setScope(e.target.value)}
+                  />
+                </Field>
+                <Field label="Subject" htmlFor="git-commit-subject">
+                  <Input
+                    id="git-commit-subject"
+                    placeholder="subject"
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                  />
+                </Field>
+                <div className="field git-breaking">
+                  <label>Breaking</label>
+                  <Switch
+                    on={breaking}
+                    onChange={setBreaking}
+                    label="breaking change"
+                    disabled={busy}
+                  />
+                </div>
+              </div>
+              <Field label="Body (optional)" htmlFor="git-commit-body">
+                <textarea
+                  id="git-commit-body"
+                  className="input mono git-body"
+                  placeholder="body"
+                  rows={3}
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
                 />
-                breaking
-              </label>
-            </div>
-            <textarea
-              className="git__body mono-data"
-              placeholder="body (optional)"
-              aria-label="commit body"
-              rows={3}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-            />
-            {commitMessage !== '' && (
-              <pre className="git__preview mono-data" aria-label="commit message preview">
-                {commitMessage}
-              </pre>
-            )}
-            <div className="git__commit-actions">
-              <Button
-                label={busy ? 'committing…' : 'commit'}
-                variant="primary"
-                disabled={busy || commitMessage === '' || repo.staged.length === 0}
-                onClick={onCommit}
-              />
-              {repo.staged.length === 0 && (
-                <span className="micro-label git__hint">stage a file to commit</span>
+              </Field>
+              {commitMessage !== '' && (
+                <pre className="mono-data git-preview" aria-label="commit message preview">
+                  {commitMessage}
+                </pre>
               )}
+              <div className="git-commit-actions">
+                <Button
+                  label={busy ? 'Committing…' : 'Commit'}
+                  variant="primary"
+                  disabled={busy || commitMessage === '' || repo.staged.length === 0}
+                  onClick={onCommit}
+                />
+                {repo.staged.length === 0 && <span className="meta">stage a file to commit</span>}
+              </div>
             </div>
           </section>
 
           <section className="page__section">
-            <span className="micro-label git__group-label">TIMELINE</span>
+            <h2 className="git-section-head">Timeline</h2>
             <CommitTimeline commits={commits} />
           </section>
         </>
       )}
     </main>
   );
+}
+
+export function Git() {
+  // Toasts confirm through the shell-level ToastProvider (App.tsx).
+  return <GitPanel />;
 }

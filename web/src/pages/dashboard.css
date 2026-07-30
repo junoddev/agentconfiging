@@ -1,133 +1,80 @@
-/* Dashboard (rail 17 DASHBOARD, docs/DESIGN.md §5–§7). Page-local styles only;
-   the shared chassis lives in app.css / styles/ and components.css. Tokens only
-   — no raw hex, no shadows, no gradients. */
+/* Dashboard (#/dashboard) — Console page-layout styles only (opendesign/
+   DESIGN.md). Tiles, heatmap and empty states come from components.css;
+   tokens only, no raw hex. `.page-sub` is shared page scaffolding (styles/grid.css). */
 
-.dash__lede {
+/* ── Level progress: thin accent bar on a recessed track ─────────────────── */
+
+.dash__progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--fg-soft);
+  overflow: hidden;
+}
+
+.dash__progress-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.15s ease;
+}
+
+.dash__progress-note {
   margin-top: 8px;
-  color: var(--fg-dim);
-  max-width: 60ch;
 }
 
-.dash__acquiring {
-  padding: var(--gutter) 0;
-}
-
-/* Top stat row: four figures on the 12-column page grid, hairline column rules
-   between them. Reflows to two-up, then one-up, on narrow viewports. */
-.dash__stats {
-  row-gap: var(--gutter);
-}
-
-.dash__stat {
-  grid-column: span 3;
-}
-
-@media (max-width: 900px) {
-  .dash__stat {
-    grid-column: span 6;
-  }
-  .dash__stat.col-rule {
-    border-left: 0;
-  }
-}
-
-@media (max-width: 560px) {
-  .dash__stat {
-    grid-column: span 12;
-  }
-}
-
-/* XP / level row: the level numeral, a VU meter for level progress, and a mono
-   detail line, with a runtimes / active-days / prompts meta strip below. */
-.dash__xp {
-  display: flex;
-  flex-direction: column;
-  gap: var(--gutter);
-}
-
-.dash__xp-figures {
-  display: flex;
-  align-items: center;
-  gap: calc(var(--gutter) * 1.5);
-  flex-wrap: wrap;
-}
-
-.dash__xp-meter {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.dash__xp-detail {
-  color: var(--fg-dim);
-}
-
-.dash__meta {
-  display: flex;
-  gap: var(--gutter);
-  flex-wrap: wrap;
-  color: var(--fg-dim);
-}
-
-/* Section header: caption + a trailing mono figure (range / progress). */
+/* Section header: h2 + a trailing mono figure (range / progress tally). */
 .dash__section-head {
   display: flex;
   align-items: baseline;
-  gap: var(--gutter);
-  min-height: var(--row-h);
-}
-
-.dash__heading {
-  margin-bottom: 8px;
-}
-
-.dash__range {
-  margin-left: auto;
-  color: var(--fg-dim);
+  gap: 16px;
+  justify-content: space-between;
+  margin-bottom: 12px;
 }
 
 .dash__note {
   margin-top: 8px;
-  color: var(--fg-dim);
 }
 
-/* Achievements: a wrapping grid of hairline chips; unlocked lit in --signal,
-   locked dimmed. No zebra. */
+/* ── Achievements: a wrapping grid of hairline chips ─────────────────────── */
+
 .dash__ach-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 2px;
+  gap: 8px;
 }
 
 .dash-ach {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
-  padding: 8px var(--gutter);
-  border: var(--hairline-w) solid var(--hairline);
+  gap: 10px;
+  padding: 9px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
 }
 
 .dash-ach__dot {
   width: 8px;
   height: 8px;
-  border-radius: var(--radius);
+  border-radius: 2px;
 }
 
+/* Unlocked wears the accent (a winning value); locked stays muted. */
 .dash-ach--on .dash-ach__dot {
-  background: var(--signal);
+  background: var(--accent);
 }
 
 .dash-ach--off .dash-ach__dot {
-  background: var(--hairline);
+  background: var(--border);
 }
 
 .dash-ach--off {
-  color: var(--fg-dim);
+  color: var(--muted);
 }
 
 .dash-ach__body {
@@ -137,20 +84,10 @@
 }
 
 .dash-ach__name {
-  font-family: var(--font-sans);
-  font-size: var(--size-body);
-  line-height: var(--leading-body);
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 550;
 }
 
 .dash-ach--off .dash-ach__name {
   font-weight: 400;
-}
-
-.dash-ach__desc {
-  color: var(--fg-dim);
-}
-
-.dash-ach__cat {
-  color: var(--fg-dim);
 }

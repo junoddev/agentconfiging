@@ -1,12 +1,13 @@
 /**
- * ContextHealth (rail `21 CONTEXT`, route `#/context`) — the CONTEXT HEALTH +
- * STORAGE MAINTENANCE view (SPEC §5 row 16 / E7, bead agentconfig-7yb.6).
+ * ContextHealth (route `#/context`) — the CONTEXT HEALTH + STORAGE MAINTENANCE
+ * view (SPEC §5 row 16 / E7, bead agentconfig-7yb.6).
  *
  * Two content-free surfaces for the current instance:
  *  - CONTEXT HEALTH: how much of the agent config FOOTPRINT loads into an
- *    agent's context window — total size vs a budget (a VU bar), the largest
- *    contributors, per-category totals, and honest, size-derived optimization
- *    suggestions. Served by GET /api/context-health (sizes + paths only).
+ *    agent's context window — total size vs a budget (a plain meter bar), the
+ *    largest contributors, per-category totals, and honest, size-derived
+ *    optimization suggestions. Served by GET /api/context-health (sizes + paths
+ *    only).
  *  - STORAGE MAINTENANCE: the disk-usage breakdown + recoverable, allowlisted
  *    cleanup — REUSED from the Settings storage panel (the committed StoragePanel
  *    component + GET /api/storage / POST /api/storage/cleanup). No new delete
@@ -27,9 +28,16 @@ import {
   type ContextHealth as ContextHealthData,
   type StorageReport,
 } from '../api/index.js';
-import { parseTokenHash } from '../api/token.js';
-import { EmptyState, FileChip, StatBlock, Table, formatBytes } from '../components/core/index.js';
-import { VuMeter } from '../components/signal/index.js';
+import { bootstrapToken } from '../api/token.js';
+import {
+  EmptyState,
+  FileChip,
+  Notice,
+  StatBlock,
+  Table,
+  formatBytes,
+  useToast,
+} from '../components/core/index.js';
 import { useAppState } from '../state/index.js';
 import { StoragePanel } from './settings/StoragePanel.js';
 import {
@@ -42,8 +50,7 @@ import {
 import './contexthealth.css';
 import './settings.css';
 
-const bootToken =
-  typeof window !== 'undefined' ? parseTokenHash(window.location.hash).token : undefined;
+const bootToken = typeof window !== 'undefined' ? bootstrapToken() : undefined;
 
 type LoadStatus = 'loading' | 'ok' | 'error';
 
@@ -65,10 +72,11 @@ function storageError(err: unknown): string {
   return 'could not read storage';
 }
 
-export function ContextHealth() {
+function ContextHealthPanel() {
   const { currentInstance } = useAppState();
   const client = useMemo(() => (bootToken ? new ApiClient(bootToken) : undefined), []);
   const instanceId = currentInstance?.id;
+  const toast = useToast();
 
   const [reloadKey, setReloadKey] = useState(0);
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
@@ -131,7 +139,7 @@ export function ContextHealth() {
       setCleanMsg(undefined);
       try {
         const res = await client.cleanupStorage(home, name, instanceId);
-        setCleanMsg(`cleaned ${name} · freed ${formatBytes(res.bytes)} · recoverable in trash`);
+        toast(`Cleaned ${name} — freed ${formatBytes(res.bytes)} (recoverable in trash)`);
         reload();
       } catch (err) {
         setCleanMsg(err instanceof ApiError ? `cleanup refused (${err.kind})` : 'cleanup failed');
@@ -139,7 +147,7 @@ export function ContextHealth() {
         setCleaning(false);
       }
     },
-    [client, instanceId, reload],
+    [client, instanceId, reload, toast],
   );
 
   const maxCategoryBytes = useMemo(
@@ -150,53 +158,62 @@ export function ContextHealth() {
   return (
     <main className="layout-main page">
       <section className="page__section">
-        <h1 className="title-page">
-          CONTEXT HEALTH
-          <span className="ctx__sub micro-label">
-            {currentInstance ? currentInstance.name : 'no instance'}
-          </span>
-        </h1>
-        <p className="ctx__lede micro-label">
-          size of the agent config that loads into an agent&apos;s context window — total vs budget,
-          largest contributors &amp; optimization suggestions
-        </p>
+        <div className="page-head">
+          <div>
+            <h1>Context health</h1>
+            <p className="page-sub">
+              Size of the agent config that loads into an agent&apos;s context window for{' '}
+              <span className="mono">{currentInstance ? currentInstance.name : 'no instance'}</span>{' '}
+              — total vs budget, largest contributors &amp; optimization suggestions.
+            </p>
+          </div>
+        </div>
       </section>
 
       {status === 'loading' && (
         <section className="page__section">
-          <p className="micro-label ctx__acquiring">ACQUIRING SIGNAL</p>
+          <p className="meta">measuring context…</p>
         </section>
       )}
 
       {status === 'error' && (
         <section className="page__section">
-          <EmptyState title="NO SIGNAL" instruction={errMsg} />
+          <EmptyState title="Context health unavailable" instruction={errMsg} />
         </section>
       )}
 
       {status === 'ok' && health && hasNoConfig(health) && (
         <section className="page__section">
-          <EmptyState title="NO SIGNAL" instruction="no agent config loads into context here" />
+          <EmptyState
+            title="No context config"
+            instruction="no agent config loads into context for this instance"
+          />
         </section>
       )}
 
       {status === 'ok' && health && !hasNoConfig(health) && (
         <>
           <section className="page__section">
-            <div className="grid-page ctx__stats">
-              <div className="ctx__stat">
-                <StatBlock value={formatBytes(health.totalBytes)} label="CONTEXT CONFIG" />
-              </div>
-              <div className="ctx__stat col-rule">
-                <StatBlock value={budgetPercent(health)} label="OF BUDGET" size="md" />
-              </div>
-              <div className="ctx__stat col-rule">
-                <StatBlock value={health.fileCount} label="CONFIG FILES" size="md" />
-              </div>
+            <div className="tile-row ctx-tiles">
+              <StatBlock value={formatBytes(health.totalBytes)} label="Context config" />
+              <StatBlock value={budgetPercent(health)} label="Of budget" />
+              <StatBlock value={health.fileCount} label="Config files" />
             </div>
-            <div className={`ctx__budget ctx__budget--${health.status}`}>
-              <VuMeter level={meterLevel(health)} warnFrom={0.75} label="context budget usage" />
-              <span className="mono-data ctx__budget-caption">
+            <div className={`ctx-budget ctx-budget--${health.status}`}>
+              <div
+                className="ctx-meter"
+                role="meter"
+                aria-label="Context budget usage"
+                aria-valuemin={0}
+                aria-valuemax={1}
+                aria-valuenow={meterLevel(health)}
+              >
+                <span
+                  className="ctx-meter__fill"
+                  style={{ width: `${meterLevel(health) * 100}%` }}
+                />
+              </div>
+              <span className="mono-data ctx-budget-caption">
                 {formatBytes(health.totalBytes)} / {formatBytes(health.budgetBytes)} ·{' '}
                 {statusLabel(health.status)}
               </span>
@@ -205,26 +222,35 @@ export function ContextHealth() {
 
           {health.suggestions.length > 0 && (
             <section className="page__section">
-              <h2 className="micro-label ctx__heading">OPTIMIZATION SUGGESTIONS</h2>
-              <ul className="ctx__suggestions">
-                {health.suggestions.map((s) => (
-                  <li key={s.id} className={`ctx__suggestion ctx__suggestion--${s.severity}`}>
-                    <span className="ctx__suggestion-dot" aria-hidden="true" />
-                    <span className="ctx__suggestion-msg">{s.message}</span>
-                  </li>
-                ))}
-              </ul>
+              <h2 className="ctx-heading">Optimization suggestions</h2>
+              {health.suggestions.map((s) => (
+                <Notice key={s.id} tone={s.severity === 'warn' ? 'warn' : 'info'}>
+                  {s.message}
+                </Notice>
+              ))}
             </section>
           )}
 
           <section className="page__section">
-            <h2 className="micro-label ctx__heading">BY CATEGORY</h2>
-            <ul className="ctx__cats">
+            <h2 className="ctx-heading">By category</h2>
+            <ul className="ctx-cats">
               {health.byCategory.map((c) => (
-                <li key={c.category} className="ctx__cat-row">
-                  <span className="micro-label ctx__cat-name">{categoryLabel(c.category)}</span>
-                  <VuMeter level={c.bytes / maxCategoryBytes} label={`${c.category} share`} />
-                  <span className="mono-data ctx__cat-size">
+                <li key={c.category} className="ctx-cat-row">
+                  <span className="table-header ctx-cat-name">{categoryLabel(c.category)}</span>
+                  <div
+                    className="ctx-meter"
+                    role="meter"
+                    aria-label={`${c.category} share`}
+                    aria-valuemin={0}
+                    aria-valuemax={1}
+                    aria-valuenow={c.bytes / maxCategoryBytes}
+                  >
+                    <span
+                      className="ctx-meter__fill"
+                      style={{ width: `${(c.bytes / maxCategoryBytes) * 100}%` }}
+                    />
+                  </div>
+                  <span className="mono-data ctx-cat-size">
                     {formatBytes(c.bytes)} · {c.files}f
                   </span>
                 </li>
@@ -233,15 +259,15 @@ export function ContextHealth() {
           </section>
 
           <section className="page__section">
-            <h2 className="micro-label ctx__heading">LARGEST CONTRIBUTORS</h2>
+            <h2 className="ctx-heading">Largest contributors</h2>
             <Table headers={['FILE', 'CATEGORY', 'SIZE']}>
               {health.largest.map((f) => (
                 <tr key={f.path}>
                   <td>
                     <FileChip path={f.path} size={f.size} />
                   </td>
-                  <td className="micro-label">{categoryLabel(f.category)}</td>
-                  <td className="mono-data">{formatBytes(f.size)}</td>
+                  <td className="mono muted">{categoryLabel(f.category)}</td>
+                  <td className="mono num-col">{formatBytes(f.size)}</td>
                 </tr>
               ))}
             </Table>
@@ -250,9 +276,12 @@ export function ContextHealth() {
       )}
 
       <section className="page__section">
-        <h2 className="ctx__heading micro-label">STORAGE · DISK USAGE</h2>
+        <h2 className="ctx-heading">Storage · disk usage</h2>
         {storageStatus === 'error' && !storage ? (
-          <EmptyState title="NO SIGNAL" instruction={storageErr ?? 'could not read storage'} />
+          <EmptyState
+            title="Storage unavailable"
+            instruction={storageErr ?? 'could not read storage'}
+          />
         ) : (
           <StoragePanel
             report={storage}
@@ -266,4 +295,9 @@ export function ContextHealth() {
       </section>
     </main>
   );
+}
+
+export function ContextHealth() {
+  // Toasts confirm through the shell-level ToastProvider (App.tsx).
+  return <ContextHealthPanel />;
 }

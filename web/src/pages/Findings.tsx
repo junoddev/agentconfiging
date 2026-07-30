@@ -1,6 +1,14 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Severity } from '../api/types.js';
-import { EmptyState, FindingRow, SourceBadge, severityClass } from '../components/core/index.js';
+import {
+  Button,
+  EmptyState,
+  ListCard,
+  ListRow,
+  Pill,
+  SourceBadge,
+  useToast,
+} from '../components/core/index.js';
 import { homeRel } from '../lib/format.js';
 import { routeHash } from '../routes.js';
 import { useGlobalConfig, useReport } from '../state/index.js';
@@ -12,31 +20,47 @@ import {
   filterFindings,
   globalFindingRows,
   globalTallyLine,
-  rowSeverity,
   severityCountLabel,
+  severityPillTone,
 } from './findings/logic.js';
 import './findings.css';
 
+/** Muted sub-line for one finding: `→ fix` + detail, mid-dot joined;
+ *  undefined (no line at all) when the finding carries neither. */
+function findingSub(f: { suggestion?: string; detail: string }): string | undefined {
+  const parts: string[] = [];
+  if (f.suggestion !== undefined) parts.push(`→ ${f.suggestion}`);
+  if (f.detail !== '') parts.push(f.detail);
+  return parts.length > 0 ? parts.join(' · ') : undefined;
+}
+
 /**
- * Findings page (rail `03 FINDINGS`, route `#/findings`, bead c6p.5 + wmc.1).
- * Renders the content-free report findings — already severity-sorted server-side,
- * order preserved — as timetable FindingRows, with per-severity filter chips and
- * one-click APPLY.
+ * Findings page (route `#/findings`, bead c6p.5 + wmc.1, Console E13.4).
+ * Renders the content-free report findings — already severity-sorted
+ * server-side, order preserved — as list rows with severity pills and scope
+ * badges, plus per-severity filter chips and one-click APPLY.
  *
- * APPLY drives the reusable write flow (bead wmc.1): clicking [APPLY] opens the
- * mandatory DIFF PREVIEW (the fix's server-computed dry-run diff — the client
- * never holds the patch body, only sees `hasFix`), [COMMIT] applies it through
- * the guarded write path and refetches the report so the finding drops out live,
- * [DISCARD] cancels. Errors (an out-of-scope fix, a vanished finding, network)
- * surface as terse in-panel messages, never a crash.
+ * APPLY drives the reusable write flow (bead wmc.1): clicking "Apply fix"
+ * opens the mandatory diff preview (the fix's server-computed dry-run diff —
+ * the client never holds the patch body, only sees `hasFix`), Commit applies
+ * it through the guarded write path and refetches the report so the finding
+ * drops out live (confirmed by a toast), Discard cancels. Errors (an
+ * out-of-scope fix, a vanished finding, network) surface as terse in-panel
+ * messages, never a crash.
  *
  * All finding strings (title / detail / suggestion) come from adversarially
  * parsed config and are rendered as TEXT NODES only — never as HTML.
  */
 export function Findings() {
+  // Toasts confirm through the shell-level ToastProvider (App.tsx).
+  return <FindingsBody />;
+}
+
+function FindingsBody() {
   const { report, loading, error } = useReport();
   const flow = useWriteFlow();
-  // Inherited (machine-global) findings (E12), rendered under a GLOBAL group
+  const toast = useToast();
+  // Inherited (machine-global) findings (E12), rendered in a GLOBAL list-card
   // with per-row provenance badges. APPLY is NEVER offered for them (see
   // `canApply` — /api/fix cannot reach the global store by design). Absent or
   // failed global data ⇒ zero rows ⇒ the page renders exactly as before.
@@ -50,6 +74,13 @@ export function Findings() {
   const [openId, setOpenId] = useState<string | null>(null);
 
   const findings = report?.findings ?? [];
+
+  // Every mutating action confirms via toast (§5): a committed fix announces
+  // itself even as the refetched report drops the finding (and its panel).
+  // Keyed on the phase alone — message/toast are stable companions of it.
+  useEffect(() => {
+    if (flow.phase === 'done') toast(flow.message ?? 'Fix applied');
+  }, [flow.phase, flow.message, toast]);
 
   function onApply(id: string) {
     // Toggle: re-clicking the open finding discards its preview.
@@ -65,26 +96,16 @@ export function Findings() {
   // Counts are over the FULL set so the chips report totals, not the filtered view.
   const counts = useMemo(() => countBySeverity(findings), [findings]);
   const visible = useMemo(() => filterFindings(findings, active), [findings, active]);
-  // Stable 1-based timetable index per finding id — filtering never renumbers.
-  const indexById = useMemo(() => {
-    const map = new Map<string, number>();
-    findings.forEach((f, i) => map.set(f.id, i + 1));
-    return map;
-  }, [findings]);
 
   // Global layer: its own severity tally (the layers' tallies stay distinct)
-  // and the same severity filter as the project rows. Indexes continue the
-  // timetable after the project set and are stable under filtering.
+  // and the same severity filter as the project rows.
   const globalTally = useMemo(
     () => globalTallyLine(globalRows.map((r) => r.finding)),
     [globalRows],
   );
   const visibleGlobal = useMemo(
-    () =>
-      globalRows
-        .map((row, i) => ({ ...row, index: findings.length + i + 1 }))
-        .filter((row) => active.has(row.finding.severity)),
-    [globalRows, findings.length, active],
+    () => globalRows.filter((row) => active.has(row.finding.severity)),
+    [globalRows, active],
   );
 
   function toggle(sev: Severity) {
@@ -100,7 +121,7 @@ export function Findings() {
   if (error && !report) {
     return (
       <Frame>
-        <EmptyState instruction={error.message} />
+        <EmptyState title="Scan failed" instruction={error.message} />
       </Frame>
     );
   }
@@ -110,10 +131,7 @@ export function Findings() {
   if (!report) {
     return (
       <Frame>
-        <EmptyState
-          title="ACQUIRING"
-          instruction={loading ? 'scanning config …' : 'awaiting report'}
-        />
+        <EmptyState instruction={loading ? 'scanning config …' : 'no report yet'} />
       </Frame>
     );
   }
@@ -130,98 +148,107 @@ export function Findings() {
   return (
     <Frame>
       {findings.length > 0 && (
-        <div className="findings__filters" role="group" aria-label="filter by severity">
-          {SEVERITY_ORDER.map((sev) => {
-            const on = active.has(sev);
-            return (
-              <button
-                key={sev}
-                type="button"
-                className="findings__chip"
-                aria-pressed={on}
-                onClick={() => toggle(sev)}
-              >
-                <span className={`sev ${severityClass(rowSeverity(sev))}`} aria-hidden="true" />
-                <span className="mono-data">{severityCountLabel(sev, counts[sev])}</span>
-              </button>
-            );
-          })}
+        <div className="toolbar">
+          <div className="chip-row" role="group" aria-label="filter by severity">
+            {SEVERITY_ORDER.map((sev) => {
+              const on = active.has(sev);
+              return (
+                <button
+                  key={sev}
+                  type="button"
+                  className={on ? 'chip active' : 'chip'}
+                  aria-pressed={on}
+                  onClick={() => toggle(sev)}
+                >
+                  {severityCountLabel(sev, counts[sev])}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
-      {findings.length === 0 ? (
-        // Only reachable when global findings exist below (§7 voice, per layer).
-        <EmptyState instruction="clean project config · nothing to fix" />
-      ) : visible.length === 0 ? (
-        <EmptyState instruction="no findings match the active filters" />
-      ) : (
-        <ol className="findings__list">
-          {visible.map((f) => (
-            <li key={f.id} className="findings__item">
-              <FindingRow
-                index={indexById.get(f.id) ?? 0}
-                severity={rowSeverity(f.severity)}
+      <ListCard head="PROJECT" headMeta={String(findings.length)}>
+        {findings.length === 0 ? (
+          // Only reachable when global findings exist below (§7 voice, per layer).
+          <EmptyState instruction="clean project config · nothing to fix" />
+        ) : visible.length === 0 ? (
+          <EmptyState instruction="no findings match the active severity filters" />
+        ) : (
+          visible.map((f) => (
+            <div key={f.id} className="findings__row">
+              <ListRow
+                leading={<Pill tone={severityPillTone(f.severity)}>{f.severity}</Pill>}
                 title={f.title}
-                fix={f.suggestion}
-                onApply={canApply(f, 'project') ? () => onApply(f.id) : undefined}
+                badge={<SourceBadge scope="project" />}
+                sub={findingSub(f)}
+                trailing={
+                  <>
+                    {/* Group the finding under its agent (route text — never HTML). */}
+                    <a className="meta lr-link" href={routeHash({ name: 'agent', kind: f.agent })}>
+                      {f.agent}
+                    </a>
+                    {canApply(f, 'project') && (
+                      <Button label="Apply fix" onClick={() => onApply(f.id)} />
+                    )}
+                  </>
+                }
               />
-              <div className="findings__meta">
-                {/* Group the finding under its agent (route text — never HTML). */}
-                <a
-                  className="findings__agent mono-data"
-                  href={routeHash({ name: 'agent', kind: f.agent })}
-                >
-                  {f.agent}
-                </a>
-                {f.detail !== '' && <span className="findings__detail">{f.detail}</span>}
-              </div>
-              {openId === f.id && <WriteFlow flow={flow} />}
-            </li>
-          ))}
-        </ol>
-      )}
+              {openId === f.id && (
+                <div className="findings__flow">
+                  <WriteFlow flow={flow} />
+                </div>
+              )}
+            </div>
+          ))
+        )}
+      </ListCard>
 
       {globalRows.length > 0 && (
-        <div className="findings__global">
-          <div className="findings__global-head">
-            <h2 className="micro-label">GLOBAL</h2>
-            <span className="mono-data findings__global-tally">{globalTally}</span>
-          </div>
-          <ol className="findings__list">
-            {visibleGlobal.map((row) => (
-              <li key={`${row.root}:${row.finding.id}`} className="findings__item">
-                {/* No onApply EVER for a global finding: apply-fix resolves ids
-                    against the project report and cannot reach the global store
-                    by design (see canApply in findings/logic). */}
-                <FindingRow
-                  index={row.index}
-                  severity={rowSeverity(row.finding.severity)}
-                  title={row.finding.title}
-                  fix={row.finding.suggestion}
-                />
-                <div className="findings__meta">
-                  <SourceBadge scope="global" detail={homeRel(row.root)} />
-                  {/* Agent kind as plain text: detail routes resolve against the
-                      project report, so a global-only kind must not link. */}
-                  <span className="mono-data">{row.finding.agent}</span>
-                  {row.finding.detail !== '' && (
-                    <span className="findings__detail">{row.finding.detail}</span>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ol>
-        </div>
+        <ListCard head="GLOBAL" headMeta={globalTally}>
+          {visibleGlobal.length === 0 ? (
+            <EmptyState instruction="no global findings match the active severity filters" />
+          ) : (
+            visibleGlobal.map((row) => (
+              // No apply action EVER for a global finding: apply-fix resolves
+              // ids against the project report and cannot reach the global
+              // store by design (see canApply in findings/logic).
+              <ListRow
+                key={`${row.root}:${row.finding.id}`}
+                leading={
+                  <Pill tone={severityPillTone(row.finding.severity)}>{row.finding.severity}</Pill>
+                }
+                title={row.finding.title}
+                badge={<SourceBadge scope="global" detail={homeRel(row.root)} />}
+                sub={findingSub(row.finding)}
+                trailing={
+                  // Agent kind as plain text: detail routes resolve against the
+                  // project report, so a global-only kind must not link.
+                  <span className="meta">{row.finding.agent}</span>
+                }
+              />
+            ))
+          )}
+        </ListCard>
       )}
     </Frame>
   );
 }
 
-/** Shared page chassis so every state renders in the same main/section shell. */
+/** Shared page chassis so every state renders under the same page head. */
 function Frame({ children }: { children: ReactNode }) {
   return (
     <main className="layout-main page">
-      <section className="page__section">{children}</section>
+      <div className="page-head">
+        <div>
+          <h1>Findings</h1>
+          <p className="page-sub">
+            Issues detected across this folder&apos;s agent config. Apply previews a dry-run diff —
+            nothing is written without a commit.
+          </p>
+        </div>
+      </div>
+      {children}
     </main>
   );
 }

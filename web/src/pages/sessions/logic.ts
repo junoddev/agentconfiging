@@ -10,7 +10,13 @@
  * it, and the renderer maps segments to TEXT NODES only.
  */
 
-import type { RedactionSpan, ReplayBlock, ReplayMessage, SessionDetail } from '../../api/types.js';
+import type {
+  RedactionSpan,
+  ReplayBlock,
+  ReplayMessage,
+  SessionDetail,
+  SessionSummary,
+} from '../../api/types.js';
 
 /** One run of the redacted text — a plain slice or a `[REDACTED:*]` mark. */
 export interface RedactSegment {
@@ -90,6 +96,27 @@ export function formatWhen(iso: string | undefined): string {
 /** Normalize a single tag the way the server will (trim, bound length). */
 export function normalizeTag(raw: string): string {
   return raw.trim().slice(0, 64);
+}
+
+/** A terse mono table id — the first 8 chars of the (often UUID) session id. */
+export function shortId(id: string): string {
+  return id.slice(0, 8);
+}
+
+/**
+ * Case-insensitive substring filter over id + title + cwd + tags for the
+ * browse table's `.search` (Console §7: the empty state names this query).
+ * A blank query matches everything. Never mutates the input.
+ */
+export function filterSessions(
+  sessions: readonly SessionSummary[],
+  query: string,
+): SessionSummary[] {
+  const q = query.trim().toLowerCase();
+  if (q === '') return [...sessions];
+  return sessions.filter((s) =>
+    [s.id, s.title, s.cwd, ...s.tags].join(' ').toLowerCase().includes(q),
+  );
 }
 
 function blockToMarkdown(block: ReplayBlock): string {

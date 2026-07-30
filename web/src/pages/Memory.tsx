@@ -1,20 +1,21 @@
 /**
- * Memory browser & editor (rail `11 MEMORY`, route `#/memory`, bead
- * agentconfig-wmc.7). Browses the instance's memory files — the markdown notes
+ * Memory browser & editor (#/memory, bead agentconfig-wmc.7; Console
+ * conversion 4u1.4). Browses the instance's memory files — the markdown notes
  * under a `memory/` directory (`.claude/memory/…` and
  * `~/.claude/projects/<slug>/memory/…`) whose frontmatter carries a `type`,
  * `name`, and `description`, with the body holding the fact itself.
  *
- * The grid is a CARD per file: a colour-coded type badge, the name, the
- * description, and a one-line body preview. Frontmatter is parsed CLIENT-SIDE
- * (a hand-rolled splitter — no yaml dep; resilient to malformed input). Cards
- * bulk-load their (redacted) content from getFile; the list itself is derived
- * live from the report, so a WS-driven refetch keeps the grid current.
+ * The list is one `.list-card` of rows: name + scope badge, the description as
+ * the muted sub-line, and trailing type meta + a ghost Edit/View. Frontmatter
+ * is parsed CLIENT-SIDE (a hand-rolled splitter — no yaml dep; resilient to
+ * malformed input). Rows bulk-load their (redacted) content from getFile; the
+ * list itself is derived live from the report, so a WS-driven refetch keeps it
+ * current.
  *
- * Selecting a card opens a small FIELD EDITOR (type / name / description + the
- * body); a CREATE flow authors a brand-new note. Both serialize back to file
- * content and save through the reusable useWriteFlow ({kind:'file'}) → diff →
- * commit path — the ONLY write seam.
+ * The FIELD EDITOR (type / name / description + the body) and the CREATE flow
+ * live in the shared Dialog. Both serialize back to file content and save
+ * through the reusable useWriteFlow ({kind:'file'}) → diff → commit path — the
+ * ONLY write seam; every committed mutation confirms via Toast.
  *
  * REDACTION-SAVE TRAP (SPEC §3): getFile returns content with secrets already
  * replaced by visible `[REDACTED:*]` marks. A memory note can quote a secret, so
@@ -26,7 +27,19 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { type FileContent, type RedactionSpan } from '../api/index.js';
-import { Button, EmptyState, SourceBadge } from '../components/core/index.js';
+import {
+  Button,
+  Dialog,
+  EmptyState,
+  Field,
+  Input,
+  ListCard,
+  ListRow,
+  Notice,
+  Select,
+  SourceBadge,
+  useToast,
+} from '../components/core/index.js';
 import { fileReadOnly } from '../lib/editable.js';
 import { homeRel } from '../lib/format.js';
 import { useAppState, useGlobalConfig } from '../state/index.js';
@@ -45,12 +58,6 @@ import {
 } from './memory/logic.js';
 import './memory.css';
 
-/** Known type → badge class; anything else gets the neutral badge. */
-function badgeClass(type: string): string {
-  const t = type.toLowerCase();
-  return (MEMORY_TYPES as readonly string[]).includes(t) ? `mem__badge--${t}` : 'mem__badge--other';
-}
-
 /** Redacted `content` + mark `spans` → text nodes with styled `[REDACTED:*]`
  *  marks. Everything is a TEXT node — never markup; marks are already redacted
  *  server-side so no secret is present to leak. */
@@ -61,7 +68,7 @@ function renderRedacted(content: string, spans: readonly RedactionSpan[]): React
     if (span.start < cursor || span.end > content.length) return;
     if (span.start > cursor) nodes.push(content.slice(cursor, span.start));
     nodes.push(
-      <mark key={i} className="mem__redact" title={`redacted: ${span.id}`}>
+      <mark key={i} className="redact-mark" title={`redacted: ${span.id}`}>
         {content.slice(span.start, span.end)}
       </mark>,
     );
@@ -83,15 +90,21 @@ const EMPTY_FIELDS: MemoryFields = {
 };
 
 export function Memory() {
+  // Toasts confirm through the shell-level ToastProvider (App.tsx).
+  return <MemoryPage />;
+}
+
+function MemoryPage() {
   const { report, getFile } = useAppState();
   const { entries: globalDirs } = useGlobalConfig();
   const flow = useWriteFlow();
+  const toast = useToast();
 
   const memoryPaths = useMemo(() => collectMemoryFiles(report), [report]);
   // Inherited GLOBAL memory files (bead 71h.5): absolute root-joined paths.
   // Since 71h.10 they are editable when served unredacted — saves take the
   // same write flow, gated by its global-scope warning. A failed global load
-  // only drops those cards (the bulk loader already tolerates per-file
+  // only drops those rows (the bulk loader already tolerates per-file
   // failures); absent global data ⇒ empty list and the page is unchanged.
   const globalFiles = useMemo(() => collectGlobalMemoryFiles(globalDirs), [globalDirs]);
   const globalByPath = useMemo(
@@ -107,7 +120,7 @@ export function Memory() {
   // (re)scan, so an edit/create that keeps the same path set still re-loads.
   const stamp = report?.generatedAt ?? '';
 
-  // Bulk-load every memory file's (redacted) content, then build the cards.
+  // Bulk-load every memory file's (redacted) content, then build the rows.
   const [files, setFiles] = useState<Map<string, FileContent>>(new Map());
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
 
@@ -145,7 +158,7 @@ export function Memory() {
     [allPaths, files],
   );
 
-  // ── Editor / create state ──────────────────────────────────────────────────
+  // ── Editor / create state (shared Dialog) ─────────────────────────────────
   const [mode, setMode] = useState<Mode>({ kind: 'browse' });
   const [draft, setDraft] = useState<MemoryFields>(EMPTY_FIELDS);
   const [baseline, setBaseline] = useState<MemoryFields>(EMPTY_FIELDS);
@@ -159,17 +172,6 @@ export function Memory() {
   // WriteFlow global-scope warning. Only redaction forces read-only.
   const inherited = mode.kind === 'edit' && globalByPath.has(mode.path);
   const readOnly = fileReadOnly({ redacted, inherited });
-
-  // Re-baseline an open editor after our own commit lands (files reloads via the
-  // stamp-keyed effect above), so the save button falls honestly idle.
-  useEffect(() => {
-    if (flow.phase !== 'done' || mode.kind !== 'edit') return;
-    const f = files.get(mode.path);
-    if (!f) return;
-    const fields = parseMemory(f.content);
-    setDraft(fields);
-    setBaseline(fields);
-  }, [flow.phase, files, mode]);
 
   function openEdit(path: string) {
     const f = files.get(path);
@@ -217,185 +219,195 @@ export function Memory() {
       kind: 'file',
       path: effectivePath,
       content: serializeMemory(draft),
-      label: effectivePath,
+      label: `save ${effectivePath}`,
     });
   }
+
+  // Every committed mutation confirms via Toast (§5); the dialog closes and
+  // the stamp-keyed reload above refreshes the rows.
+  useEffect(() => {
+    if (flow.phase !== 'done') return;
+    const label = flow.request?.label;
+    toast(label !== undefined ? `Applied — ${label}` : 'Change applied');
+    setMode({ kind: 'browse' });
+    flow.cancel();
+    // flow.phase is the trigger; toast + flow.cancel are stable.
+  }, [flow.phase]);
 
   const editorOpen = mode.kind === 'edit' || mode.kind === 'create';
 
   return (
-    <main className="layout-main page">
-      <section className="page__section">
-        <h1 className="title-page">
-          MEMORY
-          <span className="mem__count mono-data">{allPaths.length} FILES</span>
-        </h1>
-        <div className="mem__tabs">
-          <Button
-            label="+ new memory"
-            variant={mode.kind === 'create' ? 'primary' : 'default'}
-            onClick={openCreate}
-          />
+    <main className="layout-main">
+      <div className="page-head">
+        <div>
+          <h1>Memory</h1>
+          <p className="page-sub">
+            Persistent facts the agent carries between sessions — {allPaths.length} file
+            {allPaths.length === 1 ? '' : 's'}, frontmatter-typed, provenance on every row.
+          </p>
         </div>
-      </section>
+        <div>
+          <Button label="New memory" variant="primary" onClick={openCreate} />
+        </div>
+      </div>
 
-      <section className="page__section">
-        {allPaths.length === 0 ? (
-          <EmptyState
-            title="NO MEMORY"
-            instruction="no memory files yet — create one to capture a persistent fact"
-          />
-        ) : status === 'loading' && cards.length === 0 ? (
-          <p className="micro-label">loading memory…</p>
-        ) : status === 'error' ? (
-          <EmptyState title="NO SIGNAL" instruction="could not load memory files" />
-        ) : (
-          <div className="mem__grid">
-            {cards.map((card) => (
-              <button
+      {!editorOpen && flow.phase !== 'idle' && <WriteFlow flow={flow} />}
+
+      {allPaths.length === 0 ? (
+        <EmptyState
+          title="No memory yet"
+          instruction="No memory files in this instance. Create one to capture a persistent fact."
+        />
+      ) : status === 'loading' && cards.length === 0 ? (
+        <p className="meta">loading memory …</p>
+      ) : status === 'error' ? (
+        <EmptyState title="Memory unavailable" instruction="Could not load memory files." />
+      ) : (
+        <ListCard head="MEMORY FILES" headMeta={String(cards.length)}>
+          {cards.map((card) => {
+            const globalRoot = globalByPath.get(card.path);
+            return (
+              <ListRow
                 key={card.path}
-                type="button"
-                className="mem__card"
-                onClick={() => openEdit(card.path)}
-                {...(mode.kind === 'edit' && mode.path === card.path
-                  ? { 'aria-current': 'true' }
-                  : {})}
-              >
-                <div className="mem__card-head">
-                  <span className={`mem__badge micro-label ${badgeClass(card.type)}`}>
-                    {card.type === '' ? 'untyped' : card.type}
-                  </span>
-                  {card.redacted && <span className="mem__redact-tag micro-label">redacted</span>}
-                  {globalByPath.has(card.path) && (
-                    <SourceBadge scope="global" readOnly={card.redacted} />
-                  )}
-                </div>
-                <span className="mem__card-name">{card.name}</span>
-                {card.description !== '' && <p className="mem__card-desc">{card.description}</p>}
-                {card.preview !== '' && (
-                  <p className="mem__card-preview mono-data">{card.preview}</p>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
+                title={<span className="mono">{card.name}</span>}
+                badge={
+                  globalRoot !== undefined ? (
+                    <SourceBadge scope="global" detail={homeRel(globalRoot)} />
+                  ) : (
+                    <SourceBadge scope="project" />
+                  )
+                }
+                sub={card.description !== '' ? card.description : card.preview}
+                trailing={
+                  <>
+                    <span className="meta">
+                      {card.type === '' ? 'untyped' : card.type}
+                      {card.redacted ? ' · redacted' : ''}
+                    </span>
+                    <Button
+                      label={card.redacted ? 'View' : 'Edit'}
+                      variant="ghost"
+                      onClick={() => openEdit(card.path)}
+                    />
+                  </>
+                }
+              />
+            );
+          })}
+        </ListCard>
+      )}
 
-      {editorOpen && (
-        <section className="page__section">
-          <div className="mem__editor">
-            <div className="mem__editor-head">
-              <span className="mono-data">
-                {mode.kind === 'create' ? 'new memory' : (mode.kind === 'edit' && mode.path) || ''}
-              </span>
-              {inherited && mode.kind === 'edit' ? (
-                <SourceBadge
-                  scope="global"
-                  detail={homeRel(globalByPath.get(mode.path) ?? '')}
-                  readOnly={redacted}
-                />
-              ) : (
-                activeFile && (
-                  <span className="mem__scope micro-label">scope · {activeFile.pathScope}</span>
-                )
-              )}
-              <span className="mem__editor-spacer" />
-              <Button label="close" onClick={closeEditor} />
-            </div>
-
-            {readOnly ? (
-              <>
-                <p className="mem__note micro-label">
-                  contains redacted secrets — read-only; edit this file on disk
-                </p>
-                <pre className="mem__source mono-data">
-                  {activeFile && renderRedacted(activeFile.content, activeFile.spans)}
-                </pre>
-              </>
+      <Dialog
+        open={editorOpen}
+        title={mode.kind === 'create' ? 'New memory' : 'Edit memory'}
+        onClose={closeEditor}
+        footer={
+          readOnly ? (
+            <Button label="Close" onClick={closeEditor} />
+          ) : (
+            <>
+              <Button label="Cancel" onClick={closeEditor} disabled={busy} />
+              <Button label="Save" variant="primary" onClick={onSave} disabled={!canSave} />
+            </>
+          )
+        }
+      >
+        {mode.kind === 'edit' && (
+          <p className="meta mem-dialog-path">
+            {mode.path}{' '}
+            {inherited ? (
+              <SourceBadge
+                scope="global"
+                detail={homeRel(globalByPath.get(mode.path) ?? '')}
+                readOnly={redacted}
+              />
             ) : (
-              <>
-                {mode.kind === 'create' && (
-                  <label className="mem__field">
-                    <span className="micro-label mem__label">file path</span>
-                    <input
-                      className="mono-data mem__input"
-                      value={pathTouched ? createPath : suggestPath(draft.name)}
-                      spellCheck={false}
-                      onChange={(e) => {
-                        setPathTouched(true);
-                        setCreatePath(e.target.value);
-                      }}
-                      aria-label="new memory file path"
-                    />
-                  </label>
-                )}
+              activeFile && (
+                <SourceBadge scope={activeFile.pathScope === 'local' ? 'local' : 'project'} />
+              )
+            )}
+          </p>
+        )}
 
-                <div className="mem__fields-row">
-                  <label className="mem__field mem__field--type">
-                    <span className="micro-label mem__label">type</span>
-                    <select
-                      className="mono-data mem__select"
-                      value={draft.type}
-                      onChange={(e) => setDraft({ ...draft, type: e.target.value })}
-                      aria-label="memory type"
-                    >
-                      {/* Preserve an existing off-list type (e.g. the fixtures'
-                          `context`) so editing never silently rewrites it. */}
-                      {draft.type !== '' &&
-                        !(MEMORY_TYPES as readonly string[]).includes(draft.type) && (
-                          <option value={draft.type}>{draft.type}</option>
-                        )}
-                      {MEMORY_TYPES.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="mem__field mem__field--name">
-                    <span className="micro-label mem__label">name</span>
-                    <input
-                      className="mono-data mem__input"
-                      value={draft.name}
-                      spellCheck={false}
-                      onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                      aria-label="memory name"
-                    />
-                  </label>
-                </div>
-
-                <label className="mem__field">
-                  <span className="micro-label mem__label">description</span>
-                  <input
-                    className="mem__input"
-                    value={draft.description}
-                    onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-                    aria-label="memory description"
-                  />
-                </label>
-
-                <label className="mem__field">
-                  <span className="micro-label mem__label">fact (body)</span>
-                  <textarea
-                    className="mono-data mem__textarea"
-                    value={draft.body}
-                    spellCheck={false}
-                    onChange={(e) => setDraft({ ...draft, body: e.target.value })}
-                    aria-label="memory body"
-                  />
-                </label>
-
-                <div className="mem__actions">
-                  <Button label="save" variant="primary" onClick={onSave} disabled={!canSave} />
-                </div>
-              </>
+        {readOnly ? (
+          <>
+            <Notice>
+              <strong>Contains redacted secrets — read-only.</strong> Edit this file on disk; saving
+              the placeholder text would overwrite the real values.
+            </Notice>
+            <pre className="mono redact-pre">
+              {activeFile && renderRedacted(activeFile.content, activeFile.spans)}
+            </pre>
+          </>
+        ) : (
+          <>
+            {mode.kind === 'create' && (
+              <Field label="File path" htmlFor="mem-path">
+                <Input
+                  id="mem-path"
+                  className="mono"
+                  value={pathTouched ? createPath : suggestPath(draft.name)}
+                  spellCheck={false}
+                  onChange={(e) => {
+                    setPathTouched(true);
+                    setCreatePath(e.target.value);
+                  }}
+                />
+              </Field>
             )}
 
-            <WriteFlow flow={flow} />
-          </div>
-        </section>
-      )}
+            <Field label="Type" htmlFor="mem-type">
+              <Select
+                id="mem-type"
+                className="mono"
+                value={draft.type}
+                onChange={(e) => setDraft({ ...draft, type: e.target.value })}
+              >
+                {/* Preserve an existing off-list type (e.g. the fixtures'
+                    `context`) so editing never silently rewrites it. */}
+                {draft.type !== '' && !(MEMORY_TYPES as readonly string[]).includes(draft.type) && (
+                  <option value={draft.type}>{draft.type}</option>
+                )}
+                {MEMORY_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+
+            <Field label="Name" htmlFor="mem-name">
+              <Input
+                id="mem-name"
+                className="mono"
+                value={draft.name}
+                spellCheck={false}
+                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              />
+            </Field>
+
+            <Field label="Description" htmlFor="mem-desc">
+              <Input
+                id="mem-desc"
+                value={draft.description}
+                onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+              />
+            </Field>
+
+            <Field label="Fact (body)" htmlFor="mem-body">
+              <textarea
+                id="mem-body"
+                className="input mono mem-body"
+                value={draft.body}
+                spellCheck={false}
+                onChange={(e) => setDraft({ ...draft, body: e.target.value })}
+              />
+            </Field>
+          </>
+        )}
+
+        {flow.phase !== 'idle' && <WriteFlow flow={flow} />}
+      </Dialog>
     </main>
   );
 }

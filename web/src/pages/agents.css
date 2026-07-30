@@ -1,63 +1,21 @@
-/* Agent list (#/agents) + detail (#/agent/:kind), bead c6p.3. Layout only —
-   motion belongs to the signal layer, color to the design tokens. */
+/* Agent list (#/agents) + detail (#/agent/:kind), Console E13.4. Page-layout
+   CSS only — list rows, pills, badges, chips, and tables come from the §5
+   contract in components.css. Tokens only. */
 
-/* Each SignalStrip is wrapped in a link to its detail page. The strip already
-   draws the hairline row; the link is a transparent, full-width click target. */
-.agent-link {
-  display: block;
-  color: inherit;
-  text-decoration: none;
-}
-
-.agent-link:hover .strip__kind {
-  color: var(--signal);
-}
-
-/* ── Global (inherited) section, E12 ─────────────────────────────────────
-   One SourceBadge heading per home config dir, then that dir's strips. The
-   strips are informational (not linked) — detail routes resolve against the
-   project report. */
-
-.agents__global-head {
-  margin: var(--gutter) 0 8px;
-}
-
-/* ── Detail head: kind + confidence rating over its VU meter ───────────── */
-
-.agent-detail__head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--gutter);
-  padding-bottom: 8px;
-  border-bottom: var(--hairline-w) solid var(--hairline);
-}
-
-.agent-detail__kind {
-  font-family: var(--font-sans);
-  font-size: var(--size-section);
-  line-height: var(--leading-section);
-  font-weight: 700;
-  letter-spacing: var(--tracking-heading);
-}
+/* ── Detail head: confidence pill pinned to the trailing edge ───────────── */
 
 .agent-detail__conf {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: auto;
-}
-
-/* Fingerprint sits in its own block under the head. */
-.agent-detail__wave {
-  padding: var(--gutter) 0;
 }
 
 /* Section caption for FILES / METADATA / FINDINGS. */
 .agent-detail__caption {
-  margin-bottom: 8px;
+  margin: 18px 0 8px;
 }
 
-/* PROJECT / GLOBAL · <dir> micro-headings between chip groups (E12). */
+/* PROJECT / GLOBAL · <dir> provenance headings between chip groups (E12). */
 .agent-detail__filegroup {
   margin: 8px 0;
 }
@@ -69,9 +27,9 @@
   gap: 8px;
 }
 
-/* Extras key column: mono, dim, top-aligned against wrapping values. */
+/* Extras key column: muted, no wrap; values wrap and break. */
 .agent-extras__key {
-  color: var(--fg-dim);
+  color: var(--muted);
   white-space: nowrap;
 }
 

@@ -1,16 +1,17 @@
 /**
- * ServerForm — the visual add/edit form for one MCP server (bead wmc.8). It
- * builds an {@link McpServer} from plain inputs and hands it to `onPreview`,
- * which drives the dry-run diff through useWriteFlow. It performs NO write
- * itself. `${VAR}` env/header values are typed and stored literally — nothing
- * here expands them. In add mode a template picker prefills the fields.
+ * ServerForm — the add/edit form for one MCP server (bead wmc.8, Console
+ * conversion 4u1.4). Rendered inside the shared Dialog; builds an
+ * {@link McpServer} from `.field`/`.input` controls and hands it to
+ * `onPreview`, which drives the dry-run diff through useWriteFlow. It performs
+ * NO write itself. `${VAR}` env/header values are typed and stored literally —
+ * nothing here expands them. In add mode a template picker prefills the fields.
  *
  * Extra (unmodeled) keys from an edited server are preserved: the form keeps the
  * original server's `extra`/`type` and re-attaches them to the built value.
  */
 
 import { useMemo, useState } from 'react';
-import { Button } from '../../components/core/index.js';
+import { Button, Field, Input, Notice, SegmentedControl } from '../../components/core/index.js';
 import {
   formatArgsText,
   formatKeyVals,
@@ -104,6 +105,8 @@ function invalidReason(state: FormState, existingNames: readonly string[]): stri
   return undefined;
 }
 
+const TRANSPORTS = ['stdio', 'http'] as const;
+
 export function ServerForm({ mode, initial, existingNames, onPreview, onCancel }: ServerFormProps) {
   const [state, setState] = useState<FormState>(() => seed(initial));
 
@@ -119,118 +122,108 @@ export function ServerForm({ mode, initial, existingNames, onPreview, onCancel }
   }
 
   return (
-    <div className="mcp-form surface">
-      <div className="mcp-form__title micro-label">
-        {mode === 'add' ? 'add server' : `edit · ${initial?.name ?? ''}`}
-      </div>
-
+    <div>
       {mode === 'add' && (
-        <div className="mcp-form__templates">
-          <span className="micro-label">start from template</span>
-          <div className="mcp-form__template-row">
-            {MCP_TEMPLATES.map((t) => (
-              <Button key={t.id} label={t.label} onClick={() => applyTemplate(t.id)} />
-            ))}
-          </div>
+        <div className="mcp-form-templates">
+          <span className="meta">Start from template</span>
+          {MCP_TEMPLATES.map((t) => (
+            <Button key={t.id} label={t.label} onClick={() => applyTemplate(t.id)} />
+          ))}
         </div>
       )}
 
-      <label className="mcp-form__field">
-        <span className="micro-label">name</span>
-        <input
-          className="mcp-form__input mono-data"
+      <Field label="Name" htmlFor="mcp-name">
+        <Input
+          id="mcp-name"
+          className="mono"
           value={state.name}
           onChange={(e) => set('name', e.target.value)}
           spellCheck={false}
         />
-      </label>
+      </Field>
 
-      <div className="mcp-form__field">
-        <span className="micro-label">transport</span>
-        <div className="mcp-form__transport">
-          <Button
-            label="stdio"
-            variant={state.transport === 'stdio' ? 'primary' : 'default'}
-            onClick={() => set('transport', 'stdio')}
-          />
-          <Button
-            label="http"
-            variant={state.transport === 'http' ? 'primary' : 'default'}
-            onClick={() => set('transport', 'http')}
-          />
-        </div>
-      </div>
+      <Field label="Transport" htmlFor="mcp-transport">
+        <SegmentedControl
+          options={TRANSPORTS}
+          value={state.transport}
+          onChange={(v) => set('transport', v as Transport)}
+          label="Transport"
+        />
+      </Field>
 
       {state.transport === 'stdio' ? (
         <>
-          <label className="mcp-form__field">
-            <span className="micro-label">command</span>
-            <input
-              className="mcp-form__input mono-data"
+          <Field label="Command" htmlFor="mcp-command">
+            <Input
+              id="mcp-command"
+              className="mono"
               value={state.command}
               onChange={(e) => set('command', e.target.value)}
               spellCheck={false}
             />
-          </label>
-          <label className="mcp-form__field">
-            <span className="micro-label">args · one per line</span>
+          </Field>
+          <Field label="Args · one per line" htmlFor="mcp-args">
             <textarea
-              className="mcp-form__input mcp-form__area mono-data"
+              id="mcp-args"
+              className="input mono"
               value={state.args}
               onChange={(e) => set('args', e.target.value)}
               spellCheck={false}
               rows={3}
             />
-          </label>
-          <label className="mcp-form__field">
-            <span className="micro-label">
-              env · KEY=VALUE per line · ${'{VAR}'} refs kept literal
-            </span>
+          </Field>
+          <Field label={'Env · KEY=VALUE per line · ${VAR} refs kept literal'} htmlFor="mcp-env">
             <textarea
-              className="mcp-form__input mcp-form__area mono-data"
+              id="mcp-env"
+              className="input mono"
               value={state.env}
               onChange={(e) => set('env', e.target.value)}
               spellCheck={false}
               rows={3}
             />
-          </label>
+          </Field>
         </>
       ) : (
         <>
-          <label className="mcp-form__field">
-            <span className="micro-label">url</span>
-            <input
-              className="mcp-form__input mono-data"
+          <Field label="URL" htmlFor="mcp-url">
+            <Input
+              id="mcp-url"
+              className="mono"
               value={state.url}
               onChange={(e) => set('url', e.target.value)}
               spellCheck={false}
             />
-          </label>
-          <label className="mcp-form__field">
-            <span className="micro-label">
-              headers · KEY=VALUE per line · ${'{VAR}'} refs kept literal
-            </span>
+          </Field>
+          <Field
+            label={'Headers · KEY=VALUE per line · ${VAR} refs kept literal'}
+            htmlFor="mcp-headers"
+          >
             <textarea
-              className="mcp-form__input mcp-form__area mono-data"
+              id="mcp-headers"
+              className="input mono"
               value={state.headers}
               onChange={(e) => set('headers', e.target.value)}
               spellCheck={false}
               rows={3}
             />
-          </label>
+          </Field>
         </>
       )}
 
-      {invalid !== undefined && <p className="mcp-form__hint micro-label">{invalid}</p>}
+      {invalid !== undefined && (
+        <Notice tone="info">
+          <strong>Not previewable yet.</strong> {invalid}
+        </Notice>
+      )}
 
-      <div className="mcp-form__actions">
+      <div className="mcp-form-actions">
+        <Button label="Cancel" onClick={onCancel} />
         <Button
-          label="preview change"
+          label="Preview change"
           variant="primary"
           disabled={invalid !== undefined}
           onClick={() => onPreview(build(state))}
         />
-        <Button label="cancel" onClick={onCancel} />
       </div>
     </div>
   );

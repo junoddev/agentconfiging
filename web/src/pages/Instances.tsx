@@ -1,18 +1,31 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ApiClient, ApiError } from '../api/client.js';
-import { parseTokenHash } from '../api/token.js';
+import { bootstrapToken } from '../api/token.js';
 import type { InstanceSummary, KnownProject, ScanResponse } from '../api/types.js';
-import { Button, EmptyState } from '../components/core/index.js';
+import {
+  Button,
+  Card,
+  EmptyState,
+  Input,
+  ListCard,
+  ListRow,
+  Notice,
+  Pill,
+  SourceBadge,
+  Table,
+  useToast,
+} from '../components/core/index.js';
 import { useAppState } from '../state/index.js';
 import { annotateHits, formatScanStats } from './instances/hits.js';
 import { formatKnownMeta, pruneKnownProjects } from './instances/suggestions.js';
 import './instances.css';
 
 /**
- * Workspace manager (rail `05 INSTANCES`, DESIGN §4.2 / §5 row 23). Lists the
- * hosted instances, adds a folder, scans recursively for more, and unloads /
- * removes instances. All root paths and scan-hit paths are user/filesystem data
- * and are rendered as TEXT nodes only (never HTML).
+ * Instances — the chooser-adjacent workspace manager (Console page, E13.5).
+ * Lists the hosted instances in a `.table-card`, adds a folder, scans
+ * recursively for more (scan states as `.pill`s), and unloads / removes
+ * instances. All root paths and scan-hit paths are user/filesystem data and are
+ * rendered as TEXT nodes only (never HTML). Every mutation confirms via Toast.
  *
  * CLIENT SEAM: mutations and the post-mutation list refresh need an ApiClient,
  * but the shell keeps its own client private and consumes the URL token on its
@@ -21,12 +34,12 @@ import './instances.css';
  * dedicated client. The instance list still seeds from `useAppState().instances`
  * for the first paint; `selectInstance` remains the shell's job.
  */
-const bootToken =
-  typeof window !== 'undefined' ? parseTokenHash(window.location.hash).token : undefined;
+const bootToken = typeof window !== 'undefined' ? bootstrapToken() : undefined;
 
-export function Instances() {
+function InstancesBody() {
   const { instances: shellInstances, currentInstance, selectInstance } = useAppState();
   const client = useMemo(() => (bootToken ? new ApiClient(bootToken) : undefined), []);
+  const toast = useToast();
 
   // Local, live copy of the list: seeded from the shell, then owned by this page
   // so mutations reflect immediately (the shell does not re-fetch instances).
@@ -83,12 +96,13 @@ export function Instances() {
       await client.addInstance(path);
       setAddPath('');
       await refreshList();
+      toast('Folder added');
     } catch (err) {
       setAddError(messageFor(err));
     } finally {
       setBusy(false);
     }
-  }, [addPath, client, busy, refreshList]);
+  }, [addPath, client, busy, refreshList, toast]);
 
   const onScan = useCallback(async () => {
     const path = scanPath.trim();
@@ -113,13 +127,14 @@ export function Instances() {
       try {
         await client.addInstance(root);
         await refreshList();
+        toast('Folder added');
       } catch (err) {
         setScanError(messageFor(err));
       } finally {
         setBusy(false);
       }
     },
-    [client, busy, refreshList],
+    [client, busy, refreshList, toast],
   );
 
   const onAddKnown = useCallback(
@@ -131,13 +146,14 @@ export function Instances() {
         await client.addInstance(root);
         await refreshList();
         await refreshKnown();
+        toast('Folder added');
       } catch (err) {
         setKnownError(messageFor(err));
       } finally {
         setBusy(false);
       }
     },
-    [client, busy, refreshList, refreshKnown],
+    [client, busy, refreshList, refreshKnown, toast],
   );
 
   const onUnload = useCallback(
@@ -147,13 +163,14 @@ export function Instances() {
       try {
         await client.unloadInstance(id);
         await refreshList();
+        toast('Instance unloaded');
       } catch {
         // non-fatal; leave the row as-is.
       } finally {
         setBusy(false);
       }
     },
-    [client, busy, refreshList],
+    [client, busy, refreshList, toast],
   );
 
   const onRemove = useCallback(
@@ -170,13 +187,14 @@ export function Instances() {
           if (next) selectInstance(next.id);
         }
         await refreshList();
+        toast('Instance removed');
       } catch {
         // non-fatal; leave the row in place.
       } finally {
         setBusy(false);
       }
     },
-    [client, busy, refreshList, currentInstance, instances, selectInstance],
+    [client, busy, refreshList, currentInstance, instances, selectInstance, toast],
   );
 
   const annotated = scan
@@ -195,76 +213,56 @@ export function Instances() {
 
   return (
     <main className="layout-main page">
-      <section className="page__section">
-        <h1 className="micro-label">05 INSTANCES · WORKSPACE</h1>
-        <p className="mono-data instances__count">
-          {instances.length} INSTANCE{instances.length === 1 ? '' : 'S'} ·{' '}
-          {instances.filter((i) => i.loaded).length} LOADED
-        </p>
-      </section>
-
-      <hr className="rule-h" />
+      <div className="page-head">
+        <div>
+          <h1>Instances</h1>
+          <p className="page-sub">
+            the workspace folders agentconfig watches — add one, scan for more, unload or remove
+          </p>
+        </div>
+        <span className="meta">
+          {instances.length} instance{instances.length === 1 ? '' : 's'} ·{' '}
+          {instances.filter((i) => i.loaded).length} loaded
+        </span>
+      </div>
 
       <section className="page__section">
         {instances.length === 0 ? (
-          <EmptyState instruction="add or scan a folder to begin watching" />
+          <EmptyState instruction="No instances yet. Add or scan a folder below to begin watching." />
         ) : (
-          <table className="table-hairline mono-data instances__table">
-            <thead>
-              <tr>
-                <th scope="col" className="micro-label">
-                  STATE
-                </th>
-                <th scope="col" className="micro-label">
-                  NAME
-                </th>
-                <th scope="col" className="micro-label">
-                  ROOT
-                </th>
-                <th scope="col" className="micro-label">
-                  MARKERS
-                </th>
-                <th scope="col" className="micro-label instances__actions-head">
-                  ACTIONS
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {instances.map((inst) => {
-                const isCurrent = currentInstance?.id === inst.id;
-                return (
-                  <tr key={inst.id} className={isCurrent ? 'instances__row--current' : undefined}>
-                    <td>
-                      <span
-                        className={inst.loaded ? 'instances__dot--on' : 'instances__dot--off'}
-                        aria-hidden="true"
-                      >
-                        {inst.loaded ? '●' : '○'}
-                      </span>{' '}
-                      {inst.loaded ? 'LOADED' : 'LAZY'}
-                    </td>
-                    <td>
+          <Table headers={['State', 'Name', 'Root', 'Markers', 'Actions']}>
+            {instances.map((inst) => {
+              const isCurrent = currentInstance?.id === inst.id;
+              return (
+                <tr key={inst.id} {...(isCurrent ? { 'aria-current': 'true' } : {})}>
+                  <td>
+                    <Pill tone={inst.loaded ? 'ok' : 'off'}>{inst.loaded ? 'loaded' : 'lazy'}</Pill>
+                  </td>
+                  <td>
+                    <span className="instances__name">
                       {inst.name}
-                      {inst.isDefault && <span className="instances__tag"> DEFAULT</span>}
-                      {isCurrent && (
-                        <span className="instances__tag instances__tag--current"> CURRENT</span>
-                      )}
-                    </td>
-                    <td className="instances__root">{inst.root}</td>
-                    <td className="instances__markers">
-                      {inst.markers.length > 0 ? inst.markers.join(' ') : '—'}
-                    </td>
-                    <td className="instances__actions">
+                      {inst.isDefault && <SourceBadge scope="default" />}
+                      {isCurrent && <Pill tone="ok">current</Pill>}
+                    </span>
+                  </td>
+                  <td className="mono instances__root">{inst.root}</td>
+                  <td className="mono muted">
+                    {inst.markers.length > 0 ? inst.markers.join(' ') : '—'}
+                  </td>
+                  <td>
+                    <span className="instances__actions">
                       {!isCurrent && (
                         <Button
-                          label="select"
+                          label="Select"
+                          variant="ghost"
                           onClick={() => selectInstance(inst.id)}
                           disabled={busy}
                         />
                       )}
                       {inst.loaded && (
                         <Button
-                          label="unload"
+                          label="Unload"
+                          variant="ghost"
                           onClick={() => void onUnload(inst.id)}
                           disabled={busy}
                         />
@@ -272,151 +270,146 @@ export function Instances() {
                       {confirmRemove === inst.id ? (
                         <>
                           <Button
-                            label="confirm"
+                            label="Confirm remove"
                             variant="destructive"
                             onClick={() => void onRemove(inst.id)}
                             disabled={busy}
                           />
                           <Button
-                            label="cancel"
+                            label="Cancel"
+                            variant="ghost"
                             onClick={() => setConfirmRemove(null)}
                             disabled={busy}
                           />
                         </>
                       ) : (
                         <Button
-                          label="remove"
+                          label="Remove"
                           variant="destructive"
                           onClick={() => setConfirmRemove(inst.id)}
                           disabled={busy}
                         />
                       )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </Table>
         )}
         {onlyDefault && (
-          <p className="micro-label instances__hint">
-            no watched folders yet — add or scan one below
-          </p>
+          <p className="meta instances__hint">no watched folders yet — add or scan one below</p>
         )}
       </section>
 
-      <hr className="rule-h" />
-
       <section className="page__section">
-        <h2 className="micro-label">ADD FOLDER</h2>
-        <div className="instances__form">
-          <input
-            className="instances__input mono-data"
-            type="text"
-            placeholder="/absolute/path/to/project"
-            value={addPath}
-            spellCheck={false}
-            onChange={(e) => setAddPath(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void onAdd();
-            }}
-          />
-          <Button
-            label="add"
-            variant="primary"
-            onClick={() => void onAdd()}
-            disabled={busy || !addPath.trim()}
-          />
-        </div>
-        {addError && <p className="instances__error mono-data">{addError}</p>}
+        <Card title="Add folder">
+          <div className="instances__form">
+            <Input
+              type="text"
+              className="mono"
+              placeholder="/absolute/path/to/project"
+              value={addPath}
+              spellCheck={false}
+              aria-label="folder to add"
+              onChange={(e) => setAddPath(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void onAdd();
+              }}
+            />
+            <Button
+              label="Add"
+              variant="primary"
+              onClick={() => void onAdd()}
+              disabled={busy || !addPath.trim()}
+            />
+          </div>
+          {addError !== null && <p className="instances__error mono-data">{addError}</p>}
+        </Card>
       </section>
 
-      {(suggestions.length > 0 || knownError) && (
-        <>
-          <hr className="rule-h" />
-          <section className="page__section">
-            <h2 className="micro-label">SUGGESTED PROJECTS</h2>
-            <p className="micro-label instances__hint">
-              seen in your recent sessions · one click to watch
-            </p>
-            {knownError ? (
-              <p className="instances__error mono-data">{knownError}</p>
-            ) : (
-              <ul className="instances__hits">
-                {suggestions.map((sug) => (
-                  <li key={sug.root} className="instances__hit">
-                    <div className="instances__hit-body">
-                      <span className="instances__root mono-data">{sug.root}</span>
-                      <span className="micro-label instances__hit-meta">
-                        {formatKnownMeta(sug)}
-                      </span>
-                    </div>
-                    <Button
-                      label="add"
-                      variant="primary"
-                      onClick={() => void onAddKnown(sug.root)}
-                      disabled={busy}
-                    />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </>
+      {(suggestions.length > 0 || knownError !== null) && (
+        <section className="page__section">
+          {knownError !== null ? (
+            <Notice>could not load suggested projects — {knownError}</Notice>
+          ) : (
+            <ListCard head="SUGGESTED PROJECTS" headMeta="seen in your recent sessions">
+              {suggestions.map((sug) => (
+                <ListRow
+                  key={sug.root}
+                  title={<span className="mono-data instances__root">{sug.root}</span>}
+                  sub={formatKnownMeta(sug)}
+                  trailing={
+                    <Button label="Add" onClick={() => void onAddKnown(sug.root)} disabled={busy} />
+                  }
+                />
+              ))}
+            </ListCard>
+          )}
+        </section>
       )}
 
-      <hr className="rule-h" />
-
       <section className="page__section">
-        <h2 className="micro-label">SCAN RECURSIVELY</h2>
-        <div className="instances__form">
-          <input
-            className="instances__input mono-data"
-            type="text"
-            placeholder="/absolute/path/to/scan"
-            value={scanPath}
-            spellCheck={false}
-            onChange={(e) => setScanPath(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void onScan();
-            }}
-          />
-          <Button label="scan" onClick={() => void onScan()} disabled={busy || !scanPath.trim()} />
-        </div>
-        {scanError && <p className="instances__error mono-data">{scanError}</p>}
-        {scan && (
-          <div className="instances__scan">
-            <p className="micro-label instances__hint">
-              {annotated.length} HIT{annotated.length === 1 ? '' : 'S'} ·{' '}
-              {formatScanStats(scan.stats)}
-            </p>
-            {annotated.length === 0 ? (
-              <EmptyState instruction="no agent-config markers found under that path" />
-            ) : (
-              <ul className="instances__hits">
-                {annotated.map((hit) => (
-                  <li key={hit.root} className="instances__hit">
-                    <div className="instances__hit-body">
-                      <span className="instances__root">{hit.root}</span>
-                      <span className="micro-label instances__hit-meta">
-                        {hit.runtimes.length > 0 ? hit.runtimes.join(' · ') : 'NO RUNTIME'}
-                        {' · '}
-                        {hit.markers.join(' ')}
-                      </span>
-                    </div>
-                    <Button
-                      label={hit.added ? 'added' : 'add'}
-                      variant={hit.added ? 'default' : 'primary'}
-                      onClick={() => void onAddHit(hit.root)}
-                      disabled={busy || hit.added}
-                    />
-                  </li>
-                ))}
-              </ul>
-            )}
+        <Card title="Scan recursively">
+          <div className="instances__form">
+            <Input
+              type="text"
+              className="mono"
+              placeholder="/absolute/path/to/scan"
+              value={scanPath}
+              spellCheck={false}
+              aria-label="folder to scan"
+              onChange={(e) => setScanPath(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void onScan();
+              }}
+            />
+            <Button
+              label="Scan"
+              onClick={() => void onScan()}
+              disabled={busy || !scanPath.trim()}
+            />
           </div>
-        )}
+          {scanError !== null && <p className="instances__error mono-data">{scanError}</p>}
+        </Card>
+
+        {scan &&
+          (annotated.length === 0 ? (
+            <div className="instances__scan">
+              <EmptyState instruction="No agent-config markers found under that path." />
+            </div>
+          ) : (
+            <div className="instances__scan">
+              <ListCard
+                head="SCAN HITS"
+                headMeta={`${annotated.length} hit${annotated.length === 1 ? '' : 's'} · ${formatScanStats(scan.stats)}`}
+              >
+                {annotated.map((hit) => (
+                  <ListRow
+                    key={hit.root}
+                    title={<span className="mono-data instances__root">{hit.root}</span>}
+                    badge={
+                      <Pill tone={hit.added ? 'off' : 'ok'}>{hit.added ? 'added' : 'new'}</Pill>
+                    }
+                    sub={`${hit.runtimes.length > 0 ? hit.runtimes.join(' · ') : 'no runtime'} · ${hit.markers.join(' ')}`}
+                    trailing={
+                      <Button
+                        label="Add"
+                        onClick={() => void onAddHit(hit.root)}
+                        disabled={busy || hit.added}
+                      />
+                    }
+                  />
+                ))}
+              </ListCard>
+            </div>
+          ))}
       </section>
     </main>
   );
+}
+
+export function Instances() {
+  // Toasts confirm through the shell-level ToastProvider (App.tsx).
+  return <InstancesBody />;
 }

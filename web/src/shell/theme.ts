@@ -2,23 +2,37 @@
  * Shell preferences (E10 qoc.2): theme persistence + first-run onboarding flag.
  *
  * These are NON-SENSITIVE user preferences (a colour scheme, a "seen the intro"
- * boolean), so — like the budget threshold (E7) — they live in `localStorage`.
- * The session token is the opposite: it stays memory-only and NEVER touches
- * storage. The pure resolve/guard functions below carry the logic that tests
- * pin; the thin read/write wrappers tolerate a disabled store (private mode).
+ * boolean), so they live in `localStorage` — durable across tabs and restarts.
+ * The session token is different: it lives in `sessionStorage` (tab-scoped,
+ * cleared on close) purely so a refresh can recover it, never in `localStorage`
+ * and never on the wire as a query string — see api/token.ts. The pure
+ * resolve/guard functions below carry the logic that tests pin; the thin
+ * read/write wrappers tolerate a disabled store (private mode).
  */
 
-import type { Theme } from './TopBar.js';
+/** Console themes (docs/DESIGN.md §1): dark is the native mode, light the
+ *  first-class inverse. `data-theme` on <html> carries one of these. */
+export type Theme = 'light' | 'dark';
+
+/** Pre-Console (Signal Grid) stored values migrate: paper→light, ink→dark. */
+const LEGACY_THEMES: Record<string, Theme> = { paper: 'light', ink: 'dark' };
 
 export const THEME_KEY = 'agentconfig:theme';
 export const ONBOARDED_KEY = 'agentconfig:onboarded';
 
-/** Seed the theme on mount: a valid stored choice wins; otherwise fall back to
- *  the OS preference (the pre-persistence behaviour). Pure — the caller passes
- *  the stored value and `matchMedia` result, so this is trivially testable. */
-export function resolveInitialTheme(stored: string | null, systemPrefersDark: boolean): Theme {
-  if (stored === 'ink' || stored === 'paper') return stored;
-  return systemPrefersDark ? 'ink' : 'paper';
+/** Seed the theme on mount: a valid stored choice wins (legacy paper/ink
+ *  values migrate); otherwise the OS preference; otherwise DARK — the tool is
+ *  launched from a terminal, dark is its native mode. Pure — the caller passes
+ *  the stored value and the `matchMedia` result (null when the OS expresses no
+ *  preference), so this is trivially testable. */
+export function resolveInitialTheme(
+  stored: string | null,
+  systemPrefersDark: boolean | null,
+): Theme {
+  const migrated = stored != null && stored in LEGACY_THEMES ? LEGACY_THEMES[stored] : stored;
+  if (migrated === 'light' || migrated === 'dark') return migrated;
+  if (systemPrefersDark === false) return 'light';
+  return 'dark';
 }
 
 /** First-run guard: the onboarding overlay shows until the flag reads 'true'. */
@@ -50,10 +64,11 @@ export function readTheme(): string | null {
   }
 }
 
-/** Persist an explicit theme choice so it survives reload. */
-export function writeTheme(theme: Theme): void {
+/** Persist an explicit theme choice so it survives reload. Legacy paper/ink
+ *  values (from callers not yet migrated to light/dark) store migrated. */
+export function writeTheme(theme: Theme | 'paper' | 'ink'): void {
   try {
-    storage()?.setItem(THEME_KEY, theme);
+    storage()?.setItem(THEME_KEY, LEGACY_THEMES[theme] ?? theme);
   } catch {
     // Storage disabled — the theme still applies for this session.
   }

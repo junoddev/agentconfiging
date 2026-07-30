@@ -1,209 +1,47 @@
-/* MCP server manager (#/mcp, bead wmc.8). Chassis only — Signal Grid tokens,
-   hairlines, mono. Nothing animates; server values are adversarial config data
-   rendered as text nodes, never markup. */
+/* MCP manager (#/mcp) — Console conversion (bead 4u1.4). List cards, rows,
+   badges, pills, buttons, notices, dialog and toast come from the §5 contract
+   classes in components/core; only true page-layout rules live here. */
 
-.mcp__count {
-  margin-left: 8px;
-  color: var(--fg-dim);
-}
-
-/* ── Editor (add/edit form + write-flow diff) ──────────────────────────────── */
-
-.mcp__editor {
+/* lc-head right side hosting a count + ghost action. */
+.lc-actions {
   display: flex;
-  flex-direction: column;
-  gap: var(--gutter);
+  align-items: center;
+  gap: 10px;
 }
 
-/* ── Per-file group ────────────────────────────────────────────────────────── */
-
-.mcp__file {
-  margin-bottom: var(--gutter);
-  padding-bottom: var(--gutter);
-  border-bottom: var(--hairline-w) solid var(--hairline);
-}
-
-.mcp__file-head {
+/* Template picker row inside the add dialog. */
+.mcp-form-templates {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px var(--gutter);
-  margin-bottom: 8px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
 }
 
-.mcp__scope,
-.mcp__note {
-  color: var(--fg-dim);
+.mcp-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
 }
 
-.mcp__ro {
-  color: var(--warn);
+/* Read-only detail dialog: label / value rows, values in mono. */
+.mcp-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.mcp__file-actions {
-  margin-left: auto;
-}
-
-.mcp__note {
-  margin: 4px 0 8px;
-  max-width: 70ch;
-}
-
-/* ── Card grid ─────────────────────────────────────────────────────────────── */
-
-.mcp__cards {
+.mcp-detail-row {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--gutter);
-}
-
-.mcp__new {
-  margin-top: var(--gutter);
-}
-
-/* ── Server card ───────────────────────────────────────────────────────────── */
-
-.mcp-card {
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: var(--gutter);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
-
-.mcp-card__head {
-  display: flex;
-  flex-wrap: wrap;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 10px;
   align-items: baseline;
-  gap: 8px;
-  padding-bottom: 8px;
-  border-bottom: var(--hairline-w) solid var(--hairline);
-}
-
-.mcp-card__name {
-  font-weight: 600;
-}
-
-.mcp-card__transport {
-  color: var(--fg-dim);
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: 0 4px;
-}
-
-.mcp-card__actions {
-  margin-left: auto;
-  display: flex;
-  gap: 8px;
-}
-
-.mcp-card__row {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.mcp-card__key {
-  color: var(--fg-dim);
-}
-
-.mcp-card__args,
-.mcp-card__kv {
   overflow-wrap: anywhere;
-  word-break: break-word;
 }
 
-.mcp-card__vals {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.mcp-card__envkey {
-  color: var(--fg-dim);
-}
-
-/* A ${VAR} reference — a distinct token treatment; value is never expanded. */
-.mcp-card__ref {
-  color: var(--signal);
-}
-
-.mcp-card__reftag {
-  margin-left: 6px;
-  color: var(--signal);
-  border: var(--hairline-w) solid var(--signal);
-  border-radius: var(--radius);
-  padding: 0 3px;
-}
-
-.mcp-card__note {
-  margin: 0;
-  color: var(--fg-dim);
-}
-
-/* ── Add/edit form ─────────────────────────────────────────────────────────── */
-
-.mcp-form {
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: var(--gutter);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.mcp-form__title {
-  color: var(--fg-dim);
-  padding-bottom: 8px;
-  border-bottom: var(--hairline-w) solid var(--hairline);
-}
-
-.mcp-form__templates,
-.mcp-form__field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.mcp-form__template-row,
-.mcp-form__transport,
-.mcp-form__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.mcp-form__input {
-  background: var(--bg);
-  color: var(--fg);
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: 6px 8px;
-  font-size: var(--size-data);
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.mcp-form__input:focus {
-  outline: none;
-  border-color: var(--fg);
-}
-
-.mcp-form__area {
-  resize: vertical;
-  white-space: pre;
-}
-
-.mcp-form__hint {
-  margin: 0;
-  color: var(--warn);
-}
-
-@media (max-width: 720px) {
-  .mcp__cards {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.mcp-detail-reftag {
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }

@@ -1,16 +1,7 @@
-/* Instruction sync (#/sync, bead wmc.10). Chassis only — Signal-Grid tokens,
-   hairlines, mono. Nothing here animates; every diff/path is adversarial data
-   rendered by DiffPanel / text nodes, never markup. */
-
-.sync__sub {
-  margin-left: 8px;
-  color: var(--fg-dim);
-}
-
-.sync__lede {
-  color: var(--fg-dim);
-  margin-top: 6px;
-}
+/* Sync (#/sync) — Console page layout only. Pills, badges, seg, card, diff and
+   buttons come from the §5 contract in components/core; only true page
+   geometry (source picker stack, target-row cards) lives here. Every diff/path
+   is adversarial data rendered by DiffPanel / text nodes, never markup. */
 
 /* ── Source of truth picker ─────────────────────────────────────────────── */
 
@@ -20,37 +11,25 @@
   gap: 8px;
 }
 
-.sync__source-label {
-  color: var(--fg-dim);
-  letter-spacing: var(--tracking-micro);
-}
-
-.sync__source-pick {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--gutter);
-}
-
 /* ── Plan summary + actions ─────────────────────────────────────────────── */
 
 .sync__summary {
-  color: var(--fg-dim);
-  margin-bottom: var(--gutter);
+  margin-bottom: 12px;
 }
 
 .sync__commit-msg {
-  color: var(--signal);
-  margin-bottom: var(--gutter);
+  color: var(--accent);
+  margin-bottom: 12px;
 }
 
 .sync__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--gutter);
-  margin-bottom: var(--gutter);
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
-/* ── Target rows ────────────────────────────────────────────────────────── */
+/* ── Target rows (each a .card) ─────────────────────────────────────────── */
 
 .sync__list {
   list-style: none;
@@ -58,24 +37,28 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--gutter);
+  gap: 14px;
 }
 
 .sync__row {
-  padding: var(--gutter);
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: 14px 16px;
 }
 
 .sync__row-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  gap: 8px var(--gutter);
+  gap: 8px 16px;
+}
+
+.sync__row-marks {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .sync__pick {
@@ -86,32 +69,13 @@
 }
 
 .sync__path {
-  color: var(--fg);
   word-break: break-all;
-}
-
-.sync__badge {
-  letter-spacing: var(--tracking-micro);
-  text-transform: uppercase;
-}
-
-.sync__badge--signal {
-  color: var(--signal);
-}
-
-.sync__badge--warn {
-  color: var(--warn);
-}
-
-.sync__badge--dim {
-  color: var(--fg-dim);
 }
 
 .sync__meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px var(--gutter);
-  color: var(--fg-dim);
+  gap: 8px 16px;
 }
 
 .sync__note {
@@ -119,5 +83,5 @@
 }
 
 .sync__err {
-  color: var(--red);
+  color: var(--danger);
 }

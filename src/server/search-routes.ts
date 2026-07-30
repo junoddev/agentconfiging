@@ -11,8 +11,8 @@
  * only touched when a search route is actually hit.
  *
  * LOCAL-ONLY + BOUNDED + REDACTED: sessions come from THIS machine's `~/.claude`
- * history via the same bounded, TTL-cached {@link StatsCache} the dashboard/
- * analytics routes use. Result snippets are REDACTED server-side (SPEC §3) before
+ * history via the same bounded, TTL-cached {@link StatsCache} the dashboard
+ * routes use. Result snippets are REDACTED server-side (SPEC §3) before
  * they cross the wire; the raw index lives under a server-controlled state dir and
  * is never served. The query is bound as a parameter and sanitized for FTS5.
  */

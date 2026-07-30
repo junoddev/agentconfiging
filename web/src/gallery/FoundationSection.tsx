@@ -1,57 +1,54 @@
-import { themeTokens, type ColorTokenName } from '../styles/tokens.js';
+import { derivedTokens, themeTokens, type ColorTokenName } from '../styles/tokens.js';
 
-const TOKEN_NAMES = Object.keys(themeTokens.paper) as ColorTokenName[];
+const TOKEN_NAMES = Object.keys(themeTokens.light) as ColorTokenName[];
+const SOFT_NAMES = Object.keys(derivedTokens) as (keyof typeof derivedTokens)[];
 
-/** Foundation swatches: color tokens (rendered through the live theme),
- *  type scale specimens, and the grid primitives. Chassis only. */
+/** Foundation — Console tokens rendered through the live theme, the fixed-px
+ *  type scale, and the shape primitives. Flip the theme toggle to verify the
+ *  light and dark values side by side. */
 export function FoundationSection() {
   return (
     <section className="page__section" id="foundation">
-      <h2 className="micro-label">FOUNDATION</h2>
+      <h2 className="table-header">Foundation · §1–§3</h2>
 
       <div className="gallery__demo">
-        <h3 className="micro-label">COLOR TOKENS</h3>
+        <h3 className="micro-label">COLOR TOKENS · LIGHT / DARK</h3>
         {TOKEN_NAMES.map((name) => (
           <div key={name} className="swatch-row">
             <span className="swatch" style={{ background: `var(${name})` }} aria-hidden="true" />
             <span className="mono-data swatch-row__name">{name}</span>
             <span className="mono-data swatch-row__values">
-              {themeTokens.paper[name]} · {themeTokens.ink[name]}
+              {themeTokens.light[name]} · {themeTokens.dark[name]}
             </span>
+          </div>
+        ))}
+        {SOFT_NAMES.map((name) => (
+          <div key={name} className="swatch-row">
+            <span className="swatch" style={{ background: `var(${name})` }} aria-hidden="true" />
+            <span className="mono-data swatch-row__name">{name}</span>
+            <span className="mono-data swatch-row__values">{derivedTokens[name]}</span>
           </div>
         ))}
       </div>
 
       <div className="gallery__demo">
-        <h3 className="micro-label">TYPE SCALE</h3>
-        <div className="numeral-giant">96</div>
-        <div className="numeral-giant numeral-giant--sm">64</div>
-        <div className="title-page">Page title · Archivo 600 · 28</div>
-        <div className="title-section">Section header · Archivo 600 · 18</div>
-        <p>Body 15 — legibility earns trust before writes.</p>
-        <div className="mono-data">mono-data 13 · .claude/settings.json · a1b2c3d4</div>
-        <div className="micro-label">MICRO-LABEL 11 · +0.08EM TRACKING</div>
+        <h3 className="micro-label">TYPE SCALE · FIXED PX</h3>
+        <h1>Page title · 20 / 650</h1>
+        <h2>Card head · 15 / 600</h2>
+        <p>Body 13.5 / 1.5 — labels are nouns, buttons are verbs that say what happens.</p>
+        <div className="mono-data">mono-data 12.5 · .claude/settings.json · a1b2c3d4</div>
+        <div className="meta">meta 12 mono muted · updated 3d ago</div>
+        <div className="table-header">TABLE HEADER · 11 MONO · 0.05EM</div>
+        <div className="micro-label">MICRO LABEL · 10 MONO · 0.08EM</div>
       </div>
 
       <div className="gallery__demo">
-        <h3 className="micro-label">GRID</h3>
-        <div className="grid-page">
-          <div className="grid-demo-cell" style={{ gridColumn: 'span 4' }}>
-            <span className="micro-label">SPAN 4</span>
-          </div>
-          <div className="grid-demo-cell col-rule" style={{ gridColumn: 'span 4' }}>
-            <span className="micro-label">SPAN 4 · COL RULE</span>
-          </div>
-          <div className="grid-demo-cell col-rule" style={{ gridColumn: 'span 4' }}>
-            <span className="micro-label">SPAN 4 · COL RULE</span>
-          </div>
-        </div>
-        <hr className="rule-h" />
+        <h3 className="micro-label">SHAPE · HAIRLINES DO THE SEPARATION WORK</h3>
         <div className="row">
-          <span className="mono-data">40PX ROW · HAIRLINE RULED · NO ZEBRA</span>
+          <span className="mono-data">hairline row · no zebra · hover carries fg-soft</span>
         </div>
         <div className="surface grid-demo-surface">
-          <span className="micro-label">SURFACE · ELEVATION = HAIRLINE + SURFACE SHIFT</span>
+          <span className="micro-label">SURFACE · RADIUS-LG · NO SHADOW AT REST</span>
         </div>
       </div>
     </section>

@@ -3,8 +3,8 @@ import { fuzzyMatch } from './fuzzy.js';
 
 describe('fuzzyMatch — subsequence', () => {
   it('matches an in-order subsequence, case-insensitively', () => {
-    expect(fuzzyMatch('sig', 'SIGNAL').matched).toBe(true);
-    expect(fuzzyMatch('SGN', 'SIGNAL').matched).toBe(true);
+    expect(fuzzyMatch('set', 'SETTINGS').matched).toBe(true);
+    expect(fuzzyMatch('STG', 'SETTINGS').matched).toBe(true);
     expect(fuzzyMatch('git', 'GIT').matched).toBe(true);
   });
 
@@ -21,13 +21,13 @@ describe('fuzzyMatch — subsequence', () => {
   });
 
   it('reports the matched indices in order', () => {
-    expect(fuzzyMatch('sg', 'SIGNAL').indices).toEqual([0, 2]);
+    expect(fuzzyMatch('st', 'SETTINGS').indices).toEqual([0, 2]);
   });
 });
 
 describe('fuzzyMatch — ranking', () => {
   it('scores a prefix/consecutive run above a scattered match', () => {
-    const tight = fuzzyMatch('sig', 'SIGNAL'); // consecutive from the start
+    const tight = fuzzyMatch('set', 'SETTINGS'); // consecutive from the start
     const loose = fuzzyMatch('sns', 'SESSIONS'); // scattered
     expect(tight.score).toBeGreaterThan(loose.score);
   });

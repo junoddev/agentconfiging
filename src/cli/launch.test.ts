@@ -99,7 +99,7 @@ describe('runLaunch (plain, non-TTY)', () => {
     const code = await runLaunch(OPTS, h.deps);
     expect(code).toBe(0);
     expect(h.serverCalls).toEqual([{ root: h.cwd }]);
-    expect(h.stdout()).toContain(`SIGNAL ACQUIRED · ${URL}`);
+    expect(h.stdout()).toContain(`SERVER UP · ${URL}`);
   });
 
   it('prints the log path on startup and mirrors every line to disk', async () => {
@@ -108,7 +108,7 @@ describe('runLaunch (plain, non-TTY)', () => {
     const logFile = path.join(h.logDir, '2026-07-26T12-00-00.log');
     expect(h.stdout()).toContain(`LOG ${logFile}`);
     const onDisk = fs.readFileSync(logFile, 'utf-8');
-    expect(onDisk).toContain(`SIGNAL ACQUIRED · ${URL}`);
+    expect(onDisk).toContain(`SERVER UP · ${URL}`);
     expect(onDisk).toContain('2 AGENTS · 3 FINDINGS');
     expect(onDisk).toContain(`OPEN ${URL}`);
   });
@@ -188,7 +188,7 @@ describe('runLaunch (TTY / Ink mode)', () => {
     ]);
     expect(props?.initialLogs.map((e) => e.text)).toEqual([
       expect.stringContaining('LOG '),
-      `SIGNAL ACQUIRED · ${URL}`,
+      `SERVER UP · ${URL}`,
       '2 AGENTS · 3 FINDINGS',
       `OPEN ${URL}`,
     ]);

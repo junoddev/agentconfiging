@@ -80,28 +80,59 @@ export interface TerminalTheme {
   brightBlack: string;
 }
 
+/** The two Console themes (opendesign/DESIGN.md §1). */
+export type ConsoleTheme = 'light' | 'dark';
+
+/** The four Console core tokens the terminal palette is built from. */
+export interface ConsoleTokenColors {
+  bg: string;
+  fg: string;
+  accent: string;
+  muted: string;
+}
+
+/** sRGB hex equivalents of the Console oklch tokens (styles/tokens.css §1) —
+ *  the FALLBACK when live token resolution is unavailable (no canvas, jsdom).
+ *  In the browser, Terminal.tsx resolves the CSS custom properties at runtime
+ *  so the palette always tracks the token block. */
+export const FALLBACK_TOKENS: Record<ConsoleTheme, ConsoleTokenColors> = {
+  light: { bg: '#f6f9fc', fg: '#121c23', accent: '#299236', muted: '#5a656d' },
+  dark: { bg: '#0b1014', fg: '#e3e9ed', accent: '#48c063', muted: '#848e95' },
+};
+
+/** `#rrggbb` → `#rrggbbaa` (xterm accepts 8-digit hex); other forms pass
+ *  through unchanged (better a solid selection than an unparsable color). */
+export function withAlpha(color: string, alpha: number): string {
+  if (!/^#[0-9a-fA-F]{6}$/.test(color)) return color;
+  const a = Math.round(Math.min(1, Math.max(0, alpha)) * 255)
+    .toString(16)
+    .padStart(2, '0');
+  return `${color}${a}`;
+}
+
 /**
- * Map the active Signal Grid theme to an xterm palette (DESIGN §2/§6). Pure so
- * the mapping is testable; Terminal.tsx reads the two palettes by theme name.
+ * Build the xterm palette from the Console tokens (DESIGN §1): terminal bg =
+ * `--bg` (recessed like inputs), text = `--fg`, cursor + selection wear the one
+ * accent, bright-black = `--muted`. `tokens` carries the LIVE resolved token
+ * colors when the caller can read them; anything missing falls back to the
+ * static equivalents for `theme`. Pure and testable.
  */
-export function xtermTheme(theme: 'paper' | 'ink'): TerminalTheme {
-  if (theme === 'ink') {
-    return {
-      background: '#0b0e17',
-      foreground: '#e8eaf2',
-      cursor: '#b4ff39',
-      selectionBackground: 'rgba(180, 255, 57, 0.22)',
-      black: '#0b0e17',
-      brightBlack: '#232a3e',
-    };
-  }
+export function xtermTheme(
+  theme: ConsoleTheme,
+  tokens?: Partial<ConsoleTokenColors>,
+): TerminalTheme {
+  const base = FALLBACK_TOKENS[theme];
+  const bg = tokens?.bg ?? base.bg;
+  const fg = tokens?.fg ?? base.fg;
+  const accent = tokens?.accent ?? base.accent;
+  const muted = tokens?.muted ?? base.muted;
   return {
-    background: '#ffffff',
-    foreground: '#141519',
-    cursor: '#2e7d32',
-    selectionBackground: 'rgba(46, 125, 50, 0.25)',
-    black: '#141519',
-    brightBlack: '#5c5f6a',
+    background: bg,
+    foreground: fg,
+    cursor: accent,
+    selectionBackground: withAlpha(accent, 0.35),
+    black: bg,
+    brightBlack: muted,
   };
 }
 

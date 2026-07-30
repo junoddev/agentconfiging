@@ -1,76 +1,72 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { themeTokens } from './tokens.js';
+import { derivedTokens, themeTokens } from './tokens.js';
 
-/** The DESIGN.md §2 table, verbatim. If the spec changes, change it here too. */
-const spec = {
-  paper: {
-    '--bg': '#FAFAF7',
-    '--surface': '#FFFFFF',
-    '--fg': '#141519',
-    '--fg-dim': '#5C5F6A',
-    '--hairline': '#D9D9D2',
-    '--signal': '#2E7D32',
-    '--warn': '#8A6100',
-    '--red': '#E63329',
-    '--trace-dim': 'rgba(46,125,50,.25)',
-  },
-  ink: {
-    '--bg': '#0B0E17',
-    '--surface': '#121627',
-    '--fg': '#E8EAF2',
-    '--fg-dim': '#9AA1B5',
-    '--hairline': '#232A3E',
-    '--signal': '#B4FF39',
-    '--warn': '#FFC53D',
-    '--red': '#FF4D3D',
-    '--trace-dim': 'rgba(180,255,57,.22)',
-  },
-} as const;
+/** Drift test: the Console token block must be identical in three places —
+ *  tokens.ts (this module's source of truth for JS), tokens.css (what the app
+ *  ships), and the docs/DESIGN.md §1 token block (the spec). */
 
-/** Case/whitespace/leading-zero-insensitive color comparison. */
+/** Whitespace/quote-insensitive comparison; oklch/color-mix values verbatim. */
 function normalize(value: string): string {
-  return value.toLowerCase().replace(/\s+/g, '').replace(/\b0\./g, '.');
+  return value.toLowerCase().replaceAll('"', "'").replace(/\s+/g, ' ').trim();
 }
 
-const css = readFileSync(new URL('./tokens.css', import.meta.url), 'utf8');
-
-function cssBlock(selectorPattern: RegExp): string {
-  const match = css.match(selectorPattern);
-  if (!match?.[1]) throw new Error(`selector not found in tokens.css: ${selectorPattern}`);
+function block(source: string, selectorPattern: RegExp, label: string): string {
+  const match = source.replaceAll('"', "'").match(selectorPattern);
+  if (!match?.[1]) throw new Error(`selector not found in ${label}: ${selectorPattern}`);
   return match[1];
 }
 
-const blocks = {
-  paper: cssBlock(/\n:root \{([^}]*)\}/),
-  ink: cssBlock(/:root\[data-theme='ink'\] \{([^}]*)\}/),
-  inkMedia: cssBlock(
-    /@media \(prefers-color-scheme: dark\) \{\s*:root:not\(\[data-theme='paper'\]\) \{([^}]*)\}/,
-  ),
-};
-
-function cssValue(block: string, token: string): string {
-  const match = block.match(new RegExp(`${token}:\\s*([^;]+);`));
+function cssValue(blockText: string, token: string): string {
+  const match = blockText.match(new RegExp(`${token}:\\s*([^;]+);`));
   if (!match?.[1]) throw new Error(`token ${token} not found in block`);
   return match[1].trim();
 }
 
-describe('Signal Grid color tokens (DESIGN.md §2)', () => {
-  for (const theme of ['paper', 'ink'] as const) {
-    it(`tokens.ts ${theme} matches the DESIGN.md table exactly`, () => {
-      expect(themeTokens[theme]).toEqual(spec[theme]);
-    });
+const css = readFileSync(new URL('./tokens.css', import.meta.url), 'utf8');
+const docs = readFileSync(new URL('../../../docs/DESIGN.md', import.meta.url), 'utf8');
 
-    it(`tokens.css ${theme} theme matches tokens.ts`, () => {
-      for (const [token, value] of Object.entries(themeTokens[theme])) {
-        expect(normalize(cssValue(blocks[theme], token)), token).toBe(normalize(value));
+/** The spec's token block is the first ```css fence in docs/DESIGN.md. */
+const docsFence = docs.match(/```css\n([\s\S]*?)```/)?.[1];
+if (!docsFence) throw new Error('docs/DESIGN.md has no ```css token block');
+
+const sources = {
+  'tokens.css': {
+    light: block(css, /:root \{([^}]*)\}/, 'tokens.css'),
+    dark: block(css, /html\[data-theme='dark'\] \{([^}]*)\}/, 'tokens.css'),
+  },
+  'docs/DESIGN.md': {
+    light: block(docsFence, /:root \{([^}]*)\}/, 'docs/DESIGN.md'),
+    dark: block(docsFence, /html\[data-theme='dark'\] \{([^}]*)\}/, 'docs/DESIGN.md'),
+  },
+};
+
+describe('Console color tokens (docs/DESIGN.md §1)', () => {
+  for (const [name, blocks] of Object.entries(sources)) {
+    for (const theme of ['light', 'dark'] as const) {
+      it(`${name} ${theme} theme matches tokens.ts`, () => {
+        for (const [token, value] of Object.entries(themeTokens[theme])) {
+          expect(normalize(cssValue(blocks[theme], token)), token).toBe(normalize(value));
+        }
+      });
+    }
+
+    it(`${name} declares the soft washes as color-mix of core tokens`, () => {
+      for (const [token, value] of Object.entries(derivedTokens)) {
+        expect(normalize(cssValue(blocks.light, token)), token).toBe(normalize(value));
       }
     });
   }
 
-  it('prefers-color-scheme dark fallback carries the full Ink set', () => {
-    for (const [token, value] of Object.entries(themeTokens.ink)) {
-      expect(normalize(cssValue(blocks.inkMedia, token)), token).toBe(normalize(value));
+  it('no raw hex colors in web/src/styles outside the token block', () => {
+    const dir = new URL('.', import.meta.url);
+    for (const file of readdirSync(dir).filter((f) => f.endsWith('.css'))) {
+      const text = readFileSync(new URL(file, dir), 'utf8');
+      expect(/#[0-9a-fA-F]{3,8}\b/.test(text), `${file} contains raw hex`).toBe(false);
     }
+  });
+
+  it('the dark block overrides every core token (soft washes re-derive)', () => {
+    expect(Object.keys(themeTokens.dark)).toEqual(Object.keys(themeTokens.light));
   });
 });

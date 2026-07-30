@@ -1,120 +1,47 @@
-/* Workspace manager (#/instances, DESIGN §4.2 / §5 row 23). Chassis only —
-   tokens exclusively, no gradients/shadows/radius > 2px. Nothing here animates. */
+/* Instances (#/instances) — Console page layout only. Components (table-card,
+   pills, list-card, card, buttons) come from the §5 contract in
+   components/core; only true page geometry lives here. */
 
-.instances__count {
-  color: var(--fg-dim);
-  margin-top: 8px;
-}
-
-.instances__table {
-  width: 100%;
+/* Name cell: name + default/current marks on one line. */
+.instances__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 /* Root paths are mono user data; let long paths break rather than blow the grid. */
 .instances__root {
-  color: var(--fg);
   word-break: break-all;
-}
-
-.instances__markers {
-  color: var(--fg-dim);
-}
-
-.instances__dot--on {
-  color: var(--signal);
-}
-
-.instances__dot--off {
-  color: var(--fg-dim);
-}
-
-.instances__row--current {
-  background: var(--surface);
-}
-
-.instances__tag {
-  color: var(--fg-dim);
-  letter-spacing: var(--tracking-micro);
-}
-
-.instances__tag--current {
-  color: var(--signal);
-}
-
-.instances__actions-head {
-  text-align: right;
 }
 
 .instances__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   justify-content: flex-end;
+}
+
+.instances__hint {
+  margin-top: 8px;
 }
 
 /* ── Add / scan forms ──────────────────────────────────────────────────── */
 
 .instances__form {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
-  margin-top: 8px;
   max-width: 640px;
 }
 
-.instances__input {
-  flex: 1;
-  min-width: 0;
-  background: var(--surface);
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  color: var(--fg);
-  padding: 4px 8px;
-}
-
-.instances__input::placeholder {
-  color: var(--fg-dim);
-}
-
 .instances__error {
-  color: var(--red);
-  margin-top: 8px;
-}
-
-.instances__hint {
-  color: var(--fg-dim);
+  color: var(--danger);
   margin-top: 8px;
 }
 
 /* ── Scan results ──────────────────────────────────────────────────────── */
 
 .instances__scan {
-  margin-top: var(--gutter);
-}
-
-.instances__hits {
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 0;
-}
-
-.instances__hit {
-  display: flex;
-  align-items: center;
-  gap: var(--gutter);
-  min-height: var(--row-h);
-  padding: 4px 0;
-  border-bottom: var(--hairline-w) solid var(--hairline);
-}
-
-.instances__hit-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex: 1;
-}
-
-.instances__hit-meta {
-  color: var(--fg-dim);
+  margin-top: 16px;
 }

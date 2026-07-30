@@ -29,7 +29,7 @@ function readyFlow(previews: WritePreview[]): WriteFlowController {
 }
 
 describe('WriteFlow global-scope warning (bead 71h.10)', () => {
-  it('renders the warn banner + [COMMIT — ALL PROJECTS] when a preview is global', () => {
+  it('renders the warn notice + "Commit — all projects" when a preview is global', () => {
     const html = renderToStaticMarkup(
       createElement(WriteFlow, {
         flow: readyFlow([preview({ path: '/Users/x/.claude/settings.json', pathScope: 'global' })]),
@@ -37,16 +37,17 @@ describe('WriteFlow global-scope warning (bead 71h.10)', () => {
     );
     expect(html).toContain('GLOBAL SCOPE — EDITS ~/.claude/settings.json');
     expect(html).toContain(WARNING_TEXT);
-    expect(html).toContain('[COMMIT — ALL PROJECTS]');
-    expect(html).not.toContain('[COMMIT]');
+    expect(html).toContain('class="notice"');
+    expect(html).toContain('Commit — all projects');
+    expect(html).not.toContain('>Commit<');
   });
 
-  it('renders no banner and the plain [COMMIT] for a project-scope preview', () => {
+  it('renders no notice and the plain Commit for a project-scope preview', () => {
     const html = renderToStaticMarkup(createElement(WriteFlow, { flow: readyFlow([preview({})]) }));
     expect(html).not.toContain('GLOBAL SCOPE');
     expect(html).not.toContain(WARNING_TEXT);
-    expect(html).toContain('[COMMIT]');
-    expect(html).not.toContain('[COMMIT — ALL PROJECTS]');
+    expect(html).toContain('>Commit<');
+    expect(html).not.toContain('Commit — all projects');
   });
 
   it('warns when ANY edit of a multi-file preview is global (apply-fix path)', () => {
@@ -59,6 +60,6 @@ describe('WriteFlow global-scope warning (bead 71h.10)', () => {
       }),
     );
     expect(html).toContain(WARNING_TEXT);
-    expect(html).toContain('[COMMIT — ALL PROJECTS]');
+    expect(html).toContain('Commit — all projects');
   });
 });

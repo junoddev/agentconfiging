@@ -15,7 +15,7 @@ export interface HeatmapProps {
 
 /**
  * Bucket a day's count into one of five intensity steps (0 = empty, 1..4 =
- * increasing `--signal` opacity), relative to the window's busiest day. Pure and
+ * increasing `--accent` opacity), relative to the window's busiest day. Pure and
  * exported so the bucketing is unit-testable without the DOM.
  */
 export function heatmapLevel(count: number, max: number): 0 | 1 | 2 | 3 | 4 {
@@ -40,7 +40,7 @@ export function leadingBlankCount(firstDate: string | undefined): number {
 
 /**
  * Activity calendar (DESIGN.md §6): 7-row weekday grid, squares with a 2px gap,
- * filled in `--signal` opacity steps by count — a hairline square when empty, no
+ * filled in `--accent` opacity steps by count — a hairline square when empty, no
  * zebra. Each day carries a `title` + `aria-label` (date + count); the counts are
  * numbers, so nothing here renders untrusted text. Pure-ish: `cells` in → grid out.
  */

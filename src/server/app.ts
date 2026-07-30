@@ -69,7 +69,6 @@ import { registerGitRoutes } from './git-routes.js';
 import type { GitExec } from './git.js';
 import { registerStatsRoutes } from './stats-routes.js';
 import { registerKnownProjectsRoute } from './known-projects.js';
-import { registerAnalyticsRoutes } from './analytics-routes.js';
 import { registerSearchRoutes } from './search-routes.js';
 import { registerPtyRoutes } from './pty-routes.js';
 import { registerPipelineRoutes } from './pipeline-routes.js';
@@ -533,14 +532,6 @@ export function createApp(config: AppConfig): Hono {
   // last-seen only). Feeds the EXISTING add flow (POST /api/instances) — the UI
   // one-click adds a suggestion. See src/server/known-projects.ts.
   registerKnownProjectsRoute(app, { registry });
-
-  // TOKEN/COST ANALYTICS (7yb.5): GET /api/analytics. Also under /api (inherits
-  // the token + Origin/CSRF gates); reads THIS machine's runtime history
-  // (~/.claude) through the committed adapter + shared caching discipline,
-  // bounded to the most-recent N session files. Returns token/cost aggregates
-  // per model, cache efficiency, and daily/hourly trends — content-free (counts,
-  // costs, model ids, buckets; never a message body).
-  registerAnalyticsRoutes(app);
 
   // SESSION SEARCH (7yb.4): GET /api/search, /api/search/status + POST
   // /api/search/reindex. Also under /api (inherits the token + Origin/CSRF

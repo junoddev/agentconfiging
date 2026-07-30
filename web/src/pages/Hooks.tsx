@@ -1,10 +1,19 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ApiError, type FileContent } from '../api/index.js';
-import { EmptyState, SourceBadge } from '../components/core/index.js';
+import {
+  Button,
+  Dialog,
+  EmptyState,
+  ListCard,
+  ListRow,
+  Notice,
+  SourceBadge,
+  useToast,
+  type SourceScope,
+} from '../components/core/index.js';
 import { homeRel } from '../lib/format.js';
 import { useAppState, useGlobalConfig } from '../state/index.js';
 import { WriteFlow, useWriteFlow } from '../write/index.js';
-import { HookCard } from './hooks/HookCard.js';
 import { HookForm } from './hooks/HookForm.js';
 import { HOOK_EVENTS } from './hooks/events.js';
 import {
@@ -14,9 +23,9 @@ import {
   draftFromTemplate,
   emptyDraft,
   globalAddViaWholeFile,
-  globalHookCards,
   globalHookSource,
   hookWriteTargets,
+  isDraftValid,
   isRedacted,
   parseHooksBlock,
   removeHookFromSettings,
@@ -41,16 +50,25 @@ interface SourceState {
   message?: string;
 }
 
-/** A parsed card plus the file it belongs to. */
-interface CardRef {
+/** One configured hook as a list row: the parsed entry plus its provenance. */
+interface Row {
   entry: HookEntry;
-  source: string;
-  /** True when the owning file is redacted (card is display-only). */
-  readOnly: boolean;
+  /** Display path of the owning file (project-relative or ~-relative). */
+  sourcePath: string;
+  scope: SourceScope;
+  /** SourceBadge detail (the global root), when applicable. */
+  detail?: string;
+  /** Present when this row can be removed (writable file / structured global op). */
+  onRemove?: () => void;
 }
 
 function initialSources(): SourceState[] {
   return SETTINGS_PATHS.map((path) => ({ path, status: 'loading', redacted: false }));
+}
+
+/** Which scope badge a project settings file earns. */
+function projectScope(path: string): SourceScope {
+  return path.includes('.local.') ? 'local' : 'project';
 }
 
 /** Load + parse state for the inherited ~/.claude settings file (bead 71h.4).
@@ -62,12 +80,18 @@ interface GlobalSourceState {
   message?: string;
 }
 
+export function Hooks() {
+  // Toasts confirm through the shell-level ToastProvider (App.tsx).
+  return <HooksPage />;
+}
+
 /**
- * Hooks manager (rail `09 HOOKS`, route `#/hooks`, bead agentconfig-wmc.5).
+ * Hooks manager (route `#/hooks`, Console conversion bead agentconfig-4u1.4).
  *
- * Left: the tracked Claude Code hook events (data file ./hooks/events.ts) as a
- * filterable sidebar with live counts. Right: each configured hook as a
- * collapsible card, plus a visual create form with four quick-add templates.
+ * Hooks render as one `.list-card` per lifecycle event (lc-head = event name +
+ * count); each row is matcher + scope badge, the command as the muted mono
+ * sub-line, and trailing meta + a ghost Remove. The create form lives in the
+ * shared Dialog; every committed mutation confirms via Toast.
  *
  * WRITES go out through useWriteFlow only: a create/remove builds the next
  * settings.json content client-side (./hooks/logic) and begins a dry-run → diff →
@@ -76,32 +100,30 @@ interface GlobalSourceState {
  *
  * REDACTION-SAVE TRAP: settings.json can hold secrets in `env`, so the server
  * serves it REDACTED. Serializing redacted content back would clobber those
- * secrets, so a redacted file is READ-ONLY here (its cards show, but create/remove
- * into it is disabled with a note). Only files served without redaction marks are
- * writable.
+ * secrets, so a redacted file is READ-ONLY here (its rows show, but create/remove
+ * into it is disabled with a notice). Only files served without redaction marks
+ * are writable.
  *
  * INHERITED GLOBAL HOOKS (beads 71h.4 / 71h.10): the machine-global
  * ~/.claude/settings.json (from useGlobalConfig) is ALSO shown — its hooks fire
- * for this project too — under a GLOBAL SourceBadge, and since 71h.10 it is
- * EDITABLE: cards carry [REMOVE] (hidden for command-less entries) and the
- * create form can target it. Both ops drive the STRUCTURED /api/hooks/edit
- * endpoint (server bead 71h.9) through the SAME dry-run → diff → commit flow —
- * the server re-reads the RAW file, so even a redacted global settings.json is
- * editable without the save trap; the flow's GLOBAL-SCOPE warning flags every
- * commit as affecting all projects/agents. An ABSENT global settings.json is
- * created via the whole-file /api/write fallback instead (the structured
- * endpoint 404s on absent files). The whole-file project editors above stay
- * trap-gated exactly as before.
+ * for this project too — under GLOBAL scope badges, and it is EDITABLE: rows
+ * carry Remove (hidden for command-less entries) and the create form can target
+ * it. Both ops drive the STRUCTURED /api/hooks/edit endpoint (server bead 71h.9)
+ * through the SAME dry-run → diff → commit flow — the server re-reads the RAW
+ * file, so even a redacted global settings.json is editable without the save
+ * trap; the flow's GLOBAL-SCOPE warning flags every commit as affecting all
+ * projects/agents. An ABSENT global settings.json is created via the whole-file
+ * /api/write fallback instead (the structured endpoint 404s on absent files).
  */
-export function Hooks() {
+function HooksPage() {
   const { getFile, report, currentInstance } = useAppState();
   const { entries: globalEntries } = useGlobalConfig();
   const flow = useWriteFlow();
+  const toast = useToast();
 
   const [sources, setSources] = useState<SourceState[]>(initialSources);
   const [globalState, setGlobalState] = useState<GlobalSourceState | undefined>(undefined);
-  const [selectedEvent, setSelectedEvent] = useState<string>('all');
-  const [creating, setCreating] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [draft, setDraft] = useState<HookDraft>(() => emptyDraft(HOOK_EVENTS[0]?.name ?? 'Stop'));
   const [target, setTarget] = useState<string>(SETTINGS_PATHS[0]);
   const [buildError, setBuildError] = useState<string | undefined>(undefined);
@@ -143,8 +165,8 @@ export function Hooks() {
   // The inherited ~/.claude settings.json (bead 71h.4) — instance-independent.
   // No global `.claude` home ⇒ silently no global section; a 404 on the file is
   // the 'absent' state (an ADD can create it — bead 71h.10); any other failure
-  // shows the page's normal per-source error note. A committed global op
-  // refetches the global report (useWriteFlow), which re-runs this load.
+  // shows a notice. A committed global op refetches the global report
+  // (useWriteFlow), which re-runs this load.
   const globalSrc = useMemo(() => globalHookSource(globalEntries), [globalEntries]);
   useEffect(() => {
     if (!globalSrc) {
@@ -202,50 +224,94 @@ export function Hooks() {
     }
   }, [targets, target]);
 
-  // All cards across ready files, redacted files contributing read-only cards.
-  const cards = useMemo<CardRef[]>(() => {
-    const out: CardRef[] = [];
+  const removeProjectEntry = useCallback(
+    (path: string, entry: HookEntry) => {
+      setBuildError(undefined);
+      const base = baseContent.get(path);
+      if (base === undefined) {
+        setBuildError('this file is read-only');
+        return;
+      }
+      try {
+        const content = removeHookFromSettings(
+          base,
+          entry.event,
+          entry.groupIndex,
+          entry.hookIndex,
+        );
+        flow.begin({ kind: 'file', path, content, label: `remove ${entry.event} hook` });
+      } catch (err) {
+        setBuildError(err instanceof Error ? err.message : 'could not build change');
+      }
+    },
+    [baseContent, flow],
+  );
+
+  // GLOBAL row removal (bead 71h.10): the STRUCTURED remove op, addressed by
+  // the row's own parseHooksBlock coordinates with the command pinned as the
+  // server-side precondition (stale view ⇒ 409, file untouched). Callers gate
+  // on canRemoveHookEntry — a command-less entry would 400.
+  const removeGlobalEntry = useCallback(
+    (entry: HookEntry) => {
+      if (!globalSrc || entry.command === undefined) return;
+      setBuildError(undefined);
+      flow.begin({
+        kind: 'hooks-edit',
+        edit: {
+          path: globalSrc.path,
+          op: 'remove',
+          address: { event: entry.event, groupIndex: entry.groupIndex, hookIndex: entry.hookIndex },
+          expected: { command: entry.command },
+        },
+        label: `remove ${entry.event} hook`,
+      });
+    },
+    [globalSrc, flow],
+  );
+
+  // All rows across the project files plus the inherited global file, in one
+  // provenance-badged pool (grouped by event below).
+  const rows = useMemo<Row[]>(() => {
+    const out: Row[] = [];
     for (const s of sources) {
       if (s.status !== 'ready' || !s.parse?.ok) continue;
       for (const entry of s.parse.entries) {
-        out.push({ entry, source: s.path, readOnly: s.redacted });
+        out.push({
+          entry,
+          sourcePath: s.path,
+          scope: projectScope(s.path),
+          ...(s.redacted ? {} : { onRemove: () => removeProjectEntry(s.path, entry) }),
+        });
+      }
+    }
+    if (globalSrc && globalState?.status === 'ready' && globalState.parse?.ok) {
+      for (const entry of globalState.parse.entries) {
+        out.push({
+          entry,
+          sourcePath: homeRel(globalSrc.path),
+          scope: 'global',
+          detail: homeRel(globalSrc.root),
+          ...(canRemoveHookEntry(entry) ? { onRemove: () => removeGlobalEntry(entry) } : {}),
+        });
       }
     }
     return out;
-  }, [sources]);
+  }, [sources, globalSrc, globalState, removeProjectEntry, removeGlobalEntry]);
 
-  // Inherited global hooks as ALWAYS-read-only cards (never write targets).
-  const globalCards = useMemo(
-    () =>
-      globalSrc && globalState?.status === 'ready'
-        ? globalHookCards(globalState.parse, homeRel(globalSrc.path))
-        : [],
-    [globalSrc, globalState],
-  );
-
-  const totalCount = cards.length + globalCards.length;
-
-  // Live per-event counts for the sidebar — global hooks fire too, so they count.
-  const countByEvent = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const c of [...cards, ...globalCards]) {
-      counts.set(c.entry.event, (counts.get(c.entry.event) ?? 0) + 1);
+  // One list-card per event, tracked events first (data-file order), then any
+  // events the config carries that we don't track.
+  const grouped = useMemo<[string, Row[]][]>(() => {
+    const byEvent = new Map<string, Row[]>();
+    for (const ev of HOOK_EVENTS) byEvent.set(ev.name, []);
+    for (const row of rows) {
+      const list = byEvent.get(row.entry.event);
+      if (list) list.push(row);
+      else byEvent.set(row.entry.event, [row]);
     }
-    return counts;
-  }, [cards, globalCards]);
+    return [...byEvent.entries()].filter(([, list]) => list.length > 0);
+  }, [rows]);
 
-  const visibleCards = useMemo(
-    () => (selectedEvent === 'all' ? cards : cards.filter((c) => c.entry.event === selectedEvent)),
-    [cards, selectedEvent],
-  );
-  const visibleGlobalCards = useMemo(
-    () =>
-      selectedEvent === 'all'
-        ? globalCards
-        : globalCards.filter((c) => c.entry.event === selectedEvent),
-    [globalCards, selectedEvent],
-  );
-
+  const totalCount = rows.length;
   const anyLoading = sources.some((s) => s.status === 'loading');
   const anyRedacted = sources.some((s) => s.status === 'ready' && s.redacted);
   const flowBusy = flow.phase === 'loading' || flow.phase === 'committing';
@@ -311,246 +377,195 @@ export function Hooks() {
     }
   }, [baseContent, target, draft, flow, globalSrc, globalState]);
 
-  const removeCard = useCallback(
-    (card: CardRef) => {
-      setBuildError(undefined);
-      const base = baseContent.get(card.source);
-      if (base === undefined) {
-        setBuildError('this file is read-only');
-        return;
-      }
-      try {
-        const content = removeHookFromSettings(
-          base,
-          card.entry.event,
-          card.entry.groupIndex,
-          card.entry.hookIndex,
-        );
-        flow.begin({
-          kind: 'file',
-          path: card.source,
-          content,
-          label: `remove ${card.entry.event} hook`,
-        });
-      } catch (err) {
-        setBuildError(err instanceof Error ? err.message : 'could not build change');
-      }
-    },
-    [baseContent, flow],
-  );
-
-  // GLOBAL card removal (bead 71h.10): the STRUCTURED remove op, addressed by
-  // the card's own parseHooksBlock coordinates with the command pinned as the
-  // server-side precondition (stale view ⇒ 409, file untouched). Callers gate
-  // on canRemoveHookEntry — a command-less entry would 400.
-  const removeGlobalEntry = useCallback(
-    (entry: HookEntry) => {
-      if (!globalSrc || entry.command === undefined) return;
-      setBuildError(undefined);
-      flow.begin({
-        kind: 'hooks-edit',
-        edit: {
-          path: globalSrc.path,
-          op: 'remove',
-          address: { event: entry.event, groupIndex: entry.groupIndex, hookIndex: entry.hookIndex },
-          expected: { command: entry.command },
-        },
-        label: `remove ${entry.event} hook`,
-      });
-    },
-    [globalSrc, flow],
-  );
-
   const openForm = useCallback(() => {
     setBuildError(undefined);
     flow.cancel();
-    setDraft(
-      emptyDraft(selectedEvent === 'all' ? (HOOK_EVENTS[0]?.name ?? 'Stop') : selectedEvent),
-    );
-    setCreating(true);
-  }, [flow, selectedEvent]);
+    setDraft(emptyDraft(HOOK_EVENTS[0]?.name ?? 'Stop'));
+    setDialogOpen(true);
+  }, [flow]);
 
   const closeForm = useCallback(() => {
     setBuildError(undefined);
     flow.cancel();
-    setCreating(false);
+    setDialogOpen(false);
   }, [flow]);
+
+  // Every committed mutation confirms via Toast (§5), then the flow resets and
+  // the dialog (if open) closes. Declared after the loads so the refetch-driven
+  // effects above observe the 'done' phase first.
+  useEffect(() => {
+    if (flow.phase !== 'done') return;
+    const label = flow.request?.label;
+    toast(label !== undefined ? `Applied — ${label}` : 'Change applied');
+    setDialogOpen(false);
+    flow.cancel();
+    // flow.phase is the trigger; toast + flow.cancel are stable.
+  }, [flow.phase]);
 
   // Fetch error before anything loaded (unauthorized handled by the shell).
   if (!report && !currentInstance) {
     return (
       <Frame>
-        <EmptyState title="ACQUIRING" instruction="awaiting instance" />
+        <EmptyState title="No instance yet" instruction="Waiting for the first scan." />
       </Frame>
     );
   }
 
   return (
     <Frame>
-      <h1 className="title-page">
-        HOOKS
-        <span className="hooks__count mono-data">{totalCount} CONFIGURED</span>
-      </h1>
-
-      {anyRedacted && (
-        <p className="hooks__note micro-label" role="note">
-          a settings file is redacted (contains secrets) — its hooks are read-only to avoid
-          clobbering them on save
-        </p>
-      )}
-
-      <div className="hooks">
-        <nav className="hooks__events" aria-label="hook events">
-          <button
-            type="button"
-            className="hooks__event"
-            aria-current={selectedEvent === 'all' ? 'true' : undefined}
-            onClick={() => setSelectedEvent('all')}
-          >
-            <span className="mono-data">all events</span>
-            <span className="hooks__event-count micro-label">{totalCount}</span>
-          </button>
-          {HOOK_EVENTS.map((ev) => {
-            const n = countByEvent.get(ev.name) ?? 0;
-            return (
-              <button
-                key={ev.name}
-                type="button"
-                className="hooks__event"
-                aria-current={selectedEvent === ev.name ? 'true' : undefined}
-                title={ev.description}
-                onClick={() => setSelectedEvent(ev.name)}
-              >
-                <span className="mono-data">{ev.name}</span>
-                <span className="hooks__event-count micro-label">{n > 0 ? n : ''}</span>
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="hooks__detail">
-          <div className="hooks__toolbar">
-            {!creating && (
-              <button
-                type="button"
-                className="hooks__add"
-                disabled={targets.length === 0}
-                onClick={openForm}
-              >
-                [+ NEW HOOK]
-              </button>
-            )}
-            {targets.length === 0 && !anyLoading && (
-              <span className="hooks__note micro-label">no writable settings file</span>
-            )}
-          </div>
-
-          {creating && (
-            <>
-              <HookForm
-                draft={draft}
-                onChange={setDraft}
-                onTemplate={(t) => {
-                  setBuildError(undefined);
-                  setDraft(draftFromTemplate(t));
-                }}
-                onSubmit={beginCreate}
-                onCancel={closeForm}
-                targets={targets}
-                target={target}
-                onTargetChange={setTarget}
-                busy={flowBusy}
-              />
-              {buildError !== undefined && (
-                <p className="hooks__note hooks__error micro-label" role="alert">
-                  {buildError}
-                </p>
-              )}
-              {flow.phase !== 'idle' && <WriteFlow flow={flow} />}
-            </>
-          )}
-
-          {!creating && flow.phase !== 'idle' && <WriteFlow flow={flow} />}
-          {!creating && buildError !== undefined && (
-            <p className="hooks__note hooks__error micro-label" role="alert">
-              {buildError}
-            </p>
-          )}
-
-          {anyLoading ? (
-            <p className="micro-label">loading settings …</p>
-          ) : totalCount === 0 ? (
-            <EmptyState instruction="no hooks configured · add one to begin" />
-          ) : visibleCards.length === 0 && visibleGlobalCards.length === 0 ? (
-            <EmptyState instruction={`no hooks for ${selectedEvent}`} />
-          ) : (
-            <>
-              {visibleCards.length > 0 && (
-                <div className="hooks__cards">
-                  {visibleCards.map((card) => (
-                    <HookCard
-                      key={`${card.source}:${card.entry.event}:${card.entry.groupIndex}:${card.entry.hookIndex}`}
-                      entry={card.entry}
-                      source={card.source}
-                      readOnly={card.readOnly}
-                      onRemove={card.readOnly ? undefined : () => removeCard(card)}
-                    />
-                  ))}
-                </div>
-              )}
-              {globalSrc && visibleGlobalCards.length > 0 && (
-                <div className="hooks__global">
-                  <SourceBadge scope="global" detail={homeRel(globalSrc.root)} />
-                  <div className="hooks__cards">
-                    {visibleGlobalCards.map((card) => (
-                      <HookCard
-                        key={`global:${card.entry.event}:${card.entry.groupIndex}:${card.entry.hookIndex}`}
-                        entry={card.entry}
-                        source={card.source}
-                        {...(canRemoveHookEntry(card.entry)
-                          ? { onRemove: () => removeGlobalEntry(card.entry) }
-                          : {})}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {sources
-            .filter((s) => s.status === 'error')
-            .map((s) => (
-              <p key={s.path} className="hooks__note hooks__error micro-label">
-                {s.path} · {s.message ?? 'could not load'}
-              </p>
-            ))}
-          {sources.some((s) => s.status === 'ready' && s.parse?.ok === false) && (
-            <p className="hooks__note hooks__error micro-label">
-              a settings file has a malformed hooks block — fix it in ARTIFACTS
-            </p>
-          )}
-          {globalSrc && globalState?.status === 'error' && (
-            <p className="hooks__note hooks__error micro-label">
-              {homeRel(globalSrc.path)} · {globalState.message ?? 'could not load'}
-            </p>
-          )}
-          {globalSrc && globalState?.status === 'ready' && globalState.parse?.ok === false && (
-            <p className="hooks__note hooks__error micro-label">
-              {homeRel(globalSrc.path)} has a malformed hooks block — its hooks are not shown
-            </p>
-          )}
+      <div className="page-head">
+        <div>
+          <h1>Hooks</h1>
+          <p className="page-sub">
+            Commands that run on agent lifecycle events. {totalCount} configured across settings
+            files — provenance on every row.
+          </p>
+        </div>
+        <div>
+          <Button
+            label="Add hook"
+            variant="primary"
+            disabled={targets.length === 0}
+            onClick={openForm}
+          />
         </div>
       </div>
+
+      {anyRedacted && (
+        <Notice>
+          <strong>A settings file is redacted (contains secrets).</strong> Its hooks are shown
+          read-only so a save can never overwrite the real values with placeholders.
+        </Notice>
+      )}
+      {targets.length === 0 && !anyLoading && (
+        <Notice>
+          <strong>No writable settings file.</strong> Every hooks-bearing file is redacted, so
+          adding is disabled here.
+        </Notice>
+      )}
+
+      {!dialogOpen && flow.phase !== 'idle' && <WriteFlow flow={flow} />}
+      {!dialogOpen && buildError !== undefined && (
+        <Notice>
+          <strong>Could not build the change.</strong> {buildError}
+        </Notice>
+      )}
+
+      {anyLoading ? (
+        <p className="meta">loading settings …</p>
+      ) : totalCount === 0 ? (
+        <EmptyState
+          title="No hooks yet"
+          instruction="This project defines no hooks. Add one to run commands on lifecycle events."
+        />
+      ) : (
+        grouped.map(([event, list]) => (
+          <ListCard key={event} head={event} headMeta={String(list.length)}>
+            {list.map((row) => (
+              <ListRow
+                key={`${row.sourcePath}:${row.entry.event}:${row.entry.groupIndex}:${row.entry.hookIndex}`}
+                title={
+                  <span className="mono">
+                    {row.entry.matcher !== undefined && row.entry.matcher !== ''
+                      ? row.entry.matcher
+                      : 'all'}
+                  </span>
+                }
+                badge={
+                  <SourceBadge scope={row.scope} {...(row.detail ? { detail: row.detail } : {})} />
+                }
+                sub={
+                  <span className="mono" title={row.entry.command}>
+                    {row.entry.command ?? row.entry.type ?? '—'}
+                  </span>
+                }
+                trailing={
+                  <>
+                    <span className="meta">
+                      {row.entry.type ?? '—'}
+                      {row.entry.timeout !== undefined ? ` · ${row.entry.timeout}s` : ''}
+                    </span>
+                    <span className="meta">{row.sourcePath}</span>
+                    {row.onRemove && (
+                      <Button
+                        label="Remove"
+                        variant="ghost"
+                        onClick={row.onRemove}
+                        disabled={flowBusy}
+                      />
+                    )}
+                  </>
+                }
+              />
+            ))}
+          </ListCard>
+        ))
+      )}
+
+      {sources
+        .filter((s) => s.status === 'error')
+        .map((s) => (
+          <Notice key={s.path}>
+            <strong>{s.path}</strong> — {s.message ?? 'could not load'}
+          </Notice>
+        ))}
+      {sources.some((s) => s.status === 'ready' && s.parse?.ok === false) && (
+        <Notice>
+          <strong>A settings file has a malformed hooks block.</strong> Fix it in Artifacts.
+        </Notice>
+      )}
+      {globalSrc && globalState?.status === 'error' && (
+        <Notice>
+          <strong>{homeRel(globalSrc.path)}</strong> — {globalState.message ?? 'could not load'}
+        </Notice>
+      )}
+      {globalSrc && globalState?.status === 'ready' && globalState.parse?.ok === false && (
+        <Notice>
+          <strong>{homeRel(globalSrc.path)} has a malformed hooks block.</strong> Its hooks are not
+          shown.
+        </Notice>
+      )}
+
+      <Dialog
+        open={dialogOpen}
+        title="Add hook"
+        onClose={closeForm}
+        footer={
+          <>
+            <Button label="Cancel" onClick={closeForm} disabled={flowBusy} />
+            <Button
+              label="Preview change"
+              variant="primary"
+              onClick={beginCreate}
+              disabled={!isDraftValid(draft) || flowBusy}
+            />
+          </>
+        }
+      >
+        <HookForm
+          draft={draft}
+          onChange={setDraft}
+          onTemplate={(t) => {
+            setBuildError(undefined);
+            setDraft(draftFromTemplate(t));
+          }}
+          targets={targets}
+          target={target}
+          onTargetChange={setTarget}
+          busy={flowBusy}
+        />
+        {buildError !== undefined && (
+          <Notice>
+            <strong>Could not build the change.</strong> {buildError}
+          </Notice>
+        )}
+        {dialogOpen && flow.phase !== 'idle' && <WriteFlow flow={flow} />}
+      </Dialog>
     </Frame>
   );
 }
 
-/** Shared page chassis so every state renders in the same main/section shell. */
+/** Shared page chassis so every state renders in the same main shell. */
 function Frame({ children }: { children: ReactNode }) {
-  return (
-    <main className="layout-main page">
-      <section className="page__section">{children}</section>
-    </main>
-  );
+  return <main className="layout-main">{children}</main>;
 }

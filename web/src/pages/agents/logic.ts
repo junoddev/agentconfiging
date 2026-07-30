@@ -13,8 +13,7 @@ import type {
   Report,
   ReportFinding,
 } from '../../api/types.js';
-import type { ConfigSource } from '../../components/signal/index.js';
-import type { Severity as RowSeverity } from '../../components/core/index.js';
+import type { PillTone } from '../../components/core/index.js';
 
 /** Find the detected agent for a route `kind`, or undefined when unknown. */
 export function findAgent(report: Report | undefined, kind: string): DetectedAgent | undefined {
@@ -27,35 +26,17 @@ export function findingsForAgent(report: Report | undefined, kind: string): Repo
   return report?.findings.filter((f) => f.agent === kind) ?? [];
 }
 
-/** Detector confidence → VU meter level in [0, 1]. Three discrete rungs; matches
- *  the terse low/medium/high rating the detectors emit. */
-export function confidenceLevel(confidence: Confidence): number {
+/** Detector confidence → status-pill tone (Console §5 `.pill.p-*`): a strong
+ *  lock reads ok, a medium one warns, a weak one reads muted/off. */
+export function confidencePillTone(confidence: Confidence): PillTone {
   switch (confidence) {
     case 'low':
-      return 0.3;
+      return 'off';
     case 'medium':
-      return 0.6;
-    case 'high':
-      return 0.9;
-  }
-}
-
-/** Wire finding severity → the core FindingRow's severity vocabulary. */
-export function toRowSeverity(severity: ReportFinding['severity']): RowSeverity {
-  switch (severity) {
-    case 'error':
-      return 'error';
-    case 'warning':
       return 'warn';
-    case 'info':
+    case 'high':
       return 'ok';
   }
-}
-
-/** Agent file paths → waveform config sources. Only paths are known here (size
- *  is unused by the fingerprint's path-driven seed), so size is 0. */
-export function toConfigSources(files: readonly string[]): ConfigSource[] {
-  return files.map((path) => ({ path, size: 0 }));
 }
 
 /** Href into the artifact browser (c6p.4) for one file path. The path is

@@ -1,15 +1,26 @@
-/** Core components (docs/DESIGN.md §6). Pure presentational chassis —
- *  nothing here animates; motion belongs to the signal layer. */
+/** Core components — Console §5 contract (opendesign/DESIGN.md). Pure
+ *  presentational chassis over the token layer; class names are the contract. */
 export { Button, type ButtonProps, type ButtonVariant } from './Button.js';
-export { StatBlock, type StatBlockProps } from './StatBlock.js';
-export { SignalStrip, type SignalStripProps } from './SignalStrip.js';
-export { FindingRow, type FindingRowProps } from './FindingRow.js';
-export { FileChip, type FileChipProps } from './FileChip.js';
+export { Card, type CardProps } from './Card.js';
+export { ChipRow, type ChipOption, type ChipRowProps } from './ChipRow.js';
+export { Dialog, type DialogProps } from './Dialog.js';
 export { DiffPanel, type DiffPanelProps } from './DiffPanel.js';
-export { Table, type TableProps } from './Table.js';
 export { EmptyState, type EmptyStateProps } from './EmptyState.js';
+export { Field, Input, Select, type FieldProps } from './Field.js';
+export { FileChip, type FileChipProps } from './FileChip.js';
+export { ListCard, ListRow, type ListCardProps, type ListRowProps } from './ListCard.js';
+export { Notice, type NoticeProps } from './Notice.js';
+export { Pager, type PagerProps } from './Pager.js';
+export { Pill, type PillProps, type PillTone } from './Pill.js';
+export { SearchInput, type SearchInputProps } from './SearchInput.js';
+export { SegmentedControl, type SegmentedControlProps } from './SegmentedControl.js';
 export { SourceBadge, type SourceBadgeProps } from './SourceBadge.js';
-export { sourceBadgeText, type SourceScope } from './badge.js';
+export { StatBlock, type StatBlockProps } from './StatBlock.js';
+export { Switch, type SwitchProps } from './Switch.js';
+export { Table, type TableProps, type TableHeader } from './Table.js';
+export { ToastProvider, useToast, TOAST_DURATION_MS } from './Toast.js';
+export { scopeClass, sourceBadgeText, type SourceScope } from './badge.js';
+export { pageCount, pagerSummary } from './paging.js';
 export {
   Heatmap,
   heatmapLevel,
@@ -17,7 +28,7 @@ export {
   type HeatmapProps,
   type HeatmapDatum,
 } from './Heatmap.js';
-export { severityToken, severityClass, formatIndex, type Severity } from './finding.js';
+export { formatIndex } from './finding.js';
 export { formatDelta, deltaTone, type DeltaTone } from './stat.js';
 export {
   diffLineClass,

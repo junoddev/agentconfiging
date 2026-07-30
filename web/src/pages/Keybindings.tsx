@@ -33,7 +33,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ApiError, type FileContent } from '../api/index.js';
 import type { GlobalEntry } from '../api/types.js';
-import { Button, EmptyState, SourceBadge } from '../components/core/index.js';
+import { Button, EmptyState, Notice, SourceBadge, useToast } from '../components/core/index.js';
 import { homeRel } from '../lib/format.js';
 import { useAppState, useGlobalConfig } from '../state/index.js';
 import { WriteFlow, useWriteFlow } from '../write/index.js';
@@ -131,10 +131,11 @@ function Frame({ children }: { children: ReactNode }) {
   );
 }
 
-export function Keybindings() {
+function KeybindingsBody() {
   const { getFile, report, loading, error } = useAppState();
   const { entries: globalEntries } = useGlobalConfig();
   const flow = useWriteFlow();
+  const toast = useToast();
 
   const [source, setSource] = useState<SourceState>({ status: 'loading', redacted: false });
   const [globalKb, setGlobalKb] = useState<GlobalKbState | undefined>(undefined);
@@ -207,10 +208,14 @@ export function Keybindings() {
     };
   }, [getFile, globalSrc]);
 
-  // A committed write clears the draft; the refetch reloads the file fresh.
+  // A committed write clears the draft (the refetch reloads the file fresh)
+  // and confirms via Toast (§5: every mutating action confirms).
   useEffect(() => {
-    if (flow.phase === 'done') setDraft(null);
-  }, [flow.phase]);
+    if (flow.phase === 'done') {
+      setDraft(null);
+      toast('Keybindings saved');
+    }
+  }, [flow.phase, toast]);
 
   const parsed = source.parsed;
   const bindings = parsed?.bindings ?? [];
@@ -357,15 +362,15 @@ export function Keybindings() {
 
   return (
     <main className="layout-main page">
-      <section className="page__section">
-        <h1 className="title-page">
-          KEYBINDINGS
-          <span className="kb__count mono-data">
-            {count} BINDING{count === 1 ? '' : 'S'}
-          </span>
-        </h1>
-        <p className="kb__path micro-label">{KEYBINDINGS_PATH}</p>
-      </section>
+      <div className="page-head">
+        <div>
+          <h1>Keybindings</h1>
+          <p className="kb__path meta">{KEYBINDINGS_PATH}</p>
+        </div>
+        <span className="meta">
+          {count} binding{count === 1 ? '' : 's'}
+        </span>
+      </div>
 
       {/* Editor: the add/edit form + the mandatory dry-run diff before any write. */}
       {(draft || flow.phase !== 'idle') && (
@@ -383,31 +388,29 @@ export function Keybindings() {
       )}
 
       <section className="page__section">
-        {source.status === 'loading' && <p className="micro-label">loading keybindings …</p>}
+        {source.status === 'loading' && <p className="meta">loading keybindings …</p>}
 
         {source.status === 'error' && (
           <EmptyState instruction={source.message ?? 'could not load keybindings'} />
         )}
 
         {source.redacted && (
-          <p className="kb__note micro-label kb__ro">
-            this file contains redacted content — editing is disabled here so a masked placeholder
-            is never written over a real value
-          </p>
+          <Notice>
+            This file contains redacted content — editing is disabled here so a masked placeholder
+            is never written over a real value.
+          </Notice>
         )}
 
-        {parseError && (
-          <p className="kb__note micro-label">could not parse JSON — this file is not editable</p>
-        )}
+        {parseError && <Notice>Could not parse JSON — this file is not editable.</Notice>}
 
         {writable && (
           <div className="kb__toolbar">
-            <Button label="add binding" variant="primary" onClick={startAdd} />
-            <Button label="reset to starter set" onClick={onReset} />
+            <Button label="Add binding" variant="primary" onClick={startAdd} />
+            <Button label="Reset to starter set" onClick={onReset} />
           </div>
         )}
         {writable && (
-          <p className="kb__note micro-label">
+          <p className="kb__note">
             reset writes a small starter set — a convenience, NOT the official Claude Code defaults
             (those are unpublished). You review the exact diff before it is applied.
           </p>
@@ -415,13 +418,14 @@ export function Keybindings() {
 
         {(source.status === 'ready' || source.status === 'absent') &&
           !parseError &&
-          count === 0 && <EmptyState instruction="no keybindings configured in this instance" />}
+          count === 0 && <EmptyState instruction="No keybindings configured in this instance." />}
 
         <div className="kb__cards">
           {bindings.map((binding, index) => (
             <BindingCard
               key={index}
               binding={binding}
+              badge={<SourceBadge scope="project" />}
               {...(writable
                 ? { onEdit: () => startEdit(index), onRemove: () => onRemove(index) }
                 : {})}
@@ -441,42 +445,47 @@ export function Keybindings() {
               detail={homeRel(globalSrc.root)}
               readOnly={!globalWritable}
             />
-            <span className="kb__path micro-label">{homeRel(globalSrc.path)}</span>
+            <span className="kb__path meta">{homeRel(globalSrc.path)}</span>
           </div>
-          <p className="kb__note micro-label">
+          <p className="kb__note">
             {globalWritable
               ? 'inherited bindings apply to every project on this machine — edits go through the global-scope diff + warning before commit (how the two files combine is undocumented, so no precedence order is claimed)'
               : 'inherited bindings shown read-only (how the two files combine is undocumented, so no precedence order is claimed)'}
           </p>
 
-          {globalKb.status === 'loading' && (
-            <p className="micro-label">loading global keybindings …</p>
-          )}
+          {globalKb.status === 'loading' && <p className="meta">loading global keybindings …</p>}
           {globalKb.status === 'error' && (
-            <p className="kb__note micro-label kb__ro">
+            <Notice>
               {homeRel(globalSrc.path)} · {globalKb.message ?? 'could not load'}
-            </p>
+            </Notice>
           )}
           {globalKb.status === 'ready' && globalKb.redacted === true && (
-            <p className="kb__note micro-label kb__ro">
-              this file contains redacted content — global editing is disabled so a masked
-              placeholder is never written over a real value
-            </p>
+            <Notice>
+              This file contains redacted content — global editing is disabled so a masked
+              placeholder is never written over a real value.
+            </Notice>
           )}
           {globalKb.status === 'ready' && globalKb.parsed?.parseError === true && (
-            <p className="kb__note micro-label">could not parse JSON — bindings not shown</p>
+            <Notice>Could not parse JSON — bindings not shown.</Notice>
           )}
           {globalKb.status === 'ready' &&
             globalKb.parsed !== undefined &&
             !globalKb.parsed.parseError &&
             (globalKb.parsed.bindings.length === 0 ? (
-              <p className="kb__note micro-label">no bindings in this file</p>
+              <p className="kb__note">no bindings in this file</p>
             ) : (
               <div className="kb__cards">
                 {globalKb.parsed.bindings.map((binding, index) => (
                   <BindingCard
                     key={index}
                     binding={binding}
+                    badge={
+                      <SourceBadge
+                        scope="global"
+                        detail={homeRel(globalSrc.root)}
+                        readOnly={!globalWritable}
+                      />
+                    }
                     {...(globalWritable
                       ? {
                           onEdit: () => startEditGlobal(index),
@@ -491,4 +500,9 @@ export function Keybindings() {
       )}
     </main>
   );
+}
+
+export function Keybindings() {
+  // Toasts confirm through the shell-level ToastProvider (App.tsx).
+  return <KeybindingsBody />;
 }

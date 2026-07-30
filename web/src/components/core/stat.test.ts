@@ -17,9 +17,9 @@ describe('formatDelta', () => {
 });
 
 describe('deltaTone', () => {
-  it('maps growth to signal, loss to red, no change to dim', () => {
-    expect(deltaTone(5)).toBe('signal');
-    expect(deltaTone(-1)).toBe('red');
+  it('maps growth to accent, loss to danger, no change to dim', () => {
+    expect(deltaTone(5)).toBe('accent');
+    expect(deltaTone(-1)).toBe('danger');
     expect(deltaTone(0)).toBe('dim');
   });
 });

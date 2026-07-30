@@ -1,0 +1,11 @@
+{
+  "kind": "critique-panel",
+  "score": 4,
+  "axes": {
+    "clarity": { "score": 4, "notes": "Scope provenance (user vs project vs local) is the organizing idea and is visible on every row via badges plus a dedicated Effective Config table showing which layer wins. Adaptive per-agent terminology (Hooks vs Plugins vs Extensions, CLAUDE.md vs AGENTS.md) is labelled rather than implied." },
+    "hierarchy": { "score": 4, "notes": "Three-tier chrome (topbar / sidebar / statusbar) frames a single content pane; section headers follow one repeated pattern; counts in the nav give wayfinding. Overview could push its health card slightly harder." },
+    "typography": { "score": 5, "notes": "One sans family for UI, mono reserved strictly for paths, IDs, commands, and tabular numerics — per tech-utility posture. 13–14px density with hairline tables, no decorative type." },
+    "motion": { "score": 4, "notes": "Restrained: live-dot pulse in the statusbar, switch/hover transitions, dialog fade. No easing spectacle — appropriate for a system utility, but nothing beyond micro-interactions." },
+    "brand": { "score": 4, "notes": "Tech-utility direction bound verbatim (oklch tokens, green accent, mono chrome). Accent budget held to active-nav, primary actions, and project-scope badges; status tints derived in oklch, no raw hex outside tokens." }
+  }
+}

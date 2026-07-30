@@ -1,147 +1,230 @@
-# Signal Grid — the agentconfig design system
+# agentconfig design system — "Console"
 
-Swiss × Broadcast. A strict International-Style chassis — visible grid, timetable
-typography, giant numerals, one red — carrying a live signal layer: waveform
-traces, meters, and a pulse that exists because the tool genuinely watches your
-files in real time. The chassis never moves; only the signal does.
+A terminal-adjacent system-utility language (adopted from `opendesign/DESIGN.md`
+and its reference console mockup in `opendesign/` — the mockup's own branding is
+replaced by **agentconfig** everywhere in the app).
+Posture: information per square inch, not vibes. Data-dense, mono-detailed, one green accent,
+hairline borders everywhere. Dark is the native mode (the tool is launched from a terminal);
+light is a first-class inverse, not an afterthought.
 
-## 1. Principles
+---
 
-1. **The config is the interface.** Every element corresponds to a real file,
-   frontmatter field, or JSON key. No abstract dashboard-ware.
-2. **Legibility earns trust before writes.** People let a tool edit
-   `settings.json` only if its *reading* of the file felt precise. Density and
-   exactness over friendliness.
-3. **The chassis is static; the signal is alive.** Layout, type, and rules never
-   animate. Waveforms, meters, the LIVE dot, and rescan sweeps are the only
-   motion — and they move because something real happened on disk.
-4. **Calm by default, loud only when it matters.** A healthy config is almost
-   monochrome. Color budget is spent exclusively on signal and severity.
-5. **One red.** Swiss discipline: a single accent red for errors/destructive
-   actions, never decoration.
+## 1. Color tokens
 
-## 2. Color
+Six core tokens + derived tints. **No raw hex anywhere** — core values are `oklch()`,
+everything else is `color-mix(in oklch, …)` of a core token. Theme switching is a single
+`data-theme` attribute on `<html>`; components never reference a theme directly.
+This block is pinned verbatim against `web/src/styles/tokens.css` and
+`web/src/styles/tokens.ts` by `tokens.test.ts`.
 
-Two first-class themes. Light is "Paper" (Swiss poster), dark is "Ink" (broadcast
-console — deep ink-blue, never pure black).
+```css
+:root {
+  --bg:      oklch(98% 0.005 250);   /* page canvas */
+  --surface: oklch(100% 0 0);        /* cards, chrome, raised areas */
+  --fg:      oklch(22% 0.02 240);    /* primary text */
+  --muted:   oklch(50% 0.018 240);   /* secondary text, labels, captions */
+  --border:  oklch(90% 0.008 240);   /* hairlines, dividers */
+  --accent:  oklch(58% 0.16 145);    /* the ONE brand accent — green */
 
-| Token | Paper (light) | Ink (dark) | Use |
-|---|---|---|---|
-| `--bg` | `#FAFAF7` | `#0B0E17` | page field |
-| `--surface` | `#FFFFFF` | `#121627` | cards, panels |
-| `--fg` | `#141519` | `#E8EAF2` | primary text |
-| `--fg-dim` | `#5C5F6A` | `#9AA1B5` | secondary text |
-| `--hairline` | `#D9D9D2` | `#232A3E` | grid rules, borders (always 1px) |
-| `--signal` | `#2E7D32` | `#B4FF39` | live traces, healthy, LIVE dot, confirmed writes |
-| `--warn` | `#8A6100` | `#FFC53D` | warnings, VU high-range |
-| `--red` | `#E63329` | `#FF4D3D` | errors, destructive, the only decorative-free accent |
-| `--trace-dim` | `rgba(46,125,50,.25)` | `rgba(180,255,57,.22)` | waveform afterglow |
+  /* status — derived hues, restrained tinted backgrounds only */
+  --warn:    oklch(62% 0.14 85);
+  --danger:  oklch(56% 0.19 25);
 
-Rules: no gradients, no shadows (elevation = hairline + surface shift), no border
-radius above 2px. Severity is the only place color appears in text.
-`::selection` inverts to `--bg` on `--signal` (`--fg` fails contrast on the signal
-color in both themes — ~1.02:1 in Ink; amended 2026-07-26 during 4f8.1).
+  /* soft washes — always color-mix, never new hex */
+  --accent-soft: color-mix(in oklch, var(--accent) 14%, transparent);
+  --warn-soft:   color-mix(in oklch, var(--warn) 16%, transparent);
+  --danger-soft: color-mix(in oklch, var(--danger) 14%, transparent);
+  --fg-soft:     color-mix(in oklch, var(--fg) 6%, transparent);
+}
+html[data-theme="dark"] {
+  --bg:      oklch(17% 0.012 245);
+  --surface: oklch(21% 0.014 245);
+  --fg:      oklch(93% 0.008 240);
+  --muted:   oklch(64% 0.015 240);
+  --border:  oklch(30% 0.014 245);
+  --accent:  oklch(72% 0.17 148);    /* accent lifts in lightness+chroma on dark */
+  --warn:    oklch(76% 0.14 85);
+  --danger:  oklch(66% 0.18 25);
+}
+```
 
-## 3. Typography
+**Themes.** `light` / `dark`; `:root` carries light, `html[data-theme="dark"]` overrides.
+**Dark is the default** when neither a stored choice nor an OS preference exists.
+`shell/theme.ts` resolves: stored choice → OS preference → dark; legacy Signal Grid
+localStorage values migrate (`paper`→`light`, `ink`→`dark`).
 
-- **Structure/sans**: `Archivo` (Google Fonts; grotesque in the Univers lineage).
-  Weights 500/600/700. Tight tracking on headings (`-0.01em`).
-- **Data/mono**: `IBM Plex Mono` 400/500/600. All file paths, keys, values, code,
-  timestamps, and numerals-in-tables are mono.
-- **Micro-labels**: 11px, all-caps, `+0.08em` tracking, `--fg-dim` — the
-  timetable voice. Used for section headers, stat labels, column heads.
-- **Giant numerals**: 64–96px Archivo 700, tabular lining figures, used for
-  stat blocks only. The numeral is the hero; its label sits below in micro-label
-  style.
+**Accent budget.** The green accent is reserved for: active navigation (text + 2px left bar),
+primary buttons, project-scope badges, live/connected status, and winning values in data
+comparisons. It never appears as a large fill or background wash. Hover states use `--fg-soft`,
+not accent.
 
-Scale (px): 96 / 64 (stats) · 28 (page title) · 18 (section) · 15 (body) ·
-13 (mono data) · 11 (micro-labels). Baseline grid 8px; line-heights snap to it.
+**Status colors** appear only as pills/notices with `*-soft` backgrounds and the full-strength
+hue as text. Never as solid fills.
 
-## 4. Grid & layout
+---
 
-- 12-column grid, `max-width: 1440px`, 24px gutters; **column rules are visible**
-  where content regions meet (1px `--hairline`), full-bleed horizontal rules
-  between sections — the page reads like a printed timetable.
-- Left rail navigation (fixed 220px): mono micro-labels, numbered `01 SIGNAL`,
-  `02 AGENTS`, `03 FINDINGS`… numbers double as `Cmd+1..9` shortcuts.
-- Top bar (48px): wordmark `AGENTCONFIG` (Archivo 700, tracked out), center =
-  project path in mono, right = LIVE indicator + cost widget + theme toggle.
-- Density: rows 40px; tables are hairline-ruled, no zebra striping.
+## 2. Typography
 
-## 5. The signal layer (Broadcast)
+```css
+--font-display: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+--font-body:    same as display;   /* one sans family — utility trumps editorial */
+--font-mono:    'JetBrains Mono', 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+```
 
-- **Waveform fingerprint**: each detected agent renders a small continuous trace
-  whose shape is *deterministically derived from its config* (file sizes/hashes →
-  amplitude sequence). It is a visual hash: the trace literally changes when the
-  config changes, and pulses once on each file event. Canvas, 60fps, one color
-  (`--signal`), `--trace-dim` afterglow.
-- **Confidence/level meters**: segmented VU bars (`▮▮▮▯`) for detector
-  confidence, token budgets, cache efficiency. Segments are 2px-gapped rects —
-  never smooth progress bars.
-- **LIVE dot**: 8px square (not a circle — Swiss) in `--signal`, 1.2s pulse,
-  only while the watcher is connected. Disconnect flips it to hollow + `OFFLINE`.
-- **Rescan sweep**: on watcher-triggered re-analysis, a 1px vertical line sweeps
-  the affected panel once (300ms). No skeleton loaders anywhere.
-- **Live session pulse**: a session JSONL currently growing gets the same pulse
-  treatment in Session Replay lists.
-- `prefers-reduced-motion`: traces freeze to their static shape, pulses become
-  discrete state changes. Nothing is lost semantically.
+JetBrains Mono 400/500/600 is self-hosted via `@fontsource/jetbrains-mono` (woff2 only);
+the sans stack is pure system fonts — no sans font ships.
 
-## 6. Core components
+Scale (fixed px — this is a desktop tool, not a marketing page):
 
-| Component | Spec |
+| Role | Size / weight | Notes |
+|---|---|---|
+| Page title (h1) | 20px / 650 | letter-spacing −0.015em |
+| Card / section head (h2) | 15px / 600 | |
+| Body, controls | 13.5px / 400–550 | line-height 1.5 |
+| Table cells (mono) | 12.5px | |
+| Meta, captions | 12px mono, `--muted` | |
+| Table headers, group labels | 10.5–11px mono, UPPERCASE, letter-spacing 0.05–0.09em | |
+| Micro labels (chooser FOLDER/AGENT) | 10px mono, UPPERCASE, 0.08em | |
+
+**Mono discipline** — mono is a semantic signal, not decoration. It marks: file paths, IDs,
+hashes, branch names, commands, config keys/values, versions, timestamps, counts, and all
+table headers/eyebrow labels. Numerics always get `font-variant-numeric: tabular-nums`.
+Prose, titles, and button labels stay sans.
+
+---
+
+## 3. Space, shape, elevation
+
+- **Radii:** `--radius: 8px` (controls, inputs, buttons), `--radius-lg: 12px` (cards, tables, dialogs), `999px` (pills only).
+- **Spacing rhythm:** 4/8-based — control padding ≈ 6–8px vertical / 10–16px horizontal; card padding 18–20px; section gaps 12–22px.
+- **Borders:** 1px `var(--border)` hairlines do all separation work. No drop shadows on resting cards.
+- **Elevation** exists only for floating layers: dropdown menus (`0 12px 32px` fg-mix 18%), dialogs (`0 24px 60px` fg-mix 22%), active segmented thumb (`0 1px 2–3px` fg-mix ~12%).
+- **Flourish (the only one):** content area carries a faint dot grid —
+  `radial-gradient(color-mix(in oklch, var(--fg) 5%, transparent) 1px, transparent 1px)` at `26px 26px`.
+
+---
+
+## 4. App shell metrics
+
+| Region | Spec |
 |---|---|
-| `StatBlock` | giant numeral + micro-label + optional delta in mono; hairline-boxed |
-| `SignalStrip` | agent row: kind (Archivo 600) · waveform canvas · confidence meter · file count |
-| `FindingRow` | timetable row: 2-digit index (mono) · severity block (8px square, colored) · title · `→ fix` line · `[APPLY]` button when a machine fix exists |
-| `FileChip` | mono path chip; click = open in artifact browser; hover shows size/sha |
-| `DiffPanel` | unified diff, mono 13, add lines `--signal`, del lines `--red`; mandatory before any write; `[COMMIT]` / `[DISCARD]` |
-| `CatalogCard` | registry entry: name, kind badge, description, install count, `[INSTALL]` → DiffPanel |
-| `TerminalTab` | xterm.js themed to the active Signal Grid theme; tab strip in micro-labels |
-| `PipelineCanvas` | React Flow, nodes as hairline boxes with micro-label headers; edges are 1px, right-angled (schematic, not bezier) |
-| `Heatmap` | activity calendar in `--signal` opacity steps; squares, 2px gap |
-| `EmptyState` | `NO SIGNAL` in giant numerals style + one-line instruction; flat-line waveform |
-| `CommandPalette` | Cmd+K; mono list, numbered results, hairline modal, no blur/glass |
+| Topbar | 49px, `--surface`, bottom hairline; brand (mono, accent sigil) left, context chooser centered, utilities right |
+| Sidebar | 232px, `--surface`, right hairline; grouped nav + scope legend pinned to bottom |
+| Content | scrollable, dot-grid background, inner column max-width 980px |
+| Statusbar | 30px, mono 11.5px `--muted`; see content spec below |
+| Breakpoint | ≤860px: sidebar hides, grids collapse to 2-col, micro labels drop |
 
-Buttons: rectangular, 2px radius, mono all-caps labels in brackets — `[APPLY]`,
-`[COMMIT]`, `[INSTALL]`. Primary = `--fg` fill; destructive = `--red` fill;
-everything else = hairline outline.
+**Statusbar content** (all real values — no invented metrics):
 
-Charts (analytics): follow the dataviz skill conventions mapped onto Signal Grid
-tokens — mono axis labels, hairline gridlines, `--signal`/`--warn`/`--red` as the
-categorical trio, no legends when direct labeling fits.
+- **Left:** pulsing live-dot + `connected`/`offline` from the websocket state, then the serve
+  endpoint as `host:port` (plus ` · pid <n>` when `/api/health` provides one).
+- **Center:** the launch command in mono — `npx agentconfiging <project path>`.
+- **Right:** the active config paths (global `~/.claude` · project `./.claude`).
 
-## 7. Voice
+---
 
-Terse, instrumental, lower-stakes NASA: `2 AGENTS · 3 WARNINGS · 14 ARTIFACTS`,
-`SIGNAL ACQUIRED`, `WRITE COMMITTED`, `NO SIGNAL`. Never cute, never apologetic.
-Findings speak in the imperative: "add `.claude/settings.local.json` to
-.gitignore."
+## 5. Components
 
-## 8. The CLI (Ink)
+Class names are the contract — reuse them, don't reinvent.
 
-Signal Grid translated to the terminal. Same voice (§7), same discipline: static
-chassis, moving signal.
+- **Context chooser** (`.chooser` / `.ch-side` / `.ch-menu` / `.ch-item`): one bordered control, two baseline-aligned sides (micro label + value + 9px caret) split by a hairline `.ch-div`. Menus drop 6px below, 250px min, 5px padding, 7px-radius items; active item = accent-soft bg + accent text.
+- **Sidebar nav** (`.nav-item`): 7px/10px padding, transparent 2px left border; active = `--accent-soft` bg, accent left bar, 550 weight. Mono glyph (15px box) + label + mono count pushed right.
+- **Scope badges** (`.scope.s-*`): the system's signature. 10.5px mono uppercase, 5px radius. Every configurable row shows one — provenance is never implicit. See the scope mapping below.
+- **Status pills** (`.pill.p-*`): 999px radius, 11px mono. ok/connected = accent-soft · warn = warn-soft · error = danger-soft · disabled = fg-soft/muted.
+- **Switch** (`.switch`): 34×19px track, 13px knob, 0.15s ease; on = accent track, surface knob.
+- **Buttons** (`.btn-*`): primary = accent fill, `--bg` text (hover: mix 86% accent + fg); secondary = surface + hairline (hover: `--muted` border); ghost = muted text (hover: fg + fg-soft bg). All: 1px translateY on :active; disabled = 45% opacity, no pointer events.
+- **Data tables** (`.ds-table` in `.table-card`): mono uppercase 11px headers, 9/12px cell padding, bottom hairlines only (no striping, no vertical rules), row hover `--fg-soft`, numeric columns right-aligned mono. Wrapped in a radius-lg hairline card.
+- **List rows** (`.list-card` / `.list-row` / `.lc-head`): card with optional mono uppercase group header on fg-soft; rows = leading control (switch), title + inline badge, muted 12.5px sub-line (ellipsized), trailing meta + ghost action.
+- **Filter chips** (`.chip-row` / `.chip`): recessed fg-soft track, active chip lifts to surface with subtle shadow.
+- **Segmented options** (`.seg`): mono outlined buttons; selected = accent border/text/soft-bg. For enum settings (approval policy, sandbox mode).
+- **Stat tiles** (`.tile`): 22px mono number + 12px muted label; hover raises border to `--muted`. Clickable wayfinding, not marketing stats.
+- **Search input** (`.search`): surface + hairline, 6/11px padding; focus = accent border + 2px accent-soft ring (all inputs share this focus treatment). Every other interactive element gets the shared keyboard-focus ring — a 2px accent outline via the global `:focus-visible` rule (`base.css`).
+- **Notices** (`.notice[-info]`): warn-soft or accent-soft wash, 35%-mix border, mono glyph mark (▲). Used for capability gaps ("Codex has no lifecycle hooks…").
+- **Dialog**: head/body/foot with hairline separators, 560px max, backdrop = fg-mix 32% + 2px blur.
+- **Toast**: inverted (`--fg` bg / `--bg` text), mono 12px, bottom-right, 2.2s, confirms every mutating action.
+- **Pager** (`.pager`): meta "Showing x–y of n" left; Prev / `Page x / y` / Next right. Page size select adjacent to the search that feeds it.
+
+**Scope mapping.** agentconfig's data model uses `project` and `global` scopes (the Console
+mockup calls the machine-wide scope "user"). Badge classes and colors:
+
+| agentconfig scope | Badge | Treatment | Meaning |
+|---|---|---|---|
+| `project` | `.scope.s-project` | accent-soft bg / accent text | repo-level config (`./.claude`, `AGENTS.md`, `.mcp.json`) |
+| `global` | `.scope.s-global` | outlined neutral (surface + hairline, muted text) | this machine's home-dir config (`~/.claude`, `~/.codex`, …) |
+| `local` | `.scope.s-local` | warn-soft bg / warn text | uncommitted local overrides (`settings.local.json`) |
+
+**Adding a component to the contract.** The internal gallery (`#/gallery`,
+`web/src/gallery/`) is the living spec page: a component is not part of the contract until
+every shipped state renders there. To add one:
+
+1. Check the reference (`opendesign/agentctl-config-console.html`) and this section first —
+   reuse an existing contract class before inventing a new one.
+2. Implement it in `web/src/components/core/` with its styles in `components.css`
+   (tokens only — no raw hex, radii from §3, no resting shadows), and export it from
+   `web/src/components/core/index.ts`.
+3. Extract any non-trivial logic into a DOM-free module (`foo.ts`) with a vitest unit test,
+   mirroring `badge.ts` / `stat.ts`.
+4. Add a demo block to `web/src/gallery/CoreSection.tsx` covering **every** state and variant,
+   then verify it in both themes via the top-bar toggle.
+5. Document it with a bullet in this section (§5) — class names are the contract.
+
+---
+
+## 6. Motion
+
+Micro only. 0.12–0.15s `ease` on background/color/border; 0.05s translateY press on buttons;
+2.2s box-shadow pulse on the live dot. No entrance animations, no easing theatrics, no parallax.
+`prefers-reduced-motion` freezes everything (the live-dot becomes a static dot).
+
+---
+
+## 7. Voice & content rules
+
+- Labels are nouns, buttons are verbs that say what happens ("Resume", "Add hook", "Save hook").
+- Provenance is always visible: any value that comes from a file shows its scope badge and, where useful, its source path in mono.
+- Adaptive terminology: name things what the underlying tool names them (Hooks / Plugins / Extensions / Notifications; CLAUDE.md / AGENTS.md). When a capability doesn't exist, say so in a notice and show the nearest equivalent — never fake parity.
+- Empty/no-match states name the filter that caused them.
+
+## 8. Don'ts
+
+No gradients (beyond the dot grid), no purple washes, no emoji icons, no serif display,
+no second accent, no row striping, no boxed borders around editorial lists, no drop shadows
+on resting elements, no raw hex outside the token block, no invented metrics.
+
+## 9. The CLI (Ink)
+
+Console translated to the terminal: same voice, same restraint.
 
 - **Layout**: header line (`AGENTCONFIG · <n> instances · <url>`), instance list
   (name, agent count, finding count, `●` loaded / `○` lazy), and a log pane.
-  Completed log lines render via Ink `<Static>` so they scroll into normal
-  terminal history; only the bottom status region re-renders.
-- **Color**: terminal-safe mapping of the tokens — signal green, warn yellow,
-  error red, dim gray. One theme; respect `NO_COLOR` and non-TTY (plain lines,
+  Completed log lines render via Ink `<Static>`; only the bottom status region re-renders.
+- **Color**: terminal-safe mapping of the tokens — accent green, warn yellow,
+  danger red, dim gray. One theme; respect `NO_COLOR` and non-TTY (plain lines,
   no Ink layout when piped).
-- **Interactions (v1)**: arrow/j-k to select an instance, `enter` opens it in
-  the browser, `a` add folder, `s` scan folder recursively, `q` quit
-  (server keeps running with `--detach`). Everything else lives in the web UI.
 - **Logs on disk**: everything shown in the log pane is also appended to
   `~/.local/state/agentconfiging/logs/<timestamp>.log`; the path is printed on
   startup and on crash.
 - `report` and `daemon` never use Ink: plain JSON / plain timestamped lines.
 
-## 9. What Signal Grid refuses
+---
 
-Gradients · glassmorphism · rounded cards · shadows · skeleton screens · spinners
-(the sweep replaces them) · toasts that float over content (status changes happen
-in-place, in the chrome's status line) · icon soup (type does the work; icons only
-where space demands: severity squares, kind badges) · dark-mode-only design
-(Paper is a first-class theme).
+## Appendix: E13 adoption decisions (agentconfig-4u1.1)
+
+Recorded resolutions for the Signal Grid → Console migration:
+
+- **(a) Full replacement.** No coexistence period; this document replaced the Signal Grid
+  spec wholesale (`opendesign/` keeps the imported source). Components/pages migrate over
+  E13.2–E13.6.
+- **(b) Themes are `light`/`dark`, dark default.** `html[data-theme="dark"]`; dark is the
+  native mode. `shell/theme.ts` migrates stored Signal Grid values `paper`→`light`,
+  `ink`→`dark`.
+- **(c) Signal layer retired.** Waveform / VuMeter / SweepOverlay / SignalStrip are decorative
+  (violate "information per square inch, not vibes" and "no invented metrics") and are removed
+  in E13.4–6. LiveDot survives, restyled as the statusbar live-dot. Heatmap survives (real
+  data), restyled.
+- **(d) Fonts.** Mono: self-hosted JetBrains Mono 400/500/600 via `@fontsource/jetbrains-mono`
+  (IBM Plex Mono and Archivo packages dropped; 'IBM Plex Mono' remains in the stack only as a
+  local fallback). Sans: system stack, nothing shipped.
+- **(e) Statusbar content** per §4: ws-state live-dot + serve endpoint (host:port, + pid when
+  `/api/health` provides it) left; `npx agentconfiging <path>` center; active config paths
+  right. All values are real — no invented metrics.

@@ -1,19 +1,27 @@
 /**
- * ScopePanel — one settings.json scope's visual editor (bead agentconfig-wmc.2):
- * model, permission mode, allow/ask/deny rule lists, env vars, and statusLine.
- * Hooks are shown read-only (wmc.5 owns their editor). A save serializes the
- * edited model to full-file content and hands it to the parent's shared write
- * flow (dry-run diff → commit).
+ * ScopePanel — one settings.json scope's visual editor (bead agentconfig-wmc.2,
+ * Console E13.4): model, permission mode, allow/ask/deny rule lists, env vars,
+ * and statusLine. Hooks are shown read-only (wmc.5 owns their editor). A save
+ * serializes the edited model to full-file content and hands it to the
+ * parent's shared write flow (dry-run diff → commit).
  *
  * REDACTION-SAVE TRAP: when the served file carries redaction spans, its `env`
  * values arrived as `[REDACTED:*]` placeholders — saving would overwrite the
  * real secrets. Such a file is rendered strictly READ-ONLY (disabled inputs, no
- * save), with a banner telling the user to edit it directly. See model.ts.
+ * save), with a Notice telling the user to edit it directly. See model.ts.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { FileContent } from '../../api/index.js';
-import { Button } from '../../components/core/index.js';
+import {
+  Button,
+  Field,
+  Input,
+  Notice,
+  Select,
+  SourceBadge,
+  type SourceScope,
+} from '../../components/core/index.js';
 import {
   emptyModel,
   hasRedactions,
@@ -27,8 +35,10 @@ export type LoadStatus = 'loading' | 'ok' | 'missing' | 'error' | 'unavailable';
 
 export interface ScopePanelProps {
   title: string;
-  /** Provenance tag, e.g. "SHARED · git-tracked" / "LOCAL · gitignored". */
-  tag: string;
+  /** Provenance badge scope — every configurable surface wears one (§5). */
+  scope: SourceScope;
+  /** Badge qualifier, e.g. 'git-tracked' / 'gitignored' / 'all projects'. */
+  detail?: string;
   /** The write path (relative or absolute); undefined when the scope is absent. */
   path?: string;
   status: LoadStatus;
@@ -52,13 +62,13 @@ function RuleList({
   onChange: (next: string[]) => void;
 }) {
   return (
-    <div className="settings__field">
-      <div className="micro-label">{heading}</div>
-      {rules.length === 0 && <div className="settings__none micro-label">none</div>}
+    <div className="field">
+      <label>{heading}</label>
+      {rules.length === 0 && <div className="meta">none</div>}
       {rules.map((rule, i) => (
         <div key={i} className="settings__rule">
-          <input
-            className="settings__input mono-data"
+          <Input
+            className="mono"
             value={rule}
             disabled={disabled}
             aria-label={`${heading} rule ${String(i + 1)}`}
@@ -70,14 +80,18 @@ function RuleList({
           />
           {!disabled && (
             <Button
-              label="remove"
-              variant="destructive"
+              label="Remove"
+              variant="ghost"
               onClick={() => onChange(rules.filter((_, j) => j !== i))}
             />
           )}
         </div>
       ))}
-      {!disabled && <Button label="add rule" onClick={() => onChange([...rules, ''])} />}
+      {!disabled && (
+        <div>
+          <Button label="Add rule" onClick={() => onChange([...rules, ''])} />
+        </div>
+      )}
     </div>
   );
 }
@@ -92,13 +106,13 @@ function EnvRows({
   onChange: (next: Array<[string, string]>) => void;
 }) {
   return (
-    <div className="settings__field">
-      <div className="micro-label">ENV</div>
-      {env.length === 0 && <div className="settings__none micro-label">none</div>}
+    <div className="field">
+      <label>Env</label>
+      {env.length === 0 && <div className="meta">none</div>}
       {env.map(([k, v], i) => (
         <div key={i} className="settings__env-row">
-          <input
-            className="settings__input settings__input--key mono-data"
+          <Input
+            className="mono settings__input--key"
             value={k}
             disabled={disabled}
             aria-label={`env key ${String(i + 1)}`}
@@ -109,8 +123,8 @@ function EnvRows({
               onChange(next);
             }}
           />
-          <input
-            className="settings__input mono-data"
+          <Input
+            className="mono"
             value={v}
             disabled={disabled}
             aria-label={`env value ${String(i + 1)}`}
@@ -123,20 +137,24 @@ function EnvRows({
           />
           {!disabled && (
             <Button
-              label="remove"
-              variant="destructive"
+              label="Remove"
+              variant="ghost"
               onClick={() => onChange(env.filter((_, j) => j !== i))}
             />
           )}
         </div>
       ))}
-      {!disabled && <Button label="add var" onClick={() => onChange([...env, ['', '']])} />}
+      {!disabled && (
+        <div>
+          <Button label="Add variable" onClick={() => onChange([...env, ['', '']])} />
+        </div>
+      )}
     </div>
   );
 }
 
 export function ScopePanel(props: ScopePanelProps) {
-  const { title, tag, path, status, file, errMsg, onSave, saving } = props;
+  const { title, scope, detail, path, status, file, errMsg, onSave, saving } = props;
 
   // Parse the served (redacted) content once per file. `missing` seeds an empty
   // baseline so the panel can CREATE the file.
@@ -160,36 +178,30 @@ export function ScopePanel(props: ScopePanelProps) {
 
   if (status === 'loading') {
     return (
-      <section className="settings__panel surface">
-        <PanelHead title={title} tag={tag} />
-        <p className="micro-label">loading…</p>
-      </section>
+      <Panel title={title} scope={scope} detail={detail}>
+        <p className="meta">loading …</p>
+      </Panel>
     );
   }
   if (status === 'unavailable') {
     return (
-      <section className="settings__panel surface">
-        <PanelHead title={title} tag={tag} />
-        <p className="settings__note micro-label">{errMsg ?? 'not available for this instance'}</p>
-      </section>
+      <Panel title={title} scope={scope} detail={detail}>
+        <p className="meta">{errMsg ?? 'not available for this instance'}</p>
+      </Panel>
     );
   }
   if (status === 'error') {
     return (
-      <section className="settings__panel surface">
-        <PanelHead title={title} tag={tag} />
-        <p className="settings__note settings__note--warn micro-label">{errMsg ?? 'load failed'}</p>
-      </section>
+      <Panel title={title} scope={scope} detail={detail}>
+        <Notice>{errMsg ?? 'load failed'}</Notice>
+      </Panel>
     );
   }
   if (parsed && !parsed.ok) {
     return (
-      <section className="settings__panel surface">
-        <PanelHead title={title} tag={tag} />
-        <p className="settings__note settings__note--warn micro-label">
-          could not parse as JSON — open it in ARTIFACTS to fix by hand
-        </p>
-      </section>
+      <Panel title={title} scope={scope} detail={detail}>
+        <Notice>Could not parse as JSON — open it in Artifacts to fix by hand.</Notice>
+      </Panel>
     );
   }
   if (!parsed?.ok) return null;
@@ -204,38 +216,30 @@ export function ScopePanel(props: ScopePanelProps) {
     setDraft((d) => ({ ...d, [key]: value }));
 
   return (
-    <section className="settings__panel surface">
-      <PanelHead title={title} tag={tag} status={status} />
-
+    <Panel title={title} scope={scope} detail={detail} missing={status === 'missing'}>
       {readOnly && (
-        <p className="settings__note settings__note--warn micro-label">
-          read-only · this file contains {file?.spans.length ?? 0} redacted secret
-          {(file?.spans.length ?? 0) === 1 ? '' : 's'} — editing here would overwrite them. Edit the
+        <Notice>
+          Read-only — this file contains {file?.spans.length ?? 0} redacted secret
+          {(file?.spans.length ?? 0) === 1 ? '' : 's'}; saving here would overwrite them. Edit the
           file directly.
-        </p>
+        </Notice>
       )}
 
-      <div className="settings__field">
-        <label className="micro-label" htmlFor={`${title}-model`}>
-          MODEL
-        </label>
-        <input
+      <Field label="Model" htmlFor={`${title}-model`}>
+        <Input
           id={`${title}-model`}
-          className="settings__input mono-data"
+          className="mono"
           value={draft.model}
           disabled={readOnly}
           placeholder="(inherit) e.g. claude-opus-4-5"
           onChange={(e) => update('model', e.target.value)}
         />
-      </div>
+      </Field>
 
-      <div className="settings__field">
-        <label className="micro-label" htmlFor={`${title}-mode`}>
-          PERMISSION MODE
-        </label>
-        <select
+      <Field label="Permission mode" htmlFor={`${title}-mode`}>
+        <Select
           id={`${title}-mode`}
-          className="settings__input mono-data"
+          className="mono"
           value={draft.defaultMode}
           disabled={readOnly}
           onChange={(e) => update('defaultMode', e.target.value)}
@@ -245,23 +249,23 @@ export function ScopePanel(props: ScopePanelProps) {
               {m === '' ? '(unset)' : m}
             </option>
           ))}
-        </select>
-      </div>
+        </Select>
+      </Field>
 
       <RuleList
-        heading="ALLOW"
+        heading="Allow"
         rules={draft.allow}
         disabled={readOnly}
         onChange={(next) => update('allow', next)}
       />
       <RuleList
-        heading="ASK"
+        heading="Ask"
         rules={draft.ask}
         disabled={readOnly}
         onChange={(next) => update('ask', next)}
       />
       <RuleList
-        heading="DENY"
+        heading="Deny"
         rules={draft.deny}
         disabled={readOnly}
         onChange={(next) => update('deny', next)}
@@ -269,19 +273,19 @@ export function ScopePanel(props: ScopePanelProps) {
 
       <EnvRows env={draft.env} disabled={readOnly} onChange={(next) => update('env', next)} />
 
-      <div className="settings__field">
-        <div className="micro-label">STATUS LINE</div>
+      <div className="field">
+        <label>Status line</label>
         <div className="settings__env-row">
-          <input
-            className="settings__input settings__input--key mono-data"
+          <Input
+            className="mono settings__input--key"
             value={draft.statusLineType}
             disabled={readOnly}
             aria-label="status line type"
             placeholder="command"
             onChange={(e) => update('statusLineType', e.target.value)}
           />
-          <input
-            className="settings__input mono-data"
+          <Input
+            className="mono"
             value={draft.statusLineCommand}
             disabled={readOnly}
             aria-label="status line command"
@@ -292,16 +296,16 @@ export function ScopePanel(props: ScopePanelProps) {
       </div>
 
       {meta?.hasHooks && (
-        <p className="settings__note micro-label">
+        <p className="meta">
           {meta.hookEventCount} hook event{meta.hookEventCount === 1 ? '' : 's'} defined · edited in
-          HOOKS (preserved on save)
+          Hooks (preserved on save)
         </p>
       )}
 
       {!readOnly && path !== undefined && (
         <div className="settings__actions">
           <Button
-            label={status === 'missing' ? 'create' : 'save'}
+            label={status === 'missing' ? 'Create' : 'Save'}
             variant="primary"
             disabled={!dirty || saving}
             onClick={() =>
@@ -310,16 +314,32 @@ export function ScopePanel(props: ScopePanelProps) {
           />
         </div>
       )}
-    </section>
+    </Panel>
   );
 }
 
-function PanelHead({ title, tag, status }: { title: string; tag: string; status?: LoadStatus }) {
+/** Card chassis: mono title + provenance badge head over the editor body. */
+function Panel({
+  title,
+  scope,
+  detail,
+  missing,
+  children,
+}: {
+  title: string;
+  scope: SourceScope;
+  detail?: string;
+  missing?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <div className="settings__panel-head">
-      <span className="mono-data settings__panel-title">{title}</span>
-      <span className="micro-label settings__panel-tag">{tag}</span>
-      {status === 'missing' && <span className="micro-label settings__panel-tag">not created</span>}
-    </div>
+    <section className="card">
+      <div className="settings__panel-head">
+        <span className="mono-data settings__panel-title">{title}</span>
+        <SourceBadge scope={scope} detail={detail} />
+        {missing === true && <span className="meta">not created</span>}
+      </div>
+      {children}
+    </section>
   );
 }

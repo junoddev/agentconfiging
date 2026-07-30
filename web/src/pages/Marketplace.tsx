@@ -1,13 +1,17 @@
 /**
- * Marketplace (rail `16 MARKETPLACE`, route `#/marketplace`) — the Claude Code
- * PLUGIN MARKETPLACE surface (SPEC §4.5, §5 row 9, bead 0zm.5): browse + search
- * the marketplace (install counts, version, source), one-click INSTALL, and the
- * installed list (version/scope/date), alongside our own registry CATALOG (rail
- * 15). The server SHELLS OUT to the `claude` CLI; every plugin field is that
- * subprocess's UNTRUSTED output — rendered here as TEXT NODES only, never markup.
+ * Marketplace (route `#/marketplace`) — the Claude Code PLUGIN MARKETPLACE
+ * surface (SPEC §4.5, §5 row 9, bead 0zm.5): browse + search the marketplace
+ * (install counts, version, source), one-click INSTALL, and the installed list
+ * (version/scope/date), alongside our own registry CATALOG. The server SHELLS
+ * OUT to the `claude` CLI; every plugin field is that subprocess's UNTRUSTED
+ * output — rendered here as TEXT NODES only, never markup. Console treatment
+ * (opendesign/DESIGN.md §5): `.toolbar` search, installed `.ds-table` with
+ * scope badges, `.card` plugin entries with an `installed` pill; an install
+ * confirms via Toast.
  *
  * CLI-ABSENT: the server degrades to `{ available:false, reason }` (a 200), which
- * this page renders as a clear EmptyState — never a crash, never a failure toast.
+ * this page renders as a capability-gap `.notice` — never a crash, never a
+ * failure toast.
  *
  * CLIENT SEAM: like Catalog/Settings, the shell keeps its ApiClient private, so
  * this page captures the launch token at module load and builds its own client.
@@ -21,8 +25,18 @@ import {
   type MarketplacePlugin,
   type MarketplaceResponse,
 } from '../api/index.js';
-import { parseTokenHash } from '../api/token.js';
-import { Button, EmptyState } from '../components/core/index.js';
+import { bootstrapToken } from '../api/token.js';
+import {
+  Button,
+  EmptyState,
+  Notice,
+  Pill,
+  SearchInput,
+  SourceBadge,
+  Table,
+  useToast,
+  type SourceScope,
+} from '../components/core/index.js';
 import {
   filterPlugins,
   formatInstallCount,
@@ -31,20 +45,34 @@ import {
 } from './marketplace/logic.js';
 import './marketplace.css';
 
-const bootToken =
-  typeof window !== 'undefined' ? parseTokenHash(window.location.hash).token : undefined;
+const bootToken = typeof window !== 'undefined' ? bootstrapToken() : undefined;
 
 type LoadStatus = 'loading' | 'ok' | 'error';
 
 function loadError(err: unknown): string {
   if (err instanceof ApiError) {
-    if (err.kind === 'unauthorized') return 'session expired — reopen from the CLI';
-    if (err.kind === 'network') return 'cannot reach the local server';
+    if (err.kind === 'unauthorized') return 'Session expired — reopen from the CLI.';
+    if (err.kind === 'network') return 'Cannot reach the local server.';
   }
-  return 'could not load the marketplace';
+  return 'Could not load the marketplace.';
 }
 
-/** One plugin row. Each field is untrusted CLI output → text node. */
+/** Claude's scope words → our badge scopes ('user' wears the GLOBAL badge). */
+const PLUGIN_SCOPES: Record<string, SourceScope> = {
+  project: 'project',
+  local: 'local',
+  user: 'global',
+  global: 'global',
+};
+
+/** A scope badge when the CLI's scope word maps, mono text otherwise. */
+function PluginScope({ scope }: { scope: string }) {
+  const mapped = PLUGIN_SCOPES[scope.trim().toLowerCase()];
+  if (mapped !== undefined) return <SourceBadge scope={mapped} />;
+  return <span className="mono">{scope || '—'}</span>;
+}
+
+/** One plugin card. Each field is untrusted CLI output → text node. */
 function PluginCard({
   plugin,
   installed,
@@ -56,7 +84,8 @@ function PluginCard({
   client: ApiClient;
   onChanged: () => void;
 }) {
-  const [phase, setPhase] = useState<'idle' | 'installing' | 'done' | 'error'>('idle');
+  const toast = useToast();
+  const [phase, setPhase] = useState<'idle' | 'installing' | 'error'>('idle');
   const [message, setMessage] = useState('');
 
   const install = useCallback(() => {
@@ -69,26 +98,35 @@ function PluginCard({
           setPhase('error');
           return;
         }
-        setMessage(res.installed ? 'installed' : res.message || 'install failed');
-        setPhase(res.installed ? 'done' : 'error');
-        if (res.installed) onChanged();
+        if (res.installed) {
+          toast('Plugin installed');
+          setPhase('idle');
+          onChanged();
+          return;
+        }
+        setMessage(res.message || 'install failed');
+        setPhase('error');
       } catch (err) {
         setMessage(loadError(err));
         setPhase('error');
       }
     })();
-  }, [client, plugin.id, onChanged]);
+  }, [client, plugin.id, onChanged, toast]);
 
   return (
-    <li className="mkt-card surface">
+    <li className="card mkt-card">
       <div className="mkt-card__head">
-        <span className="mkt-card__name mono-data">{plugin.name}</span>
-        {installed && <span className="mkt-card__installed micro-label">INSTALLED</span>}
+        <span className="mkt-card__name mono">{plugin.name}</span>
+        {installed && (
+          <span className="mkt-card__state">
+            <Pill tone="ok">installed</Pill>
+          </span>
+        )}
       </div>
 
       <p className="mkt-card__desc">{plugin.description}</p>
 
-      <div className="mkt-card__meta micro-label">
+      <div className="mkt-card__meta meta">
         <span>{plugin.marketplace}</span>
         {plugin.version !== '' && <span>{plugin.version}</span>}
         <span>{formatInstallCount(plugin.installCount)} installs</span>
@@ -97,14 +135,11 @@ function PluginCard({
 
       <div className="mkt-card__actions">
         {!installed && phase === 'idle' && (
-          <Button label="install" variant="primary" onClick={install} />
+          <Button label="Install" variant="primary" onClick={install} />
         )}
-        {phase === 'installing' && <span className="micro-label">installing…</span>}
-        {(phase === 'done' || phase === 'error') && (
-          <span
-            className={`micro-label ${phase === 'error' ? 'mkt-card__msg--error' : 'mkt-card__msg--ok'}`}
-            role="status"
-          >
+        {phase === 'installing' && <span className="meta">Installing…</span>}
+        {phase === 'error' && (
+          <span className="meta mkt-card__msg--error" role="status">
             {message}
           </span>
         )}
@@ -113,18 +148,7 @@ function PluginCard({
   );
 }
 
-function InstalledRow({ rec }: { rec: InstalledPlugin }) {
-  return (
-    <li className="mkt-installed__row">
-      <span className="mono-data">{rec.name}</span>
-      <span className="micro-label">{rec.version || '—'}</span>
-      <span className="micro-label">{rec.scope || '—'}</span>
-      <span className="micro-label">{rec.installedAt || '—'}</span>
-    </li>
-  );
-}
-
-export function Marketplace() {
+function MarketplacePage() {
   const client = useMemo(() => (bootToken ? new ApiClient(bootToken) : undefined), []);
 
   const [data, setData] = useState<MarketplaceResponse | undefined>();
@@ -137,7 +161,7 @@ export function Marketplace() {
     let cancelled = false;
     if (!client) {
       setStatus('error');
-      setErrMsg('session token missing');
+      setErrMsg('Session token missing.');
       return;
     }
     setStatus('loading');
@@ -169,75 +193,80 @@ export function Marketplace() {
   return (
     <main className="layout-main page">
       <section className="page__section">
-        <h1 className="title-page">MARKETPLACE</h1>
-        <p className="mkt__lede micro-label">
-          browse &amp; install Claude Code plugins from the marketplace — install counts, versions,
-          one-click install via the claude CLI
+        <h1 className="title-page">Marketplace</h1>
+        <p className="page-sub">
+          Browse &amp; install Claude Code plugins from the marketplace — install counts, versions,
+          one-click install via the claude CLI.
         </p>
       </section>
 
       {status === 'loading' && (
         <section className="page__section">
-          <p className="micro-label">loading marketplace…</p>
+          <p className="meta">Loading marketplace…</p>
         </section>
       )}
       {status === 'error' && (
         <section className="page__section">
-          <EmptyState title="NO SIGNAL" instruction={errMsg} />
+          <EmptyState title="No marketplace" instruction={errMsg} />
         </section>
       )}
 
       {status === 'ok' && data && !data.available && (
         <section className="page__section">
-          <EmptyState
-            title="NO CLI"
-            instruction="Claude CLI not found — install it to browse the plugin marketplace"
-          />
-          <p className="mkt__reason micro-label">{data.reason}</p>
+          <Notice>
+            Claude CLI not found — install it to browse the plugin marketplace.
+            {data.reason !== '' && (
+              <>
+                {' '}
+                <span className="meta">{data.reason}</span>
+              </>
+            )}
+          </Notice>
         </section>
       )}
 
       {status === 'ok' && available && client && (
         <>
-          <section className="page__section mkt__controls">
-            <input
-              type="search"
-              className="mkt__search mono-data"
-              placeholder="search name, description, marketplace…"
-              aria-label="search marketplace"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-            <p className="mkt__summary micro-label" role="status">
-              {query.trim() !== ''
-                ? `${filtered.length} of ${plugins.length} plugins`
-                : `${plugins.length} plugins`}
-              {' · '}
-              {installed.length} installed
-            </p>
+          <section className="page__section">
+            <div className="toolbar">
+              <SearchInput
+                value={query}
+                onChange={setQuery}
+                placeholder="Filter by name, description, marketplace…"
+                label="search marketplace"
+              />
+              <span className="meta" role="status">
+                {query.trim() !== ''
+                  ? `${filtered.length} of ${plugins.length} plugins`
+                  : `${plugins.length} plugins`}
+                {' · '}
+                {installed.length} installed
+              </span>
+            </div>
           </section>
 
           {installed.length > 0 && (
-            <section className="page__section mkt-installed">
-              <h2 className="mkt__shelf-title">INSTALLED</h2>
-              <div className="mkt-installed__head micro-label">
-                <span>plugin</span>
-                <span>version</span>
-                <span>scope</span>
-                <span>date</span>
-              </div>
-              <ul className="mkt-installed__list">
-                {installed.map((rec) => (
-                  <InstalledRow key={rec.id} rec={rec} />
+            <section className="page__section">
+              <h2 className="title-section mkt__shelf-title">Installed</h2>
+              <Table headers={['Plugin', 'Version', 'Scope', 'Installed']}>
+                {installed.map((rec: InstalledPlugin) => (
+                  <tr key={rec.id}>
+                    <td className="mono">{rec.name}</td>
+                    <td className="mono">{rec.version || '—'}</td>
+                    <td>
+                      <PluginScope scope={rec.scope} />
+                    </td>
+                    <td className="mono muted">{rec.installedAt || '—'}</td>
+                  </tr>
                 ))}
-              </ul>
+              </Table>
             </section>
           )}
 
           <section className="page__section">
-            <h2 className="mkt__shelf-title">AVAILABLE</h2>
+            <h2 className="title-section mkt__shelf-title">Available</h2>
             {filtered.length === 0 ? (
-              <EmptyState instruction="no plugins match this search" />
+              <EmptyState instruction={`No plugins match "${query}".`} />
             ) : (
               <ul className="mkt__list">
                 {filtered.map((plugin) => (
@@ -256,4 +285,9 @@ export function Marketplace() {
       )}
     </main>
   );
+}
+
+export function Marketplace() {
+  // Toasts confirm through the shell-level ToastProvider (App.tsx).
+  return <MarketplacePage />;
 }

@@ -1,57 +1,64 @@
-/* Signal Grid — type primitives (docs/DESIGN.md §3).
-   Plain classes only; components compose these later. */
+/* Console — type primitives (docs/DESIGN.md §2).
+   Plain classes only; components compose these. Mono is a semantic signal:
+   paths, IDs, commands, keys/values, versions, timestamps, counts, and all
+   table headers / eyebrow labels. Prose, titles, buttons stay sans. */
 
-/* Micro-label: 11px all-caps, +0.08em tracking, --fg-dim — the timetable
-   voice. Mono, per the rail spec ("mono micro-labels"). */
-.micro-label {
+/* Mono marker — numerics always tabular. */
+.mono {
   font-family: var(--font-mono);
-  font-size: var(--size-micro);
-  line-height: var(--leading-micro);
-  font-weight: 500;
-  letter-spacing: var(--tracking-micro);
-  text-transform: uppercase;
-  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
 }
 
-/* Giant numerals: 64–96px Archivo 700, tabular lining figures.
-   Stat blocks only — the numeral is the hero. */
-.numeral-giant {
-  font-family: var(--font-sans);
-  font-size: var(--size-stat-xl);
-  line-height: var(--leading-stat-xl);
-  font-weight: 700;
-  letter-spacing: var(--tracking-heading);
-  font-variant-numeric: tabular-nums lining-nums;
+/* Meta / captions: 12px mono, muted. */
+.meta {
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  color: var(--muted);
 }
 
-.numeral-giant--sm {
-  font-size: var(--size-stat);
-  line-height: var(--leading-stat);
+.muted {
+  color: var(--muted);
 }
 
-/* Mono data: 13px — all file paths, keys, values, timestamps, table numerals. */
+/* Page title (h1 as a class): 20px / 650, tight tracking. */
+.title-page {
+  font-family: var(--font-display);
+  font-size: var(--fs-h1);
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+/* Card / section head (h2 as a class): 15px / 600. */
+.title-section {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+/* Table cells / mono data: 12.5px, tabular figures. */
 .mono-data {
   font-family: var(--font-mono);
-  font-size: var(--size-data);
-  line-height: var(--leading-data);
-  font-weight: 400;
-  font-variant-numeric: tabular-nums lining-nums;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
 }
 
-/* Page title: 28px Archivo 600, tight tracking. */
-.title-page {
-  font-family: var(--font-sans);
-  font-size: var(--size-title);
-  line-height: var(--leading-title);
-  font-weight: 600;
-  letter-spacing: var(--tracking-heading);
+/* Table headers / group labels: 11px mono, UPPERCASE, 0.05em, muted. */
+.table-header {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
-/* Section header: 18px Archivo 600. */
-.title-section {
-  font-family: var(--font-sans);
-  font-size: var(--size-section);
-  line-height: var(--leading-section);
-  font-weight: 600;
-  letter-spacing: var(--tracking-heading);
+/* Micro labels (chooser FOLDER/AGENT): 10px mono, UPPERCASE, 0.08em. */
+.micro-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
 }

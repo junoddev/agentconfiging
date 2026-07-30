@@ -10,7 +10,7 @@
  */
 
 import { useMemo, useState } from 'react';
-import { Button } from '../../components/core/index.js';
+import { Button, Field, Input } from '../../components/core/index.js';
 import { buildBinding, chordSteps, invalidReason, type Binding } from './logic.js';
 
 export interface BindingFormProps {
@@ -49,60 +49,60 @@ export function BindingForm({ mode, initial, onPreview, onCancel }: BindingFormP
   }
 
   return (
-    <div className="kb-form surface">
-      <div className="kb-form__title micro-label">
+    <div className="card kb-form">
+      <div className="table-header kb-form__title">
         {mode === 'add' ? 'add binding' : `edit · ${initial?.key ?? ''}`}
       </div>
 
-      <label className="kb-form__field">
-        <span className="micro-label">key combo · space-separate steps for a chord</span>
-        <input
-          className="kb-form__input mono-data"
+      <Field label="Key combo — space-separate steps for a chord" htmlFor="kb-form-key">
+        <Input
+          id="kb-form-key"
+          className="mono"
           value={state.key}
           onChange={(e) => set('key', e.target.value)}
           spellCheck={false}
           placeholder="ctrl+g ctrl+s"
         />
-      </label>
+      </Field>
 
       {steps.length > 1 && (
-        <p className="kb-form__steps micro-label">
-          chord · {steps.length} steps · <span className="mono-data">{steps.join(' → ')}</span>
+        <p className="kb-form__steps meta">
+          chord · {steps.length} steps · {steps.join(' → ')}
         </p>
       )}
 
-      <label className="kb-form__field">
-        <span className="micro-label">command</span>
-        <input
-          className="kb-form__input mono-data"
+      <Field label="Command" htmlFor="kb-form-command">
+        <Input
+          id="kb-form-command"
+          className="mono"
           value={state.command}
           onChange={(e) => set('command', e.target.value)}
           spellCheck={false}
           placeholder="chat.insertNewline"
         />
-      </label>
+      </Field>
 
-      <label className="kb-form__field">
-        <span className="micro-label">condition · context / when (optional)</span>
-        <input
-          className="kb-form__input mono-data"
+      <Field label="Condition — context / when (optional)" htmlFor="kb-form-condition">
+        <Input
+          id="kb-form-condition"
+          className="mono"
           value={state.condition}
           onChange={(e) => set('condition', e.target.value)}
           spellCheck={false}
           placeholder="chat"
         />
-      </label>
+      </Field>
 
-      {invalid !== undefined && <p className="kb-form__hint micro-label">{invalid}</p>}
+      {invalid !== undefined && <p className="kb-form__hint meta">{invalid}</p>}
 
       <div className="kb-form__actions">
         <Button
-          label="preview change"
+          label="Preview change"
           variant="primary"
           disabled={invalid !== undefined}
           onClick={preview}
         />
-        <Button label="cancel" onClick={onCancel} />
+        <Button label="Cancel" onClick={onCancel} />
       </div>
     </div>
   );

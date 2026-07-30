@@ -39,8 +39,8 @@ import {
   type RunHistoryEntry,
   type RunSnapshot,
 } from '../api/index.js';
-import { parseTokenHash } from '../api/token.js';
-import { Button, EmptyState } from '../components/core/index.js';
+import { bootstrapToken } from '../api/token.js';
+import { Button, Notice, Pill, Switch, useToast, type PillTone } from '../components/core/index.js';
 import { useAppState } from '../state/index.js';
 import { AgentConfigNode } from './pipelines/AgentConfigNode.js';
 import { NodeConfigPanel } from './pipelines/NodeConfigPanel.js';
@@ -60,8 +60,7 @@ import {
 } from './pipelines/logic.js';
 import './pipelines.css';
 
-const bootToken =
-  typeof window !== 'undefined' ? parseTokenHash(window.location.hash).token : undefined;
+const bootToken = typeof window !== 'undefined' ? bootstrapToken() : undefined;
 
 /** Stable node/edge type maps (React Flow requires a stable reference). */
 const nodeTypes: NodeTypes = { [AGENTCONFIG_NODE]: AgentConfigNode };
@@ -80,10 +79,19 @@ function parseInput(text: string): unknown {
   }
 }
 
-export function Pipelines() {
+/** Pill tone for a live run status. */
+function runPillTone(status: string): PillTone {
+  if (status === 'running') return 'warn';
+  if (status === 'ok') return 'ok';
+  if (status === 'error') return 'err';
+  return 'off';
+}
+
+function PipelinesPanel() {
   const { currentInstance } = useAppState();
   const instanceId = currentInstance?.id;
   const client = useMemo(() => (bootToken ? new ApiClient(bootToken) : undefined), []);
+  const toast = useToast();
 
   const [phase, setPhase] = useState<Phase>('loading');
   const [errMsg, setErrMsg] = useState('');
@@ -313,13 +321,14 @@ export function Pipelines() {
     const pipeline = graphToPipeline(pipelineId, pipelineName.trim() || 'Untitled', nodes, edges);
     try {
       await client.savePipeline(pipeline);
-      setNotice('saved');
+      setNotice(undefined);
+      toast('Pipeline saved');
       await refreshList();
     } catch (err) {
       // A 400's message is the joined validatePipeline errors — surface them.
       setNotice(err instanceof ApiError ? err.message : 'save failed');
     }
-  }, [client, pipelineId, pipelineName, nodes, edges, refreshList]);
+  }, [client, pipelineId, pipelineName, nodes, edges, refreshList, toast]);
 
   const onRun = useCallback(async () => {
     if (!client) return;
@@ -343,13 +352,14 @@ export function Pipelines() {
       if (!client) return;
       try {
         await client.deletePipeline(id);
+        toast('Pipeline deleted');
         await refreshList();
         if (id === pipelineId) onNew();
       } catch (err) {
         setNotice(err instanceof ApiError ? err.message : 'delete failed');
       }
     },
-    [client, pipelineId, refreshList, onNew],
+    [client, pipelineId, refreshList, onNew, toast],
   );
 
   const onSaveSchedule = useCallback(async () => {
@@ -367,7 +377,8 @@ export function Pipelines() {
       const res = await client.setSchedule(pipelineId, cron, scheduleEnabled, instanceId);
       setSchedule(res.schedule);
       setNextRun(res.nextRun);
-      setScheduleNotice('schedule saved · runs via `agentconfiging daemon`');
+      setScheduleNotice(undefined);
+      toast('Schedule saved');
     } catch (err) {
       // A 400's message is the cron validation error — surface it.
       setScheduleNotice(err instanceof ApiError ? err.message : 'schedule save failed');
@@ -382,14 +393,17 @@ export function Pipelines() {
     scheduleEnabled,
     instanceId,
     refreshList,
+    toast,
   ]);
 
   if (phase === 'error') {
     return (
       <main className="layout-main page">
         <section className="page__section">
-          <h1 className="title-page">PIPELINES</h1>
-          <EmptyState title="NO SIGNAL" instruction={errMsg} />
+          <div className="page-head">
+            <h1>Pipelines</h1>
+          </div>
+          <Notice>{errMsg}</Notice>
         </section>
       </main>
     );
@@ -400,45 +414,45 @@ export function Pipelines() {
   return (
     <main className="layout-main page pipeline-page">
       <section className="page__section pipeline-toolbar">
-        <h1 className="title-page">PIPELINES</h1>
+        <h1>Pipelines</h1>
         <input
-          className="pipeline-input pipeline-name mono-data"
+          className="input pipeline-name"
           aria-label="pipeline name"
           value={pipelineName}
           onChange={(e) => setPipelineName(e.target.value)}
         />
         <input
-          className="pipeline-input pipeline-runinput mono-data"
+          className="input mono pipeline-runinput"
           aria-label="run input"
           placeholder="run input ({{input}}) — text or JSON"
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
         />
         <div className="pipeline-toolbar__actions">
-          <Button label="new" onClick={onNew} />
-          <Button label="save" variant="primary" onClick={() => void onSave()} />
+          <Button label="New" onClick={onNew} />
+          <Button label="Save" onClick={() => void onSave()} />
           <Button
-            label={running ? 'running…' : 'run'}
+            label={running ? 'Running…' : 'Run'}
+            variant="primary"
             disabled={running}
             onClick={() => void onRun()}
           />
         </div>
-        {runStatus !== undefined && (
-          <span className={`pipeline-runbadge micro-label pipeline-runbadge--${runStatus}`}>
-            run {runStatus}
-          </span>
-        )}
-        {notice !== undefined && (
-          <span className="pipeline-notice mono-data" role="status">
-            {notice}
-          </span>
-        )}
+        {runStatus !== undefined && <Pill tone={runPillTone(runStatus)}>run {runStatus}</Pill>}
       </section>
 
+      {notice !== undefined && (
+        <section className="page__section">
+          <Notice>
+            <span role="status">{notice}</span>
+          </Notice>
+        </section>
+      )}
+
       <section className="page__section pipeline-schedule">
-        <span className="micro-label pipeline-schedule__title">SCHEDULE</span>
+        <span className="micro-label">SCHEDULE</span>
         <input
-          className="pipeline-input pipeline-schedule__cron mono-data"
+          className="input mono pipeline-schedule__cron"
           aria-label="cron schedule"
           list="pipeline-schedule-presets"
           placeholder="cron (min hour dom mon dow) or a @preset"
@@ -452,28 +466,27 @@ export function Pipelines() {
             </option>
           ))}
         </datalist>
-        <label className="pipeline-schedule__toggle micro-label">
-          <input
-            type="checkbox"
-            aria-label="schedule enabled"
-            checked={scheduleEnabled}
-            onChange={(e) => setScheduleEnabled(e.target.checked)}
-          />
-          enabled
-        </label>
-        <Button label="save schedule" onClick={() => void onSaveSchedule()} />
-        <span className="pipeline-schedule__next micro-label">
+        <span className="pipeline-schedule__toggle">
+          <Switch on={scheduleEnabled} onChange={setScheduleEnabled} label="schedule enabled" />
+          <span className="meta">enabled</span>
+        </span>
+        <Button label="Save schedule" onClick={() => void onSaveSchedule()} />
+        <span className="meta">
           next {formatNextRun(nextRun)} · last {formatLastRun(schedule?.lastRunAt)}
         </span>
-        <span className="pipeline-schedule__note micro-label">
-          schedules run via <code>agentconfiging daemon</code> (the UI only sets them)
+        <span className="meta">
+          schedules run via <span className="code">agentconfiging daemon</span> (the UI only sets
+          them)
         </span>
-        {scheduleNotice !== undefined && (
-          <span className="pipeline-notice mono-data" role="status">
-            {scheduleNotice}
-          </span>
-        )}
       </section>
+
+      {scheduleNotice !== undefined && (
+        <section className="page__section">
+          <Notice>
+            <span role="status">{scheduleNotice}</span>
+          </Notice>
+        </section>
+      )}
 
       <section className="page__section pipeline-workspace">
         <div className="pipeline-palette">
@@ -490,7 +503,7 @@ export function Pipelines() {
           ))}
           <span className="micro-label pipeline-palette__title pipeline-palette__saved">SAVED</span>
           {list.length === 0 ? (
-            <span className="micro-label pipeline-palette__empty">none yet</span>
+            <span className="meta">none yet</span>
           ) : (
             list.map((p) => (
               <div key={p.id} className="pipeline-saved">
@@ -559,4 +572,9 @@ export function Pipelines() {
       </section>
     </main>
   );
+}
+
+export function Pipelines() {
+  // Toasts confirm through the shell-level ToastProvider (App.tsx).
+  return <PipelinesPanel />;
 }

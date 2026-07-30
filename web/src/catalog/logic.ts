@@ -55,22 +55,22 @@ export interface Shelf {
 export const DEFAULT_SHELVES: ShelfSpec[] = [
   {
     id: 'artifacts',
-    title: 'ARTIFACTS',
-    note: 'installable skills, subagents, rules, hooks, commands & mcp servers',
+    title: 'Artifacts',
+    note: 'Installable skills, subagents, rules, hooks, commands & MCP servers.',
     match: (e) => INSTALLABLE.has(e.kind),
   },
   {
     id: 'runtime',
-    title: 'RUNTIME SETUP',
-    note: 'runtime scaffolding installed once per project',
+    title: 'Runtime setup',
+    note: 'Runtime scaffolding installed once per project.',
     match: (e) => e.kind === 'runtime-template',
   },
 ];
 
 const FALLBACK_SHELF: ShelfSpec = {
   id: 'other',
-  title: 'OTHER',
-  note: 'uncategorised registry entries',
+  title: 'Other',
+  note: 'Uncategorised registry entries.',
   match: () => true,
 };
 

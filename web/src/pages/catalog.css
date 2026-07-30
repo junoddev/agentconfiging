@@ -1,69 +1,11 @@
-/* Catalog (#/catalog, bead 0zm.4). Chassis only — Signal-Grid tokens, hairlines,
-   mono. Registry text (names/descriptions/paths/diffs) is adversarial data
-   rendered as text nodes / by DiffPanel, never markup. Nothing here animates. */
+/* Catalog (#/catalog) — Console page-layout styles only (opendesign/
+   DESIGN.md). Cards, chips, pills, badges, buttons and the search come from
+   components.css; tokens only, no raw hex. Registry text is adversarial data
+   rendered as text nodes / by DiffPanel, never markup. `.page-sub` /
+   `.toolbar` are shared page scaffolding (styles/grid.css). */
 
 .catalog__sub {
-  margin-left: 8px;
-  color: var(--fg-dim);
-}
-
-.catalog__lede,
-.catalog__summary {
-  color: var(--fg-dim);
-  margin-top: 6px;
-}
-
-.catalog__summary {
-  margin-bottom: 0;
-}
-
-/* ── Controls: search + filter chips ──────────────────────────────────────── */
-
-.catalog__controls {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.catalog__search {
-  width: 100%;
-  max-width: 480px;
-  padding: 6px 8px;
-  color: var(--fg);
-  background: transparent;
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-}
-
-.catalog__search::placeholder {
-  color: var(--fg-dim);
-}
-
-.catalog__chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.catalog-chip {
-  letter-spacing: var(--tracking-micro);
-  text-transform: uppercase;
-  color: var(--fg-dim);
-  background: transparent;
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: 2px 8px;
-  cursor: pointer;
-}
-
-.catalog-chip[aria-pressed='true'] {
-  color: var(--bg);
-  background: var(--fg);
-  border-color: var(--fg);
-}
-
-.catalog-chip--clear {
-  color: var(--red);
+  margin-left: 10px;
 }
 
 /* ── Quick-add strip ──────────────────────────────────────────────────────── */
@@ -71,55 +13,22 @@
 .catalog__quickadd {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px var(--gutter);
-}
-
-.catalog__quickadd-label {
-  color: var(--fg-dim);
-  letter-spacing: var(--tracking-micro);
-}
-
-.quickadd,
-.quickadd--open {
-  display: contents;
+  align-items: center;
+  gap: 10px 14px;
 }
 
 .quickadd--open {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   flex-basis: 100%;
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: var(--gutter);
 }
 
 .quickadd__bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px var(--gutter);
-}
-
-.quickadd__title {
-  color: var(--fg-dim);
-  letter-spacing: var(--tracking-micro);
-  text-transform: uppercase;
-}
-
-.quickadd__search {
-  flex: 1 1 160px;
-  min-width: 120px;
-  padding: 4px 8px;
-  color: var(--fg);
-  background: transparent;
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-}
-
-.quickadd__count {
-  color: var(--fg-dim);
+  gap: 10px 14px;
 }
 
 /* ── Shelves ──────────────────────────────────────────────────────────────── */
@@ -127,22 +36,11 @@
 .catalog__shelf-head {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-}
-
-.catalog__shelf-title {
-  color: var(--fg);
-  letter-spacing: var(--tracking-micro);
-  margin: 0;
-}
-
-.catalog__shelf-count {
-  color: var(--fg-dim);
+  gap: 10px;
 }
 
 .catalog__shelf-note {
-  color: var(--fg-dim);
-  margin: 4px 0 var(--gutter);
+  margin: 4px 0 14px;
 }
 
 .catalog__list {
@@ -151,82 +49,69 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--gutter);
+  gap: 14px;
 }
 
-/* ── Card ───────────────────────────────────────────────────────────────── */
+/* ── Cards (layout over the shared .card chassis) ─────────────────────────── */
 
 .catalog-card {
-  padding: var(--gutter);
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
 }
 
 .catalog-card__head {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px var(--gutter);
-}
-
-.catalog-card__badge {
-  letter-spacing: var(--tracking-micro);
-  text-transform: uppercase;
-  color: var(--fg-dim);
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: 1px 6px;
+  align-items: center;
+  gap: 9px 14px;
 }
 
 .catalog-card__name {
-  color: var(--fg);
   font-weight: 600;
+  font-size: 13px;
 }
 
-.catalog-card__installed {
+.catalog-card__state {
   margin-left: auto;
-  color: var(--signal);
-  letter-spacing: var(--tracking-micro);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .catalog-card__desc {
-  color: var(--fg);
   margin: 0;
 }
 
 .catalog-card__meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px var(--gutter);
-  color: var(--fg-dim);
+  gap: 8px 14px;
 }
 
 .catalog-card__actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--gutter);
+  gap: 10px;
 }
 
 .catalog-card__msg--ok {
-  color: var(--signal);
+  color: var(--accent);
 }
 
 .catalog-card__msg--error {
-  color: var(--red);
+  color: var(--danger);
 }
 
 .catalog-card__preview {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .catalog-card__prov {
-  color: var(--signal);
+  color: var(--accent);
 }
 
 .catalog-card__trash {
@@ -236,27 +121,16 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  color: var(--fg-dim);
+  color: var(--muted);
   word-break: break-all;
 }
 
 /* ── Runtime setup (guided scaffolding) ───────────────────────────────────── */
 
-.runtime-card__detected {
-  margin-left: auto;
-  color: var(--fg-dim);
-  letter-spacing: var(--tracking-micro);
-  text-transform: uppercase;
-}
-
 .runtime-card__scaffolds {
   display: flex;
   flex-direction: column;
   gap: 4px;
-}
-
-.runtime-card__scaffolds-label {
-  color: var(--fg-dim);
 }
 
 .runtime-card__files {
@@ -266,20 +140,15 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  color: var(--fg-dim);
+  color: var(--muted);
   word-break: break-all;
 }
 
 .runtime-soon {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-top: var(--gutter);
-}
-
-.runtime-soon__label {
-  color: var(--fg-dim);
-  letter-spacing: var(--tracking-micro);
+  gap: 8px;
+  margin-top: 14px;
 }
 
 .runtime-soon__list {
@@ -288,19 +157,15 @@
   padding: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px var(--gutter);
+  gap: 8px 14px;
 }
 
 .runtime-soon__item {
   display: flex;
-  align-items: baseline;
-  gap: 6px;
-  color: var(--fg-dim);
-  border: var(--hairline-w) solid var(--hairline);
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 2px 8px;
-}
-
-.runtime-soon__name {
-  color: var(--fg);
+  padding: 4px 10px;
 }

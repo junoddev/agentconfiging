@@ -52,22 +52,22 @@ describe('logFileName', () => {
 describe('line formatting', () => {
   const entry: LogEntry = {
     time: new Date('2026-07-26T12:30:05.123Z'),
-    level: 'signal',
-    text: 'SIGNAL ACQUIRED · http://127.0.0.1:4242',
+    level: 'ok',
+    text: 'SERVER UP · http://127.0.0.1:4242',
   };
 
   it('terminal line is HH:MM:SS + text', () => {
-    expect(formatTerminalLine(entry)).toBe('12:30:05 SIGNAL ACQUIRED · http://127.0.0.1:4242');
+    expect(formatTerminalLine(entry)).toBe('12:30:05 SERVER UP · http://127.0.0.1:4242');
   });
 
   it('file line carries full ISO timestamp and level', () => {
     expect(formatFileLine(entry)).toBe(
-      '2026-07-26T12:30:05.123Z SIGNAL SIGNAL ACQUIRED · http://127.0.0.1:4242',
+      '2026-07-26T12:30:05.123Z OK     SERVER UP · http://127.0.0.1:4242',
     );
   });
 
   it('maps levels to the terminal-safe token colors', () => {
-    expect(levelColor('signal')).toBe('green');
+    expect(levelColor('ok')).toBe('green');
     expect(levelColor('warn')).toBe('yellow');
     expect(levelColor('error')).toBe('red');
     expect(levelColor('info')).toBe('gray');
@@ -76,7 +76,7 @@ describe('line formatting', () => {
   it('the terminal line keeps the session token (browser-open needs it)', () => {
     const withToken: LogEntry = {
       time: new Date('2026-07-26T12:30:05.123Z'),
-      level: 'signal',
+      level: 'ok',
       text: 'OPEN http://127.0.0.1:4242/#token=SEKRET',
     };
     expect(formatTerminalLine(withToken)).toContain('token=SEKRET');
@@ -101,8 +101,8 @@ describe('line formatting', () => {
 
 describe('redactTokens', () => {
   it('strips token fragments/queries anywhere in the string', () => {
-    expect(redactTokens('SIGNAL ACQUIRED · http://127.0.0.1:80/#token=abc')).toBe(
-      'SIGNAL ACQUIRED · http://127.0.0.1:80/',
+    expect(redactTokens('SERVER UP · http://127.0.0.1:80/#token=abc')).toBe(
+      'SERVER UP · http://127.0.0.1:80/',
     );
     expect(redactTokens('x ?token=abc y')).toBe('x  y');
     expect(redactTokens('no secret here')).toBe('no secret here');
@@ -135,8 +135,8 @@ describe('createFileLogger', () => {
     const logger = createFileLogger(file);
     logger.append({
       time: new Date('2026-07-26T00:00:00.000Z'),
-      level: 'signal',
-      text: 'SIGNAL ACQUIRED · http://127.0.0.1:4242/#token=SEKRET',
+      level: 'ok',
+      text: 'SERVER UP · http://127.0.0.1:4242/#token=SEKRET',
     });
     expect(fs.statSync(file).mode & 0o777).toBe(0o600);
     expect(fs.readFileSync(file, 'utf-8')).not.toContain('token=');

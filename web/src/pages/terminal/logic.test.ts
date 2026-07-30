@@ -13,6 +13,7 @@ import {
   nextTabId,
   parseServerMessage,
   tabTitle,
+  withAlpha,
   xtermTheme,
   type TerminalTab,
 } from './logic.js';
@@ -66,11 +67,26 @@ describe('parseServerMessage', () => {
 });
 
 describe('xtermTheme', () => {
-  it('maps ink + paper to the Signal Grid palettes', () => {
-    expect(xtermTheme('ink').background).toBe('#0b0e17');
-    expect(xtermTheme('ink').cursor).toBe('#b4ff39');
-    expect(xtermTheme('paper').background).toBe('#ffffff');
-    expect(xtermTheme('paper').foreground).toBe('#141519');
+  it('falls back to the Console token equivalents per theme', () => {
+    expect(xtermTheme('dark').background).toBe('#0b1014');
+    expect(xtermTheme('dark').cursor).toBe('#48c063');
+    expect(xtermTheme('light').background).toBe('#f6f9fc');
+    expect(xtermTheme('light').foreground).toBe('#121c23');
+  });
+
+  it('prefers live resolved token colors over the fallback', () => {
+    const theme = xtermTheme('dark', { bg: '#101418', accent: '#22cc66' });
+    expect(theme.background).toBe('#101418');
+    expect(theme.cursor).toBe('#22cc66');
+    // Missing tokens still fall back.
+    expect(theme.foreground).toBe('#e3e9ed');
+  });
+
+  it('selection is the accent with alpha (8-digit hex)', () => {
+    expect(xtermTheme('dark').selectionBackground).toBe(withAlpha('#48c063', 0.35));
+    expect(withAlpha('#48c063', 0.35)).toBe('#48c06359');
+    // Non-6-digit-hex colors pass through untouched.
+    expect(withAlpha('rgb(1, 2, 3)', 0.5)).toBe('rgb(1, 2, 3)');
   });
 });
 

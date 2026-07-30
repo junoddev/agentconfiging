@@ -16,21 +16,28 @@ import {
 const EXPECTED_NAV = new Set([...RAIL_ORDER, 'gallery']);
 
 describe('RAIL_ORDER', () => {
-  it('covers the 24 numbered rail pages, overview first', () => {
-    expect(RAIL_ORDER).toHaveLength(24);
+  it('covers the 23 sidebar pages, overview first', () => {
+    expect(RAIL_ORDER).toHaveLength(23);
     expect(RAIL_ORDER[0]).toBe('overview');
     expect(RAIL_ORDER[RAIL_ORDER.length - 1]).toBe('pipelines');
-    expect(new Set(RAIL_ORDER).size).toBe(24); // no dupes
+    expect(new Set(RAIL_ORDER).size).toBe(23); // no dupes
   });
 
-  it('places the editor group at rail 06..14', () => {
+  it('groups WORKSPACE first (instances before artifacts), then CONFIGURE', () => {
+    expect(RAIL_ORDER.slice(0, 5)).toEqual([
+      'overview',
+      'agents',
+      'findings',
+      'instances',
+      'artifacts',
+    ]);
     expect(RAIL_ORDER.slice(5, 9)).toEqual(['settings', 'instructions', 'skills', 'hooks']);
   });
 });
 
 describe('buildCommands', () => {
   it('offers a jump for every real route (no drift from the router)', () => {
-    const cmds = buildCommands('paper');
+    const cmds = buildCommands('light');
     const navNames = cmds
       .filter((c) => c.action.type === 'navigate')
       .map((c) => parseRoute((c.action as { hash: string }).hash).name);
@@ -38,7 +45,7 @@ describe('buildCommands', () => {
   });
 
   it('every nav hash round-trips through the real parseRoute', () => {
-    for (const c of buildCommands('ink')) {
+    for (const c of buildCommands('dark')) {
       if (c.action.type !== 'navigate') continue;
       // A valid hash never falls back to overview unless it *is* overview.
       const parsed = parseRoute(c.action.hash);
@@ -47,29 +54,31 @@ describe('buildCommands', () => {
   });
 
   it('names the theme toggle after the opposite theme', () => {
-    expect(buildCommands('paper').find((c) => c.action.type === 'toggle-theme')?.label).toContain(
-      'INK',
+    expect(buildCommands('light').find((c) => c.action.type === 'toggle-theme')?.label).toContain(
+      'dark',
     );
-    expect(buildCommands('ink').find((c) => c.action.type === 'toggle-theme')?.label).toContain(
-      'PAPER',
+    expect(buildCommands('dark').find((c) => c.action.type === 'toggle-theme')?.label).toContain(
+      'light',
     );
   });
 
   it('includes the refetch action', () => {
-    expect(buildCommands('paper').some((c) => c.action.type === 'refetch')).toBe(true);
+    expect(buildCommands('light').some((c) => c.action.type === 'refetch')).toBe(true);
   });
 
-  it('labels overview as SIGNAL (rail override)', () => {
-    expect(railLabel('overview')).toBe('SIGNAL');
-    expect(railLabel('git')).toBe('GIT');
+  it('labels routes from the routes.ts label seam', () => {
+    expect(railLabel('overview')).toBe('Overview');
+    expect(railLabel('git')).toBe('Git');
+    expect(railLabel('mcp')).toBe('MCP');
   });
 });
 
 describe('railShortcutHash — Cmd+1..9 → route', () => {
-  it('maps the first nine rail slots, sharing the rail numbering', () => {
-    expect(railShortcutHash(1)).toBe('#/'); // 01 SIGNAL (overview)
+  it('maps the first nine sidebar slots in grouped order', () => {
+    expect(railShortcutHash(1)).toBe('#/'); // Overview
     expect(railShortcutHash(2)).toBe('#/agents');
-    expect(railShortcutHash(5)).toBe('#/instances');
+    expect(railShortcutHash(4)).toBe('#/instances');
+    expect(railShortcutHash(5)).toBe('#/artifacts');
     expect(railShortcutHash(6)).toBe('#/settings');
     expect(railShortcutHash(9)).toBe('#/hooks');
   });
@@ -122,15 +131,15 @@ describe('parseGlobalKey', () => {
 });
 
 describe('filterCommands', () => {
-  const cmds = buildCommands('paper');
+  const cmds = buildCommands('light');
 
   it('returns every command in natural order for an empty query', () => {
     expect(filterCommands(cmds, '').map((r) => r.command.id)).toEqual(cmds.map((c) => c.id));
   });
 
   it('ranks a tight match to the top', () => {
-    const top = filterCommands(cmds, 'sig')[0];
-    expect(top?.command.label).toBe('SIGNAL');
+    const top = filterCommands(cmds, 'over')[0];
+    expect(top?.command.label).toBe('Overview');
   });
 
   it('drops non-matches', () => {

@@ -2,6 +2,8 @@ node_modules/
 dist/
 coverage/
 docs/
+# Imported Console reference (read-only source of truth — never reformat)
+opendesign/
 fixtures/
 .beads/
 .agents/

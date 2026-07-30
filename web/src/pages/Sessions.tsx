@@ -1,11 +1,16 @@
 /**
- * Session replay (rail `18 SESSIONS`, route `#/sessions`, bead 7yb.3 — SPEC §5
- * row 13). Browse past sessions from the JSONL history adapters and STEP THROUGH
- * their messages: user / assistant / tool / thinking blocks as distinct cards,
- * subagent (sidechain) entries rendered DISTINCTLY (indented + badged), large
- * sessions PAGINATED, and actively-growing sessions badged with the signal PULSE
- * (LiveDot). A session can be TAGGED (stored in a local server-side sidecar) and
- * EXPORTED to markdown (client-side, from the already-redacted session).
+ * Session replay (route `#/sessions`, bead 7yb.3 — SPEC §5 row 13). Browse past
+ * sessions from the JSONL history adapters and STEP THROUGH their messages:
+ * user / assistant / tool / thinking blocks as distinct cards, subagent
+ * (sidechain) entries rendered DISTINCTLY (indented + badged), large sessions
+ * PAGINATED, and actively-growing sessions marked with a live pill. A session
+ * can be TAGGED (stored in a local server-side sidecar) and EXPORTED to
+ * markdown (client-side, from the already-redacted session).
+ *
+ * Console treatment (opendesign/DESIGN.md): the browse list is a `.ds-table`
+ * (mono ids, `.code` path chips, right-aligned numeric columns, muted mono
+ * when-column) fed by a `.search` + `.pager`; mutating actions confirm via
+ * Toast.
  *
  * ADVERSARIAL CONTENT (SPEC §3): session logs are other people's conversation
  * data and can hold pasted secrets. Redaction is SERVER-SIDE — `getSessionDetail`
@@ -28,35 +33,46 @@ import {
   type SessionDetail,
   type SessionSummary,
 } from '../api/index.js';
-import { parseTokenHash } from '../api/token.js';
-import { Button, EmptyState } from '../components/core/index.js';
-import { LiveDot } from '../components/signal/index.js';
+import { bootstrapToken } from '../api/token.js';
+import {
+  Button,
+  EmptyState,
+  Pager,
+  Pill,
+  SearchInput,
+  Table,
+  useToast,
+} from '../components/core/index.js';
 import {
   blockLabel,
+  filterSessions,
   formatDuration,
   formatWhen,
   messageLabel,
   normalizeTag,
   renderSegments,
   sessionToMarkdown,
+  shortId,
 } from './sessions/logic.js';
 import './sessions.css';
 
-const bootToken =
-  typeof window !== 'undefined' ? parseTokenHash(window.location.hash).token : undefined;
+const bootToken = typeof window !== 'undefined' ? bootstrapToken() : undefined;
 
 /** Messages requested per detail page (matches the server default). */
 const PAGE = 200;
+
+/** Browse-table rows per pager page. */
+const TABLE_PAGE_SIZE = 15;
 
 type LoadStatus = 'loading' | 'ok' | 'error';
 
 function loadError(err: unknown): string {
   if (err instanceof ApiError) {
-    if (err.kind === 'unauthorized') return 'session expired — reopen from the CLI';
-    if (err.kind === 'network') return 'cannot reach the local server';
-    if (err.kind === 'notfound') return 'session not found';
+    if (err.kind === 'unauthorized') return 'Session expired — reopen from the CLI.';
+    if (err.kind === 'network') return 'Cannot reach the local server.';
+    if (err.kind === 'notfound') return 'Session not found.';
   }
-  return 'could not load sessions';
+  return 'Could not load sessions.';
 }
 
 /** Redacted `text` + `spans` → text nodes with styled `[REDACTED:*]` marks. The
@@ -82,28 +98,30 @@ function RedactedText({ block }: { block: ReplayBlock }) {
 function BlockCard({ block }: { block: ReplayBlock }) {
   return (
     <div className={`sx__block sx__block--${block.kind}`}>
-      <span className="micro-label sx__block-kind">{blockLabel(block)}</span>
+      <span className="table-header sx__block-kind">{blockLabel(block)}</span>
       {(block.kind === 'text' || block.kind === 'thinking' || block.kind === 'tool_result') && (
         <pre className="mono-data sx__block-body">
           <RedactedText block={block} />
         </pre>
       )}
       {block.kind === 'tool_result' && block.persistedOutputPath !== undefined && (
-        <span className="micro-label sx__spill">spilled → {block.persistedOutputPath}</span>
+        <span className="meta sx__spill">spilled → {block.persistedOutputPath}</span>
       )}
-      {block.kind === 'unknown' && (
-        <span className="micro-label sx__block-note">unrenderable block</span>
-      )}
+      {block.kind === 'unknown' && <span className="meta sx__block-note">unrenderable block</span>}
     </div>
   );
 }
 
-export function Sessions() {
+function SessionsPage() {
+  const toast = useToast();
   const client = useMemo(() => (bootToken ? new ApiClient(bootToken) : undefined), []);
 
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [listStatus, setListStatus] = useState<LoadStatus>('loading');
   const [listErr, setListErr] = useState('');
+
+  const [query, setQuery] = useState('');
+  const [tablePage, setTablePage] = useState(1);
 
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [detail, setDetail] = useState<SessionDetail | undefined>();
@@ -115,14 +133,13 @@ export function Sessions() {
   const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const [tagDraft, setTagDraft] = useState('');
-  const [exportNote, setExportNote] = useState('');
 
   // ── Browse: load the session list ──────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
     if (!client) {
       setListStatus('error');
-      setListErr('session token missing');
+      setListErr('Session token missing.');
       return;
     }
     setListStatus('loading');
@@ -175,9 +192,14 @@ export function Sessions() {
     setSelectedId(id);
     setDetail(undefined);
     setOffset(0);
-    setExportNote('');
     setTagDraft('');
   }
+
+  const filtered = useMemo(() => filterSessions(sessions, query), [sessions, query]);
+  const pageRows = useMemo(
+    () => filtered.slice((tablePage - 1) * TABLE_PAGE_SIZE, tablePage * TABLE_PAGE_SIZE),
+    [filtered, tablePage],
+  );
 
   const messages = detail?.messages ?? [];
   const total = detail?.messageCount ?? 0;
@@ -190,12 +212,13 @@ export function Sessions() {
   }
 
   // ── Tags ────────────────────────────────────────────────────────────────────
-  async function commitTags(next: string[]) {
+  async function commitTags(next: string[], confirmation: string) {
     if (!client || selectedId === undefined) return;
     try {
       const res = await client.setSessionTags(selectedId, next);
       setDetail((d) => (d ? { ...d, tags: res.tags } : d));
       setSessions((list) => list.map((s) => (s.id === selectedId ? { ...s, tags: res.tags } : s)));
+      toast(confirmation);
     } catch {
       // A failed tag write is non-fatal; leave the UI unchanged.
     }
@@ -208,13 +231,16 @@ export function Sessions() {
       setTagDraft('');
       return;
     }
-    void commitTags([...detail.tags, tag]);
+    void commitTags([...detail.tags, tag], `Tag "${tag}" added`);
     setTagDraft('');
   }
 
   function removeTag(tag: string) {
     if (!detail) return;
-    void commitTags(detail.tags.filter((t) => t !== tag));
+    void commitTags(
+      detail.tags.filter((t) => t !== tag),
+      `Tag "${tag}" removed`,
+    );
   }
 
   // ── Markdown export (client-side, from the redacted detail) ──────────────────
@@ -223,9 +249,9 @@ export function Sessions() {
     const md = sessionToMarkdown(detail);
     try {
       await navigator.clipboard.writeText(md);
-      setExportNote('copied markdown to clipboard');
+      toast('Markdown copied to clipboard');
     } catch {
-      setExportNote('clipboard unavailable — use download');
+      toast('Clipboard unavailable — use Download');
     }
   }
 
@@ -239,196 +265,226 @@ export function Sessions() {
     a.download = `session-${detail.id}.md`;
     a.click();
     URL.revokeObjectURL(url);
-    setExportNote('downloaded markdown');
+    toast('Markdown downloaded');
   }
 
   return (
     <main className="layout-main page">
       <section className="page__section">
-        <h1 className="title-page">SESSIONS</h1>
-        <p className="sx__lede micro-label">
-          browse and step through this machine&apos;s recorded sessions — redacted content, subagent
-          traffic marked, live sessions pulsing
+        <h1 className="title-page">Sessions</h1>
+        <p className="page-sub">
+          Browse and step through this machine&apos;s recorded sessions — redacted content, subagent
+          traffic marked, live sessions pulsing.
         </p>
       </section>
 
       {listStatus === 'loading' && (
         <section className="page__section">
-          <p className="micro-label sx__acquiring">ACQUIRING SIGNAL</p>
+          <p className="meta">Loading sessions…</p>
         </section>
       )}
 
       {listStatus === 'error' && (
         <section className="page__section">
-          <EmptyState title="NO SIGNAL" instruction={listErr} />
+          <EmptyState title="No sessions" instruction={listErr} />
         </section>
       )}
 
       {listStatus === 'ok' && sessions.length === 0 && (
         <section className="page__section">
-          <EmptyState title="NO SIGNAL" instruction="no session history yet" />
+          <EmptyState title="No sessions" instruction="This machine has no session history yet." />
         </section>
       )}
 
       {listStatus === 'ok' && sessions.length > 0 && (
-        <section className="page__section sx__layout">
-          {/* ── Browse column ── */}
-          <ul className="sx__list" aria-label="Sessions">
-            {sessions.map((s) => (
-              <li key={s.id}>
-                <button
-                  type="button"
-                  className="sx__row"
-                  onClick={() => openSession(s.id)}
-                  aria-current={s.id === selectedId ? 'true' : undefined}
+        <>
+          <section className="page__section">
+            <div className="toolbar">
+              <SearchInput
+                value={query}
+                onChange={(v) => {
+                  setQuery(v);
+                  setTablePage(1);
+                }}
+                placeholder="Filter by title, id, path, tag…"
+              />
+              <span className="meta">
+                {filtered.length} of {sessions.length}
+              </span>
+            </div>
+
+            <Table headers={['ID', 'Title', 'Path', 'Msgs', 'Duration', 'When', '']}>
+              {pageRows.map((s) => (
+                <tr
+                  key={s.id}
+                  className={s.id === selectedId ? 'sess-row sess-row--selected' : 'sess-row'}
                 >
-                  <span className="sx__row-head">
-                    <span className="sx__row-title">{s.title !== '' ? s.title : s.id}</span>
-                    {s.live && <LiveDot connected={true} />}
-                  </span>
-                  {s.cwd !== '' && <span className="mono-data sx__row-cwd">{s.cwd}</span>}
-                  <span className="micro-label sx__row-meta">
-                    <span>{s.messageCount} msg</span>
-                    {formatDuration(s.runtimeMs) !== '' && (
-                      <span>{formatDuration(s.runtimeMs)}</span>
-                    )}
-                    {formatWhen(s.endedAt ?? s.startedAt) !== '' && (
-                      <span>{formatWhen(s.endedAt ?? s.startedAt)}</span>
-                    )}
-                  </span>
-                  {s.tags.length > 0 && (
-                    <span className="sx__row-tags">
+                  <td className="mono" title={s.id}>
+                    {shortId(s.id)}
+                  </td>
+                  <td>
+                    <span className="sess-title">
+                      <span>{s.title !== '' ? s.title : s.id}</span>
+                      {s.live && <Pill tone="ok">live</Pill>}
                       {s.tags.map((t) => (
-                        <span key={t} className="micro-label sx__tag">
+                        <span key={t} className="code">
                           {t}
                         </span>
                       ))}
                     </span>
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
+                  </td>
+                  <td className="sess-cwd">
+                    {s.cwd !== '' && <span className="code">{s.cwd}</span>}
+                  </td>
+                  <td className="num-col">{s.messageCount}</td>
+                  <td className="num-col">
+                    {formatDuration(s.runtimeMs) !== '' ? formatDuration(s.runtimeMs) : '—'}
+                  </td>
+                  <td className="mono muted">
+                    {formatWhen(s.endedAt ?? s.startedAt) !== ''
+                      ? formatWhen(s.endedAt ?? s.startedAt)
+                      : '—'}
+                  </td>
+                  <td>
+                    <Button variant="ghost" label="Replay" onClick={() => openSession(s.id)} />
+                  </td>
+                </tr>
+              ))}
+              {pageRows.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="muted">
+                    No sessions match &ldquo;{query}&rdquo;.
+                  </td>
+                </tr>
+              )}
+            </Table>
+            <Pager
+              page={tablePage}
+              pageSize={TABLE_PAGE_SIZE}
+              total={filtered.length}
+              onPage={setTablePage}
+            />
+          </section>
 
-          {/* ── Replay column ── */}
-          <div className="sx__replay">
-            {selectedId === undefined ? (
-              <EmptyState instruction="select a session to replay it" />
-            ) : detailStatus === 'loading' ? (
-              <p className="micro-label sx__acquiring">LOADING SESSION</p>
-            ) : detailStatus === 'error' ? (
-              <EmptyState title="NO SIGNAL" instruction={detailErr} />
-            ) : detail ? (
-              <>
-                <div className="sx__detail-head">
-                  <div className="sx__detail-title">
-                    <span className="sx__row-title">
-                      {detail.title !== '' ? detail.title : detail.id}
+          {/* ── Replay ── */}
+          {selectedId !== undefined && (
+            <section className="page__section sx__replay">
+              {detailStatus === 'loading' ? (
+                <p className="meta">Loading session…</p>
+              ) : detailStatus === 'error' ? (
+                <EmptyState title="No session" instruction={detailErr} />
+              ) : detail ? (
+                <>
+                  <div className="sx__detail-head">
+                    <div className="sx__detail-title">
+                      <span className="sx__row-title">
+                        {detail.title !== '' ? detail.title : detail.id}
+                      </span>
+                      {detail.live && <Pill tone="ok">live</Pill>}
+                    </div>
+                    <span className="meta sx__detail-meta">
+                      {shortId(detail.id)} · {detail.messageCount} messages
+                      {detail.cwd !== '' ? ` · ${detail.cwd}` : ''}
                     </span>
-                    {detail.live && <LiveDot connected={true} />}
                   </div>
-                  <span className="micro-label sx__detail-meta">
-                    {detail.messageCount} messages
-                    {detail.cwd !== '' ? ` · ${detail.cwd}` : ''}
-                  </span>
-                </div>
 
-                {/* Tags */}
-                <div className="sx__tags-editor">
-                  {detail.tags.map((t) => (
-                    <span key={t} className="micro-label sx__tag sx__tag--editable">
-                      {t}
-                      <button
-                        type="button"
-                        className="sx__tag-x"
-                        aria-label={`remove tag ${t}`}
-                        onClick={() => removeTag(t)}
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                  <input
-                    className="mono-data sx__tag-input"
-                    value={tagDraft}
-                    placeholder="+ tag"
-                    spellCheck={false}
-                    aria-label="add a tag"
-                    onChange={(e) => setTagDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') addTag();
-                    }}
-                  />
-                </div>
-
-                {/* Controls: step + pagination + export */}
-                <div className="sx__controls">
-                  <div className="sx__step">
-                    <Button label="prev" onClick={() => step(-1)} disabled={focus <= 0} />
-                    <span className="mono-data sx__step-pos">
-                      {pageStart + focus + 1} / {total}
-                    </span>
-                    <Button
-                      label="next"
-                      onClick={() => step(1)}
-                      disabled={focus >= messages.length - 1}
+                  {/* Tags */}
+                  <div className="perm-wrap sx__tags-editor">
+                    {detail.tags.map((t) => (
+                      <span key={t} className="perm-chip">
+                        {t}
+                        <button
+                          type="button"
+                          className="x"
+                          aria-label={`remove tag ${t}`}
+                          onClick={() => removeTag(t)}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                    <input
+                      className="search sx__tag-input"
+                      value={tagDraft}
+                      placeholder="+ tag"
+                      spellCheck={false}
+                      aria-label="add a tag"
+                      onChange={(e) => setTagDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') addTag();
+                      }}
                     />
                   </div>
-                  {(canPrevPage || canNextPage) && (
-                    <div className="sx__page">
-                      <Button
-                        label="newer"
-                        onClick={() => setOffset(Math.max(0, pageStart - PAGE))}
-                        disabled={!canPrevPage}
-                      />
-                      <Button
-                        label="older"
-                        onClick={() => setOffset(pageStart + PAGE)}
-                        disabled={!canNextPage}
-                      />
-                    </div>
-                  )}
-                  <div className="sx__export">
-                    <Button label="copy md" onClick={() => void copyMarkdown()} />
-                    <Button label="download md" onClick={downloadMarkdown} />
-                  </div>
-                </div>
-                {exportNote !== '' && <p className="micro-label sx__export-note">{exportNote}</p>}
 
-                {/* Messages */}
-                <div className="sx__messages">
-                  {messages.map((m: ReplayMessage, i) => (
-                    <div
-                      key={m.uuid ?? i}
-                      ref={(el) => {
-                        cardRefs.current[i] = el;
-                      }}
-                      className={`sx__msg sx__msg--${m.role}${m.isSidechain ? ' sx__msg--sidechain' : ''}${
-                        i === focus ? ' sx__msg--focus' : ''
-                      }`}
-                    >
-                      <div className="sx__msg-head">
-                        <span className="micro-label sx__msg-role">{messageLabel(m)}</span>
-                        {m.model !== undefined && (
-                          <span className="micro-label sx__msg-model">{m.model}</span>
-                        )}
-                        {formatWhen(m.timestamp) !== '' && (
-                          <span className="micro-label sx__msg-when">
-                            {formatWhen(m.timestamp)}
-                          </span>
-                        )}
-                      </div>
-                      {m.blocks.map((b, bi) => (
-                        <BlockCard key={bi} block={b} />
-                      ))}
+                  {/* Controls: step + pagination + export */}
+                  <div className="sx__controls">
+                    <div className="sx__step">
+                      <Button label="Prev" onClick={() => step(-1)} disabled={focus <= 0} />
+                      <span className="meta sx__step-pos">
+                        {pageStart + focus + 1} / {total}
+                      </span>
+                      <Button
+                        label="Next"
+                        onClick={() => step(1)}
+                        disabled={focus >= messages.length - 1}
+                      />
                     </div>
-                  ))}
-                </div>
-              </>
-            ) : null}
-          </div>
-        </section>
+                    {(canPrevPage || canNextPage) && (
+                      <div className="sx__step">
+                        <Button
+                          label="Newer"
+                          onClick={() => setOffset(Math.max(0, pageStart - PAGE))}
+                          disabled={!canPrevPage}
+                        />
+                        <Button
+                          label="Older"
+                          onClick={() => setOffset(pageStart + PAGE)}
+                          disabled={!canNextPage}
+                        />
+                      </div>
+                    )}
+                    <div className="sx__step">
+                      <Button label="Copy markdown" onClick={() => void copyMarkdown()} />
+                      <Button label="Download markdown" onClick={downloadMarkdown} />
+                    </div>
+                  </div>
+
+                  {/* Messages */}
+                  <div className="sx__messages">
+                    {messages.map((m: ReplayMessage, i) => (
+                      <div
+                        key={m.uuid ?? i}
+                        ref={(el) => {
+                          cardRefs.current[i] = el;
+                        }}
+                        className={`sx__msg sx__msg--${m.role}${m.isSidechain ? ' sx__msg--sidechain' : ''}${
+                          i === focus ? ' sx__msg--focus' : ''
+                        }`}
+                      >
+                        <div className="sx__msg-head">
+                          <span className="table-header sx__msg-role">{messageLabel(m)}</span>
+                          {m.model !== undefined && <span className="meta">{m.model}</span>}
+                          {formatWhen(m.timestamp) !== '' && (
+                            <span className="meta">{formatWhen(m.timestamp)}</span>
+                          )}
+                        </div>
+                        {m.blocks.map((b, bi) => (
+                          <BlockCard key={bi} block={b} />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+            </section>
+          )}
+        </>
       )}
     </main>
   );
+}
+
+export function Sessions() {
+  // Toasts confirm through the shell-level ToastProvider (App.tsx).
+  return <SessionsPage />;
 }

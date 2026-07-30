@@ -1,8 +1,8 @@
-import { sourceBadgeText, type SourceScope } from './badge.js';
+import { scopeClass, sourceBadgeText, type SourceScope } from './badge.js';
 import './components.css';
 
 export interface SourceBadgeProps {
-  /** Which scope the config came from — drives the label. */
+  /** Which scope the config came from — drives the label and the tint. */
   scope: SourceScope;
   /** Optional qualifier, e.g. '~/.claude' (global) or 'gitignored' (local). */
   detail?: string;
@@ -10,11 +10,15 @@ export interface SourceBadgeProps {
   readOnly?: boolean;
 }
 
-/** Scope-provenance micro-label (DESIGN §3/§7): `PROJECT`, `LOCAL · GITIGNORED`,
- *  `GLOBAL · ~/.claude · READ-ONLY`. Monochrome --fg-dim — provenance is
- *  chassis, not signal. */
+/** Scope badge (DESIGN.md §5 `.scope.s-*`) — the system's signature; every
+ *  configurable row shows one. project = accent-soft · global = outlined
+ *  neutral (the Console "user" treatment, keeping the GLOBAL label + path
+ *  detail) · local = warn-soft · default = dashed (effective-config default,
+ *  no source file). */
 export function SourceBadge({ scope, detail, readOnly }: SourceBadgeProps) {
   return (
-    <span className="source-badge micro-label">{sourceBadgeText(scope, detail, readOnly)}</span>
+    <span className={`scope ${scopeClass(scope)} source-badge`}>
+      {sourceBadgeText(scope, detail, readOnly)}
+    </span>
   );
 }

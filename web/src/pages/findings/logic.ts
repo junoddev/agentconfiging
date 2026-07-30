@@ -3,25 +3,24 @@
  * severity filtering, per-severity counts, and the applicable-fix predicate are
  * unit-testable over a plain array. The React page is a thin shell over these.
  *
- * Two `Severity` types meet here: the WIRE severity the API serves
- * ('error' | 'warning' | 'info') and the FindingRow's ROW severity
- * ('ok' | 'warn' | 'error'). `rowSeverity` bridges them.
+ * The WIRE severity the API serves ('error' | 'warning' | 'info') maps onto
+ * the Console status-pill tones via `severityPillTone`.
  */
 
 import type { GlobalEntry, ReportFinding, Severity } from '../../api/types.js';
-import type { Severity as RowSeverity } from '../../components/core/index.js';
+import type { PillTone } from '../../components/core/index.js';
 
-/** Severities in rail/report order — the order chips and tallies render in. */
+/** Severities in report order — the order chips and tallies render in. */
 export const SEVERITY_ORDER: readonly Severity[] = ['error', 'warning', 'info'];
 
 /**
- * Wire severity → FindingRow's row-severity token (the 8px block color). `info`
- * maps to the calm `ok` tone; `warning` to `warn`; `error` stays `error`.
+ * Wire severity → Console status-pill tone (§5 `.pill.p-*`). `error` reads
+ * danger, `warning` warns, and `info` wears the calm ok tone.
  */
-export function rowSeverity(severity: Severity): RowSeverity {
+export function severityPillTone(severity: Severity): PillTone {
   switch (severity) {
     case 'error':
-      return 'error';
+      return 'err';
     case 'warning':
       return 'warn';
     case 'info':
@@ -105,12 +104,12 @@ export function globalTallyLine(findings: readonly ReportFinding[]): string {
 
 /** Singular/plural label per severity ('info' does not pluralize). */
 const SEVERITY_LABEL: Record<Severity, { one: string; many: string }> = {
-  error: { one: 'ERROR', many: 'ERRORS' },
-  warning: { one: 'WARNING', many: 'WARNINGS' },
-  info: { one: 'INFO', many: 'INFO' },
+  error: { one: 'error', many: 'errors' },
+  warning: { one: 'warning', many: 'warnings' },
+  info: { one: 'info', many: 'info' },
 };
 
-/** Count chip / summary text in §7 voice: `3 ERRORS`, `1 WARNING`, `2 INFO`. */
+/** Count chip / summary text in §7 voice: `3 errors`, `1 warning`, `2 info`. */
 export function severityCountLabel(severity: Severity, count: number): string {
   const label = SEVERITY_LABEL[severity];
   return `${count} ${count === 1 ? label.one : label.many}`;

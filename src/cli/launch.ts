@@ -206,7 +206,7 @@ export async function runLaunch(opts: LaunchOptions, deps: LaunchDeps): Promise<
     return 1;
   }
 
-  emit('signal', `SIGNAL ACQUIRED · ${server.url}`);
+  emit('ok', `SERVER UP · ${server.url}`);
 
   // First instance = cwd, loaded eagerly so the list shows real counts. The
   // restored roots follow as lazy instances (○, counts unknown until opened).

@@ -2,14 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { DetectedAgent, GlobalEntry, Report, ReportFinding } from '../../api/types.js';
 import {
   artifactHref,
-  confidenceLevel,
+  confidencePillTone,
   extrasToRows,
   findAgent,
   findingsForAgent,
   globalAgentEntries,
   globalFilesForKind,
-  toConfigSources,
-  toRowSeverity,
 } from './logic.js';
 
 function agent(over: Partial<DetectedAgent> = {}): DetectedAgent {
@@ -146,29 +144,11 @@ describe('findingsForAgent', () => {
   });
 });
 
-describe('confidenceLevel', () => {
-  it('maps each rating onto an ascending meter level', () => {
-    expect(confidenceLevel('low')).toBeLessThan(confidenceLevel('medium'));
-    expect(confidenceLevel('medium')).toBeLessThan(confidenceLevel('high'));
-    expect(confidenceLevel('high')).toBeLessThanOrEqual(1);
-    expect(confidenceLevel('low')).toBeGreaterThan(0);
-  });
-});
-
-describe('toRowSeverity', () => {
-  it('maps wire severities onto FindingRow severities', () => {
-    expect(toRowSeverity('error')).toBe('error');
-    expect(toRowSeverity('warning')).toBe('warn');
-    expect(toRowSeverity('info')).toBe('ok');
-  });
-});
-
-describe('toConfigSources', () => {
-  it('turns paths into config sources', () => {
-    expect(toConfigSources(['CLAUDE.md', '.claude/settings.json'])).toEqual([
-      { path: 'CLAUDE.md', size: 0 },
-      { path: '.claude/settings.json', size: 0 },
-    ]);
+describe('confidencePillTone', () => {
+  it('maps each rating onto a Console pill tone', () => {
+    expect(confidencePillTone('low')).toBe('off');
+    expect(confidencePillTone('medium')).toBe('warn');
+    expect(confidencePillTone('high')).toBe('ok');
   });
 });
 

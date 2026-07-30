@@ -76,10 +76,9 @@ export type ContentBlock =
 
 /**
  * Per-message token accounting, lifted verbatim from an assistant message's
- * `message.usage` block. Pure token COUNTS (never content) — the analytics
- * engine (src/core/analytics) turns these into cost/cache aggregates. Absent
- * fields default to 0; the whole struct is absent when the message carried no
- * usage block (user messages, older logs).
+ * `message.usage` block. Pure token COUNTS (never content). Absent fields
+ * default to 0; the whole struct is absent when the message carried no usage
+ * block (user messages, older logs).
  */
 export interface TokenUsage {
   /** Fresh (uncached) input tokens billed at the input rate. */

@@ -11,7 +11,6 @@
  */
 
 import type {
-  AnalyticsResponse,
   ApplyFixResponse,
   CatalogInstallResponse,
   ContextHealth,
@@ -378,17 +377,6 @@ export class ApiClient {
 
   getSessions(): Promise<SessionsResponse> {
     return this.#get<SessionsResponse>('/api/sessions');
-  }
-
-  /**
-   * TOKEN/COST ANALYTICS (bead 7yb.5) — the read-only cost surface. Server-
-   * derived from THIS machine's `~/.claude` history by summing per-message token
-   * counts (never message content), bounded to the most-recent N sessions.
-   * Returns token/cost aggregates per model, cache efficiency, and daily/hourly
-   * trends. Model ids are opaque log text — render as text nodes.
-   */
-  getAnalytics(): Promise<AnalyticsResponse> {
-    return this.#get<AnalyticsResponse>('/api/analytics');
   }
 
   /**

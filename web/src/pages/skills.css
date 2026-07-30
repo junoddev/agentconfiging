@@ -1,17 +1,11 @@
-/* Skills & agents editor (#/skills, bead agentconfig-wmc.4). Chassis only —
-   tokens, hairlines, mono. Config content is adversarial data rendered as text
-   nodes, never markup. The connections graph is a static schematic; nothing
-   here animates (motion belongs to the signal layer). */
-
-.skills__count {
-  margin-left: 8px;
-  color: var(--fg-dim);
-}
+/* Skills & agents (#/skills) — Console page layout only. Chips, badges, seg,
+   notices, card and buttons come from the §5 contract in components/core; only
+   true page geometry (two-pane grid, editor pane, frontmatter cards, the
+   connections schematic) lives here. Config content is adversarial data
+   rendered as text nodes, never markup. */
 
 .skills__tabs {
-  display: flex;
-  gap: 8px;
-  margin-top: var(--gutter);
+  margin-top: 12px;
 }
 
 /* ── Two-pane layout: list + editor ────────────────────────────────────── */
@@ -19,7 +13,7 @@
 .skills {
   display: grid;
   grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
-  gap: var(--gutter);
+  gap: 16px;
   align-items: start;
 }
 
@@ -38,116 +32,88 @@
   overflow-y: auto;
 }
 
-.skills__list .chip {
+.skills__list .code {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.skills__list [aria-current] .chip {
-  background: var(--fg);
-  border-color: var(--fg);
-  color: var(--bg);
+/* Selected chip: accent treatment (active selection, like .ch-item.active). */
+.skills__list [aria-current] .code {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .skills__group {
-  margin-top: var(--gutter);
-  color: var(--fg-dim);
+  margin-top: 14px;
 }
 
 .skills__group:first-child {
   margin-top: 0;
 }
 
-.skills__none {
-  color: var(--fg-dim);
-}
-
-/* ── Editor pane ───────────────────────────────────────────────────────── */
+/* ── Editor pane (a .card) ─────────────────────────────────────────────── */
 
 .skills__editor {
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: var(--gutter);
   min-height: 240px;
 }
 
 .skills__head {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px var(--gutter);
-  padding-bottom: 8px;
-  margin-bottom: var(--gutter);
-  border-bottom: var(--hairline-w) solid var(--hairline);
-}
-
-.skills__scope {
-  color: var(--fg-dim);
+  align-items: center;
+  gap: 8px 16px;
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border);
 }
 
 .skills__path {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
   flex: 1 1 auto;
 }
 
-.skills__path-input {
-  background: var(--bg);
-  color: var(--fg);
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: 6px 8px;
+.skills__path .field {
+  margin-bottom: 0;
 }
 
-.skills__path-input:focus-visible {
-  outline: none;
-  border-color: var(--signal);
-}
-
-.skills__redact {
-  color: var(--warn);
-  border: var(--hairline-w) solid var(--warn);
-  border-radius: var(--radius);
-  padding: 6px 8px;
-  margin-bottom: var(--gutter);
+.skills__path-text {
+  word-break: break-all;
 }
 
 .skills__views {
-  display: flex;
-  gap: 8px;
-  margin-bottom: var(--gutter);
+  margin-bottom: 14px;
 }
 
+/* Raw editor: recessed like .input, mono, own scroll. */
 .skills__raw {
   width: 100%;
   min-height: 320px;
   resize: vertical;
   background: var(--bg);
   color: var(--fg);
-  border: var(--hairline-w) solid var(--hairline);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: var(--gutter);
+  padding: 12px;
   white-space: pre;
   overflow: auto;
   tab-size: 2;
 }
 
-.skills__raw:focus-visible {
-  outline: none;
-  border-color: var(--signal);
+.skills__raw:focus {
+  outline: 2px solid var(--accent-soft);
+  border-color: var(--accent);
 }
 
 .skills__raw[readonly] {
-  color: var(--fg-dim);
+  color: var(--muted);
 }
 
 .skills__actions {
   display: flex;
   gap: 8px;
-  margin-top: var(--gutter);
+  margin-top: 14px;
 }
 
 /* ── Frontmatter cards ─────────────────────────────────────────────────── */
@@ -156,41 +122,36 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px var(--gutter);
+  gap: 8px 16px;
 }
 
 .fmcards__name {
-  font-family: var(--font-sans);
-  font-size: var(--size-section);
-  line-height: var(--leading-section);
-  font-weight: 700;
-  letter-spacing: var(--tracking-heading);
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  font-weight: 600;
+  letter-spacing: -0.005em;
 }
 
 .fmcards__model {
-  color: var(--fg-dim);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .fmcards__desc {
-  margin: 8px 0 var(--gutter);
-  color: var(--fg);
+  margin: 8px 0 14px;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-.fmcards__none {
-  color: var(--fg-dim);
-}
-
 .fmcard {
-  border: var(--hairline-w) solid var(--hairline);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 8px 10px;
+  padding: 10px 12px;
   margin-top: 8px;
 }
 
 .fmcard__label {
-  color: var(--fg-dim);
   margin-bottom: 6px;
 }
 
@@ -201,9 +162,7 @@
 }
 
 .fmcard__chip {
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: 2px 6px;
+  white-space: normal;
   word-break: break-all;
 }
 
@@ -215,11 +174,11 @@
 
 .fmcard__row {
   display: flex;
-  gap: var(--gutter);
+  gap: 16px;
 }
 
 .fmcard__key {
-  color: var(--fg-dim);
+  color: var(--muted);
   white-space: nowrap;
 }
 
@@ -247,7 +206,7 @@
 
 .cgraph__edge {
   fill: none;
-  stroke: var(--signal);
+  stroke: var(--accent);
   stroke-width: 1;
 }
 
@@ -275,22 +234,22 @@
   flex-direction: column;
   gap: 1px;
   width: 100%;
-  border: var(--hairline-w) solid var(--hairline);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 4px 8px;
-  background: var(--bg);
+  background: var(--surface);
 }
 
 .cgraph__node--tool {
-  border-color: var(--fg-dim);
+  border-color: var(--muted);
 }
 
 .cgraph__node--mcp {
-  border-color: var(--signal);
+  border-color: var(--accent);
 }
 
 .cgraph__kind {
-  color: var(--fg-dim);
+  color: var(--muted);
 }
 
 .cgraph__label {
@@ -300,5 +259,5 @@
 }
 
 .cgraph__empty {
-  color: var(--fg-dim);
+  color: var(--muted);
 }

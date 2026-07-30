@@ -1,86 +1,30 @@
-/* Findings page (#/findings, bead c6p.5). Owns only its own selectors; the
-   FindingRow / severity-block chassis lives in components.css. Signal Grid
-   tokens only — no new colors, no motion. */
+/* Findings page (#/findings, Console E13.4). Page-layout CSS only — chips,
+   list rows, pills, badges, and the write-flow chassis come from the §5
+   contract in components.css / write.css. Tokens only. */
 
-/* ── Severity filter chips: toggle a band on/off; each shows its live count. ── */
-.findings__filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--gutter);
-  padding: 8px 0 var(--gutter);
+/* Project rows are wrapped (row + optional expanded diff preview), so the
+   list-card's own :last-child hairline trimming no longer sees the rows.
+   Restore the per-row hairline, hand it to the preview when one is open, and
+   trim the card's final edge. */
+.findings__row > .list-row {
+  border-bottom: 1px solid var(--border);
 }
 
-.findings__chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-  background: transparent;
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  color: var(--fg);
-  cursor: pointer;
+.findings__row > .list-row:not(:last-child) {
+  border-bottom: 0;
 }
 
-.findings__chip[aria-pressed='false'] {
-  color: var(--fg-dim);
+.findings__row:last-child > .list-row:last-child {
+  border-bottom: 0;
 }
 
-/* Dim the severity square when its band is toggled off. */
-.findings__chip[aria-pressed='false'] .sev {
-  opacity: 0.3;
+/* The expanded APPLY diff preview sits inside the list-card, under its row:
+   inset to the row padding, hairline-separated from the next row. */
+.findings__flow {
+  padding: 4px 16px 8px;
+  border-bottom: 1px solid var(--border);
 }
 
-/* ── Finding list: one FindingRow per entry plus a meta/agent line. ────────── */
-.findings__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.findings__item {
-  padding: 0;
-}
-
-/* Agent link + detail, sitting under the FindingRow it annotates. */
-.findings__meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--gutter);
-  padding: 2px 0 8px;
-  color: var(--fg-dim);
-}
-
-.findings__agent {
-  color: var(--signal);
-  text-decoration: none;
-}
-
-.findings__agent:hover {
-  text-decoration: underline;
-}
-
-.findings__detail {
-  font-family: var(--font-sans);
-  font-size: var(--size-body);
-  line-height: var(--leading-body);
-}
-
-/* ── Global (inherited) findings group, E12: heading + per-layer tally. ───── */
-.findings__global {
-  margin-top: var(--gutter);
-}
-
-.findings__global-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--gutter);
-  padding: 8px 0;
-}
-
-.findings__global-tally {
-  color: var(--fg-dim);
+.findings__row:last-child > .findings__flow {
+  border-bottom: 0;
 }

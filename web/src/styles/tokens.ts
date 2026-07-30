@@ -1,31 +1,41 @@
-/** Signal Grid color tokens (docs/DESIGN.md §2), one entry per theme.
+/** Console color tokens (docs/DESIGN.md §1), one entry per theme.
  *  Hand-kept in sync with tokens.css — tokens.test.ts fails on any drift
- *  between this module, the CSS, and the DESIGN.md table. */
+ *  between this module, the CSS, and the docs/DESIGN.md token block. */
 
-export const themeTokens = {
-  paper: {
-    '--bg': '#FAFAF7',
-    '--surface': '#FFFFFF',
-    '--fg': '#141519',
-    '--fg-dim': '#5C5F6A',
-    '--hairline': '#D9D9D2',
-    '--signal': '#2E7D32',
-    '--warn': '#8A6100',
-    '--red': '#E63329',
-    '--trace-dim': 'rgba(46,125,50,.25)',
-  },
-  ink: {
-    '--bg': '#0B0E17',
-    '--surface': '#121627',
-    '--fg': '#E8EAF2',
-    '--fg-dim': '#9AA1B5',
-    '--hairline': '#232A3E',
-    '--signal': '#B4FF39',
-    '--warn': '#FFC53D',
-    '--red': '#FF4D3D',
-    '--trace-dim': 'rgba(180,255,57,.22)',
-  },
+const light = {
+  '--bg': 'oklch(98% 0.005 250)',
+  '--surface': 'oklch(100% 0 0)',
+  '--fg': 'oklch(22% 0.02 240)',
+  '--muted': 'oklch(50% 0.018 240)',
+  '--border': 'oklch(90% 0.008 240)',
+  '--accent': 'oklch(58% 0.16 145)',
+  '--warn': 'oklch(62% 0.14 85)',
+  '--danger': 'oklch(56% 0.19 25)',
 } as const;
 
-export type ThemeName = keyof typeof themeTokens;
-export type ColorTokenName = keyof (typeof themeTokens)['paper'];
+const dark = {
+  '--bg': 'oklch(17% 0.012 245)',
+  '--surface': 'oklch(21% 0.014 245)',
+  '--fg': 'oklch(93% 0.008 240)',
+  '--muted': 'oklch(64% 0.015 240)',
+  '--border': 'oklch(30% 0.014 245)',
+  '--accent': 'oklch(72% 0.17 148)',
+  '--warn': 'oklch(76% 0.14 85)',
+  '--danger': 'oklch(66% 0.18 25)',
+} as const;
+
+export const themeTokens = {
+  light,
+  dark,
+} as const;
+/** Soft washes — theme-independent color-mix derivations of the core tokens
+ *  (declared once in :root; they re-resolve when the theme flips). */
+export const derivedTokens = {
+  '--accent-soft': 'color-mix(in oklch, var(--accent) 14%, transparent)',
+  '--warn-soft': 'color-mix(in oklch, var(--warn) 16%, transparent)',
+  '--danger-soft': 'color-mix(in oklch, var(--danger) 14%, transparent)',
+  '--fg-soft': 'color-mix(in oklch, var(--fg) 6%, transparent)',
+} as const;
+
+export type ThemeName = 'light' | 'dark';
+export type ColorTokenName = keyof typeof light;

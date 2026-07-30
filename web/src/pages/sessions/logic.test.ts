@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   blockLabel,
+  filterSessions,
   formatDuration,
   formatWhen,
   messageLabel,
   normalizeTag,
   renderSegments,
   sessionToMarkdown,
+  shortId,
 } from './logic.js';
-import type { ReplayMessage, SessionDetail } from '../../api/types.js';
+import type { ReplayMessage, SessionDetail, SessionSummary } from '../../api/types.js';
 
 describe('renderSegments', () => {
   it('splits redacted content into plain + mark segments', () => {
@@ -134,5 +136,43 @@ describe('sessionToMarkdown', () => {
   it('annotates a windowed export as partial', () => {
     const md = sessionToMarkdown({ ...detail, messageCount: 50, offset: 0 });
     expect(md).toContain('messages 1–3 of 50');
+  });
+});
+
+describe('shortId', () => {
+  it('trims a long id to its first 8 chars and keeps short ids whole', () => {
+    expect(shortId('a1f3c9d2-4b7e-4e21-9c15-000000000000')).toBe('a1f3c9d2');
+    expect(shortId('ab12')).toBe('ab12');
+  });
+});
+
+describe('filterSessions', () => {
+  const make = (over: Partial<SessionSummary>): SessionSummary => ({
+    id: 'id-1',
+    runtime: 'claude',
+    title: '',
+    cwd: '',
+    messageCount: 0,
+    live: false,
+    tags: [],
+    ...over,
+  });
+  const sessions = [
+    make({ id: 'aaa', title: 'Refactor auth', cwd: '/repo/api' }),
+    make({ id: 'bbb', title: 'Fix webhook', cwd: '/repo/web', tags: ['urgent'] }),
+  ];
+
+  it('matches on id, title, cwd, and tags, case-insensitively', () => {
+    expect(filterSessions(sessions, 'AUTH').map((s) => s.id)).toEqual(['aaa']);
+    expect(filterSessions(sessions, 'bbb').map((s) => s.id)).toEqual(['bbb']);
+    expect(filterSessions(sessions, '/repo/web').map((s) => s.id)).toEqual(['bbb']);
+    expect(filterSessions(sessions, 'urgent').map((s) => s.id)).toEqual(['bbb']);
+  });
+
+  it('returns a copy of everything for a blank query and [] for no match', () => {
+    const all = filterSessions(sessions, '   ');
+    expect(all).toEqual(sessions);
+    expect(all).not.toBe(sessions);
+    expect(filterSessions(sessions, 'zzz')).toEqual([]);
   });
 });

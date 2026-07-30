@@ -1,9 +1,9 @@
 /**
- * Command palette (DESIGN §6): Cmd+K opens a hairline modal — a mono, numbered,
- * fuzzy-filtered list to jump to any page, flip the theme, or run an action.
- * No blur/glass/shadow (DESIGN §9): a plain hairline-bordered surface over a
- * faint scrim. Keyboard nav (up/down/enter/esc); the list logic is pure (see
- * ../command/commands). The shell owns the effects via `onRun`.
+ * Command palette: Cmd+K opens the shared Dialog (E13.2 primitive — native
+ * <dialog>, hairline head/body, fg-mix backdrop) holding a `.search` input and
+ * a fuzzy-filtered command list. Keyboard nav (up/down/enter/esc); the list
+ * logic is pure (see ../command/commands). The shell owns the effects via
+ * `onRun`.
  */
 
 import {
@@ -14,14 +14,14 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from 'react';
-import { formatIndex } from '../components/core/index.js';
+import { Dialog, formatIndex } from '../components/core/index.js';
 import {
   buildCommands,
   filterCommands,
   moveSelection,
   type CommandAction,
 } from '../command/commands.js';
-import type { Theme } from './TopBar.js';
+import type { Theme } from './theme.js';
 import '../command/command.css';
 
 export interface CommandPaletteProps {
@@ -40,7 +40,8 @@ export function CommandPalette({ open, theme, onClose, onRun }: CommandPalettePr
   const commands = useMemo(() => buildCommands(theme), [theme]);
   const results = useMemo(() => filterCommands(commands, query), [commands, query]);
 
-  // Reset + focus each time it opens.
+  // Reset + focus each time it opens (after the Dialog's showModal, which
+  // otherwise leaves focus on the head's close button).
   useEffect(() => {
     if (!open) return;
     setQuery('');
@@ -84,50 +85,43 @@ export function CommandPalette({ open, theme, onClose, onRun }: CommandPalettePr
   };
 
   return (
-    <div className="cmdk" role="presentation" onMouseDown={onClose}>
-      <div
-        className="cmdk__modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label="command palette"
-        onMouseDown={(e: ReactMouseEvent) => e.stopPropagation()}
-      >
-        <input
-          ref={inputRef}
-          className="cmdk__input"
-          type="text"
-          placeholder="jump to a page · toggle theme · run an action"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={onKeyDown}
-          aria-label="command"
-          autoComplete="off"
-          spellCheck={false}
-        />
-        <ul className="cmdk__list" role="listbox" aria-label="commands">
-          {results.length === 0 ? (
-            <li className="cmdk__empty micro-label">NO MATCH</li>
-          ) : (
-            results.map(({ command }, i) => (
-              <li
-                key={command.id}
-                className={`cmdk__row${i === selected ? ' cmdk__row--active' : ''}`}
-                role="option"
-                aria-selected={i === selected}
-                onMouseMove={() => setSelected(i)}
-                onMouseDown={(e: ReactMouseEvent) => {
-                  e.preventDefault();
-                  run(command.action);
-                }}
-              >
-                <span className="cmdk__index mono-data">{formatIndex(i + 1)}</span>
-                <span className="cmdk__label">{command.label}</span>
-                <span className="cmdk__hint mono-data">{command.hint}</span>
-              </li>
-            ))
-          )}
-        </ul>
-      </div>
-    </div>
+    <Dialog open title="Commands" onClose={onClose}>
+      <input
+        ref={inputRef}
+        className="search cmdk__input"
+        type="text"
+        placeholder="Jump to a page · toggle theme · run an action"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={onKeyDown}
+        aria-label="command"
+        autoComplete="off"
+        spellCheck={false}
+        autoFocus
+      />
+      <ul className="cmdk__list" role="listbox" aria-label="commands">
+        {results.length === 0 ? (
+          <li className="cmdk__empty meta">No command matches “{query}”</li>
+        ) : (
+          results.map(({ command }, i) => (
+            <li
+              key={command.id}
+              className={`cmdk__row${i === selected ? ' cmdk__row--active' : ''}`}
+              role="option"
+              aria-selected={i === selected}
+              onMouseMove={() => setSelected(i)}
+              onMouseDown={(e: ReactMouseEvent) => {
+                e.preventDefault();
+                run(command.action);
+              }}
+            >
+              <span className="cmdk__index mono-data">{formatIndex(i + 1)}</span>
+              <span className="cmdk__label">{command.label}</span>
+              <span className="cmdk__hint mono-data">{command.hint}</span>
+            </li>
+          ))
+        )}
+      </ul>
+    </Dialog>
   );
 }

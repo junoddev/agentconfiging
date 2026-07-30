@@ -1,12 +1,12 @@
 /**
  * QuickAdd (bead agentconfig-0zm.3, SPEC §5 row 9) — the reusable quick-add
- * PRIMITIVE: a bracket button that opens a catalog picker scoped to ONE kind and
+ * PRIMITIVE: a button that opens a catalog picker scoped to ONE kind and
  * lists the not-yet-installed entries of that kind, each installable through the
  * same guarded dry-run → diff → COMMIT flow as the full Catalog page (it renders
  * {@link CatalogCard}s, so the discipline is inherited, never re-implemented).
  *
  * It is exported so each editor page (skills/hooks/rules/mcp/…) can drop in a
- * kind-scoped `[+ ADD <kind>]` without duplicating the install flow. Two modes:
+ * kind-scoped `Add <kind>` without duplicating the install flow. Two modes:
  *   • HOSTED — the caller (Catalog page) already fetched the catalog and passes
  *     `entries` + `installed`; no extra request.
  *   • STANDALONE — a caller passes only `client`/`instance`; QuickAdd fetches the
@@ -37,8 +37,10 @@ export interface QuickAddProps {
   entries?: CatalogEntryMeta[];
   /** HOSTED mode: the host's installed-by-key index. Omit to self-fetch. */
   installed?: Map<string, InstalledRecord>;
-  /** Optional label override; defaults to `add <kind>`. */
+  /** Optional label override; defaults to `Add <kind>`. */
   label?: string;
+  /** Forwarded to each CatalogCard: toast a successful commit. */
+  onToast?: (message: string) => void;
 }
 
 type FetchStatus = 'idle' | 'loading' | 'ok' | 'error';
@@ -51,6 +53,7 @@ export function QuickAdd({
   entries,
   installed,
   label,
+  onToast,
 }: QuickAddProps) {
   const hosted = entries !== undefined;
   const [open, setOpen] = useState(false);
@@ -104,38 +107,38 @@ export function QuickAdd({
   if (!open) {
     return (
       <div className="quickadd">
-        <Button label={label ?? `add ${kind}`} onClick={() => setOpen(true)} />
+        <Button label={label ?? `Add ${kind}`} onClick={() => setOpen(true)} />
       </div>
     );
   }
 
   return (
-    <div className="quickadd quickadd--open">
+    <div className="card quickadd quickadd--open">
       <div className="quickadd__bar">
-        <span className="quickadd__title micro-label">add {kind}</span>
+        <span className="table-header">add {kind}</span>
         <input
           id={inputId}
           type="search"
-          className="quickadd__search mono-data"
-          placeholder="filter…"
+          className="search"
+          placeholder="Filter…"
           aria-label={`filter ${kind} catalog`}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <Button label="done" onClick={() => setOpen(false)} />
+        <Button label="Done" onClick={() => setOpen(false)} />
       </div>
 
-      {!hosted && status === 'loading' && <p className="micro-label">loading catalog…</p>}
+      {!hosted && status === 'loading' && <p className="meta">Loading catalog…</p>}
       {!hosted && status === 'error' && (
-        <EmptyState title="NO SIGNAL" instruction="could not load the catalog" />
+        <EmptyState title="No catalog" instruction="Could not load the catalog." />
       )}
 
       {(hosted || status === 'ok') &&
         (candidates.length === 0 ? (
-          <EmptyState instruction={`no ${kind} left to add`} />
+          <EmptyState instruction={`No ${kind} left to add.`} />
         ) : (
           <>
-            <p className="quickadd__count micro-label" role="status">
+            <p className="meta" role="status">
               {candidates.length} available
             </p>
             <ul className="catalog__list">
@@ -146,6 +149,7 @@ export function QuickAdd({
                   client={client}
                   instance={instance}
                   onChanged={onCardChanged}
+                  onToast={onToast}
                 />
               ))}
             </ul>

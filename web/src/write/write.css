@@ -1,47 +1,31 @@
 /* Write flow (bead wmc.1): the dry-run diff preview + commit/discard controls
-   the Findings APPLY and every editor save (wmc.2-10) reuse. Signal Grid tokens
-   only — no new colors, no motion. DiffPanel owns the diff body styling; this
+   the Findings APPLY and every editor save (wmc.2-10) reuse. Console tokens
+   only (opendesign/DESIGN.md §1) — no new colors, no motion. DiffPanel owns
+   the diff body styling and the global-scope warning is a shared Notice; this
    file owns only the flow's status line + action row spacing. */
 
 .write-flow {
   display: flex;
   flex-direction: column;
-  gap: var(--gutter);
+  gap: 12px;
   padding: 4px 0 12px;
 }
 
 .write-flow__status {
   margin: 0;
-  color: var(--fg-dim);
+  color: var(--muted);
 }
 
 .write-flow__status--error {
-  color: var(--warn);
-}
-
-/* GLOBAL-SCOPE warning (bead 71h.10): warn-tone banner shown in the diff step
-   whenever the pending write's pathScope is 'global' — an unmissable flag that
-   the edit lands in ~/.claude-style config affecting every project and agent
-   on this machine. Severity palette only (DESIGN §2); no new colors. */
-.write-flow__global,
-.write-flow__global.micro-label {
-  margin: 0;
-  padding: 6px 10px;
-  color: var(--warn);
-  border: var(--hairline-w) solid var(--warn);
-  border-radius: 2px;
-  /* The message embeds a filesystem path whose case matters (~/.claude);
-     the fixed words are already uppercase in the source string. Compound
-     selector outranks .micro-label's uppercase regardless of bundle order. */
-  text-transform: none;
+  color: var(--danger);
 }
 
 .write-flow__status--ok {
-  color: var(--signal);
+  color: var(--accent);
 }
 
 .write-flow__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--gutter);
+  gap: 8px;
 }

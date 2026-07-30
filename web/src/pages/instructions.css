@@ -1,232 +1,105 @@
-/* Instructions editor (#/instructions, bead wmc.3). Chassis only — Signal Grid
-   tokens, hairlines, mono. Nothing animates except the import slide-in. All file
-   content is adversarial data rendered as text nodes, never markup. */
+/* Instructions editor (#/instructions) — Console conversion (bead 4u1.4).
+   List cards, rows, badges, code chips, segmented control, dialog and toast
+   come from the §5 contract classes in components/core; only true page-layout
+   and safe-markdown preview rules live here. All file content is adversarial
+   data rendered as text nodes, never markup. */
 
-.instr {
-  display: grid;
-  grid-template-columns: minmax(200px, 280px) minmax(0, 1fr);
-  gap: var(--gutter);
-  align-items: start;
-}
+/* ── Editor card ───────────────────────────────────────────────────────── */
 
-@media (max-width: 720px) {
-  .instr {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.instr__count {
-  margin-left: 8px;
-  color: var(--fg-dim);
-}
-
-/* ── Grouped file list ─────────────────────────────────────────────────── */
-
-.instr__list {
+.instr-editor-head {
   display: flex;
-  flex-direction: column;
-  gap: var(--gutter);
-  max-height: 72vh;
-  overflow-y: auto;
-}
-
-.instr__group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  align-items: flex-start;
-}
-
-.instr__group-label {
-  color: var(--fg-dim);
-  letter-spacing: var(--tracking-micro);
-}
-
-.instr__list .chip {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.instr__list [aria-current] .chip {
-  background: var(--fg);
-  border-color: var(--fg);
-  color: var(--bg);
-}
-
-/* ── Detail panel ──────────────────────────────────────────────────────── */
-
-.instr__detail {
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: var(--gutter);
-  min-height: 220px;
-}
-
-.instr__head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px var(--gutter);
-  padding-bottom: 8px;
-  margin-bottom: var(--gutter);
-  border-bottom: var(--hairline-w) solid var(--hairline);
-}
-
-.instr__scope {
-  color: var(--fg-dim);
-}
-
-.instr__toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
   align-items: center;
-  margin-bottom: var(--gutter);
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  overflow-wrap: anywhere;
 }
 
-.instr__toolbar-spacer {
+.instr-editor-spacer {
   flex: 1;
 }
 
-/* Read-only note when a file carries redacted secrets — the save guard. */
-.instr__note {
-  margin: 0 0 var(--gutter);
-  padding: 8px;
-  color: var(--warn);
-  border: var(--hairline-w) solid var(--warn);
-  border-radius: var(--radius);
-}
-
-/* ── Edit / source / preview panes ─────────────────────────────────────── */
-
-.instr__editor {
-  width: 100%;
-  min-height: 320px;
-  box-sizing: border-box;
-  resize: vertical;
-  background: var(--surface);
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  color: var(--fg);
-  padding: 8px;
-  line-height: 1.5;
-}
-
-.instr__editor:focus {
-  outline: var(--hairline-w) solid var(--fg-dim);
-}
-
-.instr__source {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-x: auto;
-}
-
-.instr__redact {
-  background: none;
-  color: var(--warn);
-  font-weight: 600;
-  border: var(--hairline-w) solid var(--warn);
-  border-radius: var(--radius);
-  padding: 0 2px;
-}
-
-/* Safe markdown preview — light structure over text nodes only. */
-.instr__preview {
-  line-height: 1.5;
-  word-break: break-word;
-}
-
-.instr__preview > * {
-  margin: 0 0 var(--gutter);
-}
-
-.instr__h {
-  font-weight: 600;
-  color: var(--fg);
-}
-
-.instr__code {
-  margin: 0 0 var(--gutter);
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-x: auto;
-  background: var(--surface);
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: 8px;
-}
-
-.instr__quote {
-  color: var(--fg-dim);
-  border-left: 2px solid var(--hairline);
-  padding-left: 8px;
-}
-
-.instr__list-md {
-  margin: 0 0 var(--gutter);
-  padding-left: 20px;
-}
-
-/* ── @import chips ─────────────────────────────────────────────────────── */
-
-.instr__imports {
-  margin-top: var(--gutter);
-  padding-top: var(--gutter);
-  border-top: var(--hairline-w) solid var(--hairline);
-}
-
-.instr__imports-label {
-  color: var(--fg-dim);
-  display: block;
-  margin-bottom: 8px;
-}
-
-.instr__import-row {
+.instr-editor-toolbar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-/* A broken / external import: marked, not a live link. */
-.instr__import--broken {
-  border-color: var(--red);
-  color: var(--red);
-  cursor: not-allowed;
-}
-
-.instr__import-tag {
-  color: var(--red);
-  letter-spacing: var(--tracking-micro);
-}
-
-/* ── Import slide-in panel ─────────────────────────────────────────────── */
-
-.instr__slide {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: min(560px, 92vw);
-  background: var(--bg);
-  border-left: var(--hairline-w) solid var(--hairline);
-  padding: var(--gutter);
-  overflow-y: auto;
-  z-index: 20;
-  box-sizing: border-box;
-  transform: translateX(0);
-}
-
-.instr__slide-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.instr-editor-raw {
+  min-height: 320px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+/* ── Safe markdown preview ─────────────────────────────────────────────── */
+
+.instr-md {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  padding-bottom: 8px;
-  margin-bottom: var(--gutter);
-  border-bottom: var(--hairline-w) solid var(--hairline);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.instr-md-h {
+  font-weight: 600;
+}
+
+.instr-md-code {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--fg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.instr-md-quote {
+  padding-left: 12px;
+  border-left: 2px solid var(--border);
+  color: var(--muted);
+}
+
+.instr-md-list {
+  padding-left: 22px;
+}
+
+/* ── @imports strip ────────────────────────────────────────────────────── */
+
+.instr-imports {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.instr-import-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Read-only redacted source view: visible marks over text nodes. */
+.redact-pre {
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--fg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.redact-mark {
+  background: var(--warn-soft);
+  color: var(--warn);
+  border-radius: 4px;
+  padding: 0 3px;
 }

@@ -7,8 +7,8 @@ import {
   globalFindingRows,
   globalTallyLine,
   hasApplicableFix,
-  rowSeverity,
   severityCountLabel,
+  severityPillTone,
 } from './logic.js';
 
 /** Sample set: 2 errors, 1 warning, 1 info; two carry a machine fix. Server
@@ -50,11 +50,11 @@ const SAMPLE: ReportFinding[] = [
   },
 ];
 
-describe('rowSeverity', () => {
-  it('maps wire severity onto the FindingRow row-severity token', () => {
-    expect(rowSeverity('error')).toBe('error');
-    expect(rowSeverity('warning')).toBe('warn');
-    expect(rowSeverity('info')).toBe('ok');
+describe('severityPillTone', () => {
+  it('maps wire severity onto the Console pill tones', () => {
+    expect(severityPillTone('error')).toBe('err');
+    expect(severityPillTone('warning')).toBe('warn');
+    expect(severityPillTone('info')).toBe('ok');
   });
 });
 
@@ -136,8 +136,8 @@ describe('globalFindingRows', () => {
 
 describe('globalTallyLine', () => {
   it('tallies the global layer in severity order, non-zero bands only', () => {
-    expect(globalTallyLine(SAMPLE)).toBe('2 ERRORS · 1 WARNING · 1 INFO');
-    expect(globalTallyLine([SAMPLE[0]!, SAMPLE[3]!])).toBe('1 ERROR · 1 INFO');
+    expect(globalTallyLine(SAMPLE)).toBe('2 errors · 1 warning · 1 info');
+    expect(globalTallyLine([SAMPLE[0]!, SAMPLE[3]!])).toBe('1 error · 1 info');
   });
 
   it('is empty when the global layer has no findings', () => {
@@ -147,11 +147,11 @@ describe('globalTallyLine', () => {
 
 describe('severityCountLabel', () => {
   it('pluralizes error/warning and leaves info unchanged, §7 voice', () => {
-    expect(severityCountLabel('error', 3)).toBe('3 ERRORS');
-    expect(severityCountLabel('error', 1)).toBe('1 ERROR');
-    expect(severityCountLabel('warning', 1)).toBe('1 WARNING');
-    expect(severityCountLabel('warning', 5)).toBe('5 WARNINGS');
-    expect(severityCountLabel('info', 2)).toBe('2 INFO');
-    expect(severityCountLabel('info', 1)).toBe('1 INFO');
+    expect(severityCountLabel('error', 3)).toBe('3 errors');
+    expect(severityCountLabel('error', 1)).toBe('1 error');
+    expect(severityCountLabel('warning', 1)).toBe('1 warning');
+    expect(severityCountLabel('warning', 5)).toBe('5 warnings');
+    expect(severityCountLabel('info', 2)).toBe('2 info');
+    expect(severityCountLabel('info', 1)).toBe('1 info');
   });
 });

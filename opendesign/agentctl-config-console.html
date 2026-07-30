@@ -1,0 +1,890 @@
+
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>agentctl · Agent Config Console</title>
+<style>
+  /* ─── tokens — tech-utility direction, bound verbatim ─────────────── */
+  :root {
+    --bg:      oklch(98% 0.005 250);
+    --surface: oklch(100% 0 0);
+    --fg:      oklch(22% 0.02 240);
+    --muted:   oklch(50% 0.018 240);
+    --border:  oklch(90% 0.008 240);
+    --accent:  oklch(58% 0.16 145);
+
+    /* derived — status tints + soft washes, all from oklch, no raw hex */
+    --warn:    oklch(62% 0.14 85);
+    --danger:  oklch(56% 0.19 25);
+    --accent-soft: color-mix(in oklch, var(--accent) 14%, transparent);
+    --warn-soft:   color-mix(in oklch, var(--warn) 16%, transparent);
+    --danger-soft: color-mix(in oklch, var(--danger) 14%, transparent);
+    --fg-soft:     color-mix(in oklch, var(--fg) 6%, transparent);
+
+    --font-display: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+    --font-body:    -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+    --font-mono:    'JetBrains Mono', 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+
+    --fs-h1: 20px;
+    --fs-h2: 15px;
+    --fs-body: 13.5px;
+    --fs-meta: 12px;
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+  html[data-theme="dark"] {
+    --bg:      oklch(17% 0.012 245);
+    --surface: oklch(21% 0.014 245);
+    --fg:      oklch(93% 0.008 240);
+    --muted:   oklch(64% 0.015 240);
+    --border:  oklch(30% 0.014 245);
+    --accent:  oklch(72% 0.17 148);
+    --warn:    oklch(76% 0.14 85);
+    --danger:  oklch(66% 0.18 25);
+  }
+
+  /* ─── reset & base ────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-body);
+    font-size: var(--fs-body);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    display: grid;
+    grid-template-rows: 49px 1fr 30px;
+    overflow: hidden;
+  }
+  h1, h2, h3 { font-family: var(--font-display); margin: 0; }
+  h1 { font-size: var(--fs-h1); font-weight: 650; letter-spacing: -0.015em; }
+  h2 { font-size: var(--fs-h2); font-weight: 600; letter-spacing: -0.005em; }
+  button { font: inherit; cursor: pointer; color: inherit; background: none; border: 0; }
+  a { color: inherit; text-decoration: none; }
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .meta { font-family: var(--font-mono); font-size: var(--fs-meta); color: var(--muted); }
+  .muted { color: var(--muted); }
+
+  /* ─── topbar ──────────────────────────────────────────────────────── */
+  .topbar {
+    display: flex; align-items: center; gap: 20px;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .brand { display: flex; align-items: baseline; gap: 8px; }
+  .brand .sigil { font-family: var(--font-mono); font-weight: 700; color: var(--accent); font-size: 15px; }
+  .brand .name { font-family: var(--font-mono); font-weight: 700; font-size: 14px; letter-spacing: -0.01em; }
+  .brand .ver { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .chooser { position: relative; display: flex; align-items: stretch; margin-inline: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+  .ch-side { display: flex; align-items: baseline; gap: 8px; padding: 6px 13px; border-radius: 7px; transition: background .12s ease; }
+  .ch-side:hover { background: var(--fg-soft); }
+  .ch-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .ch-value { font-size: 13px; font-weight: 550; }
+  .ch-value.mono { font-size: 12px; }
+  .ch-caret { font-size: 9px; color: var(--muted); }
+  .ch-div { width: 1px; background: var(--border); margin-block: 5px; }
+  .ch-menu {
+    position: absolute; top: calc(100% + 6px); min-width: 250px; z-index: 40;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    box-shadow: 0 12px 32px color-mix(in oklch, var(--fg) 18%, transparent);
+    padding: 5px; display: none;
+  }
+  .ch-menu.open { display: block; }
+  .ch-left { left: 0; }
+  .ch-right { right: 0; }
+  .ch-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    width: 100%; text-align: left; padding: 8px 11px; border-radius: 7px;
+    font-size: 13px; color: var(--fg); transition: background .1s ease;
+  }
+  .ch-item:hover { background: var(--fg-soft); }
+  .ch-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .icon-btn {
+    width: 30px; height: 30px; display: grid; place-items: center;
+    border: 1px solid var(--border); border-radius: var(--radius); color: var(--muted); font-size: 14px;
+    transition: color .15s ease, border-color .15s ease;
+  }
+  .icon-btn:hover { color: var(--fg); border-color: var(--muted); }
+
+  /* ─── shell ───────────────────────────────────────────────────────── */
+  .app-main { display: grid; grid-template-columns: 232px 1fr; overflow: hidden; }
+  .sidebar {
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    overflow-y: auto;
+    padding: 14px 10px;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .nav-group { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); padding: 12px 10px 5px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 9px;
+    padding: 7px 10px; border-radius: var(--radius);
+    font-size: 13.5px; color: var(--muted); text-align: left; width: 100%;
+    border-left: 2px solid transparent;
+    transition: background .12s ease, color .12s ease;
+  }
+  .nav-item:hover { background: var(--fg-soft); color: var(--fg); }
+  .nav-item.active { background: var(--accent-soft); color: var(--fg); border-left-color: var(--accent); font-weight: 550; }
+  .nav-item .glyph { font-family: var(--font-mono); font-size: 12px; width: 15px; text-align: center; opacity: .8; }
+  .nav-item .count { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .side-legend { margin-top: auto; padding: 12px 10px 4px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 7px; }
+  .side-legend .lg-row { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted); }
+  .side-legend .lg-path { font-family: var(--font-mono); font-size: 11px; }
+
+  .content { overflow-y: auto; padding: 26px 34px 48px;
+    background-image: radial-gradient(color-mix(in oklch, var(--fg) 5%, transparent) 1px, transparent 1px);
+    background-size: 26px 26px;
+  }
+  .content-inner { max-width: 980px; margin-inline: auto; }
+
+  /* ─── statusbar ───────────────────────────────────────────────────── */
+  .statusbar {
+    display: flex; align-items: center; gap: 22px;
+    padding: 0 16px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    font-family: var(--font-mono); font-size: 11.5px; color: var(--muted);
+  }
+  .statusbar .live { display: inline-flex; align-items: center; gap: 7px; color: var(--accent); }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: pulse 2.2s ease infinite; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 var(--accent-soft); } 50% { box-shadow: 0 0 0 5px var(--accent-soft); } }
+  .statusbar .right { margin-left: auto; display: flex; gap: 18px; }
+
+  /* ─── page scaffolding ────────────────────────────────────────────── */
+  .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 22px; }
+  .page-sub { margin: 5px 0 0; color: var(--muted); font-size: 13px; max-width: 62ch; }
+  .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .chip-row { display: flex; gap: 4px; background: var(--fg-soft); border-radius: var(--radius); padding: 3px; }
+  .chip { padding: 3px 11px; border-radius: 6px; font-size: 12px; color: var(--muted); }
+  .chip:hover { color: var(--fg); }
+  .chip.active { background: var(--surface); color: var(--fg); font-weight: 550; box-shadow: 0 1px 2px color-mix(in oklch, var(--fg) 12%, transparent); }
+  .search {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 6px 11px; font: inherit; font-size: 13px; color: var(--fg); width: 230px;
+  }
+  .search:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+  .search::placeholder { color: var(--muted); }
+
+  /* ─── components ──────────────────────────────────────────────────── */
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 18px 20px;
+  }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .tile-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  .tile {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 14px 16px; text-align: left; transition: border-color .15s ease, transform .05s ease;
+  }
+  .tile:hover { border-color: var(--muted); }
+  .tile:active { transform: translateY(1px); }
+  .tile .t-num { font-family: var(--font-mono); font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .tile .t-label { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .ds-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .ds-table th, .ds-table td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .ds-table th { color: var(--muted); font-weight: 500; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap; }
+  .ds-table tbody tr { transition: background .1s ease; }
+  .ds-table tbody tr:hover { background: var(--fg-soft); }
+  .ds-table td.mono, .ds-table .num-col { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 12.5px; }
+  .ds-table .num-col { text-align: right; }
+  .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+  .table-card .ds-table tbody tr:last-child td { border-bottom: 0; }
+
+  .scope { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 5px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap; }
+  .s-project { background: var(--accent-soft); color: var(--accent); }
+  .s-user    { border: 1px solid var(--border); color: var(--muted); background: var(--surface); }
+  .s-local   { background: var(--warn-soft); color: var(--warn); }
+  .s-default { color: var(--muted); border: 1px dashed var(--border); }
+
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; font-family: var(--font-mono); font-size: 11px; }
+  .p-ok    { background: var(--accent-soft); color: var(--accent); }
+  .p-warn  { background: var(--warn-soft); color: var(--warn); }
+  .p-err   { background: var(--danger-soft); color: var(--danger); }
+  .p-off   { background: var(--fg-soft); color: var(--muted); }
+
+  .switch { position: relative; width: 34px; height: 19px; border-radius: 999px; background: var(--fg-soft); border: 1px solid var(--border); transition: background .15s ease; flex: none; }
+  .switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: var(--muted); transition: transform .15s ease, background .15s ease; }
+  .switch.on { background: var(--accent); border-color: var(--accent); }
+  .switch.on::after { transform: translateX(15px); background: var(--surface); }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 7px 14px; border-radius: var(--radius); font-size: 13px; font-weight: 550;
+    border: 1px solid transparent; transition: background .15s ease, border-color .15s ease, transform .05s ease;
+  }
+  .btn:active { transform: translateY(1px); }
+  .btn[disabled] { opacity: 0.45; cursor: default; pointer-events: none; }
+  .pager { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+  .btn-primary { background: var(--accent); color: var(--bg); }
+  .btn-primary:hover { background: color-mix(in oklch, var(--accent) 86%, var(--fg)); }
+  .btn-secondary { border-color: var(--border); color: var(--fg); background: var(--surface); }
+  .btn-secondary:hover { border-color: var(--muted); }
+  .btn-ghost { color: var(--muted); padding: 5px 9px; }
+  .btn-ghost:hover { color: var(--fg); background: var(--fg-soft); border-radius: 6px; }
+
+  .list-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 11px 16px; border-bottom: 1px solid var(--border);
+    transition: background .1s ease;
+  }
+  .list-row:last-child { border-bottom: 0; }
+  .list-row:hover { background: var(--fg-soft); }
+  .list-row .lr-main { flex: 1; min-width: 0; }
+  .list-row .lr-title { font-weight: 550; font-size: 13.5px; display: flex; align-items: center; gap: 9px; }
+  .list-row .lr-sub { color: var(--muted); font-size: 12.5px; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .list-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 14px; }
+  .list-card .lc-head { padding: 9px 16px; border-bottom: 1px solid var(--border); background: var(--fg-soft); font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.05em; color: var(--muted); display: flex; justify-content: space-between; }
+
+  .notice { display: flex; gap: 12px; align-items: flex-start; background: var(--warn-soft); border: 1px solid color-mix(in oklch, var(--warn) 35%, transparent); border-radius: var(--radius-lg); padding: 13px 16px; font-size: 13px; margin-bottom: 16px; }
+  .notice .n-mark { font-family: var(--font-mono); color: var(--warn); font-weight: 700; }
+  .notice-info { background: var(--accent-soft); border-color: color-mix(in oklch, var(--accent) 35%, transparent); }
+  .notice-info .n-mark { color: var(--accent); }
+
+  .code {
+    font-family: var(--font-mono); font-size: 12px; background: var(--fg-soft);
+    border: 1px solid var(--border); border-radius: 6px; padding: 2px 7px; white-space: nowrap;
+  }
+  .win { color: var(--accent); font-weight: 650; }
+  .health li { display: flex; gap: 10px; padding: 6px 0; font-size: 13px; align-items: baseline; }
+  .health .h-ok { color: var(--accent); font-family: var(--font-mono); }
+  .health .h-warn { color: var(--warn); font-family: var(--font-mono); }
+  .health ul { list-style: none; margin: 6px 0 0; padding: 0; }
+
+  dialog {
+    background: var(--surface); color: var(--fg);
+    border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 0; width: min(560px, 90vw);
+    box-shadow: 0 24px 60px color-mix(in oklch, var(--fg) 22%, transparent);
+  }
+  dialog::backdrop { background: color-mix(in oklch, var(--fg) 32%, transparent); backdrop-filter: blur(2px); }
+  .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+  .modal-body { padding: 18px 20px; max-height: 60vh; overflow-y: auto; }
+  .modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 13px 20px; border-top: 1px solid var(--border); }
+  .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+  .field label { font-size: 12px; color: var(--muted); }
+  .input, select.input {
+    width: 100%; padding: 8px 11px; border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--bg); color: var(--fg); font: inherit; font-size: 13px;
+  }
+  .input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+  .rule-body { font-size: 13px; line-height: 1.6; color: var(--fg); white-space: pre-wrap; font-family: var(--font-mono); font-size: 12px; background: var(--fg-soft); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+
+  .toast {
+    position: fixed; bottom: 42px; right: 20px; z-index: 50;
+    background: var(--fg); color: var(--bg);
+    font-family: var(--font-mono); font-size: 12px;
+    padding: 9px 14px; border-radius: var(--radius);
+    opacity: 0; transform: translateY(6px); transition: opacity .2s ease, transform .2s ease;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: none; }
+
+  .seg { display: flex; gap: 4px; flex-wrap: wrap; }
+  .seg button { padding: 6px 13px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 12.5px; font-family: var(--font-mono); color: var(--muted); background: var(--surface); transition: all .12s ease; }
+  .seg button:hover { color: var(--fg); }
+  .seg button.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+  .perm-chip { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 12px; border: 1px solid var(--border); background: var(--surface); border-radius: 6px; padding: 4px 6px 4px 10px; }
+  .perm-chip .x { color: var(--muted); padding: 0 4px; border-radius: 4px; }
+  .perm-chip .x:hover { color: var(--danger); background: var(--danger-soft); }
+  .perm-wrap { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+
+  @media (max-width: 860px) {
+    .app-main { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .grid-2, .tile-row { grid-template-columns: 1fr 1fr; }
+    .ch-label { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar" data-od-id="topbar">
+  <div class="brand" data-od-id="brand">
+    <span class="sigil">▞▚</span><span class="name">agentctl</span><span class="ver">v0.4.2</span>
+  </div>
+  <div class="chooser" id="chooser" data-od-id="context-chooser"></div>
+  <button class="icon-btn" id="theme-toggle" data-od-id="theme-toggle" title="Toggle light / dark">◐</button>
+</header>
+
+<div class="app-main">
+  <aside class="sidebar" id="sidebar" data-od-id="sidebar"></aside>
+  <main class="content" data-od-id="content">
+    <div class="content-inner" id="section-root"></div>
+  </main>
+</div>
+
+<footer class="statusbar" data-od-id="statusbar">
+  <span class="live"><span class="live-dot"></span>connected</span>
+  <span id="sb-serve">http://127.0.0.1:4180 · pid 48291</span>
+  <span id="sb-cmd"></span>
+  <span class="right" id="sb-paths"></span>
+</footer>
+
+<dialog id="modal" data-od-id="modal">
+  <div class="modal-head"><h2 id="modal-title"></h2><button class="btn-ghost" onclick="modal.close()">✕</button></div>
+  <div class="modal-body" id="modal-body"></div>
+  <div class="modal-foot" id="modal-foot"></div>
+</dialog>
+<div class="toast mono" id="toast"></div>
+
+<script>
+/* ───────────────────────── data model — sample workspace ───────────── */
+const AGENTS = {
+  claude: {
+    name: 'Claude Code', bin: 'claude', version: '2.1.4', launch: 'agentctl --agent claude',
+    userPath: '~/.claude', projectPath: './.claude', scopes: ['user','project','local'],
+    resume: id => `claude --resume ${id}`,
+    terms: { memory: 'Memory & CLAUDE.md', memorySub: 'Instruction files and persistent memory, layered user → project.', hooks: 'Hooks', hooksSub: 'Shell commands bound to lifecycle events in settings.json.', addHook: 'Add hook' },
+    files: [
+      { path: '~/.claude/settings.json', scope: 'user', keys: 14, status: 'ok' },
+      { path: '~/.claude/CLAUDE.md', scope: 'user', keys: '—', status: 'ok' },
+      { path: '.claude/settings.json', scope: 'project', keys: 6, status: 'ok' },
+      { path: '.claude/settings.local.json', scope: 'local', keys: 3, status: 'ok' },
+      { path: 'CLAUDE.md', scope: 'project', keys: '—', status: 'ok' },
+      { path: '.mcp.json', scope: 'project', keys: 4, status: 'warn' } ],
+    health: [
+      { ok: true, text: 'All settings files parse cleanly' },
+      { ok: true, text: 'Hook scripts found and executable' },
+      { ok: false, text: '.mcp.json: server "sentry" unreachable (last error 401)' },
+      { ok: true, text: 'Memory dir indexed — 6 entries' } ],
+    config: [
+      { key: 'model', user: '"opus"', project: '"sonnet"', win: 'project' },
+      { key: 'permissions.defaultMode', user: '"acceptEdits"', project: '—', win: 'user' },
+      { key: 'permissions.additionalDirectories', user: '—', project: '["../shared-libs"]', win: 'project' },
+      { key: 'permissions.disableBypassPermissionsMode', user: '—', project: '"disable"', win: 'project' },
+      { key: 'includeCoAuthoredBy', user: 'true', project: '—', win: 'user' },
+      { key: 'statusLine.type', user: '"command"', project: '—', win: 'user' },
+      { key: 'statusLine.command', user: '"~/.claude/statusline.sh"', project: '—', win: 'user' },
+      { key: 'forceLoginMethod', user: '"claudeai"', project: '—', win: 'user' },
+      { key: 'autoUpdates', user: 'true', project: 'false', win: 'project' },
+      { key: 'theme', user: '"dark"', project: '—', win: 'user' },
+      { key: 'verbose', user: 'false', project: '—', local: 'true', win: 'local' },
+      { key: 'cleanupPeriodDays', user: '30', project: '—', win: 'user' },
+      { key: 'apiKeyHelper', user: '"~/.claude/get-key.sh"', project: '—', win: 'user' },
+      { key: 'outputStyle', user: '—', project: '"explanatory"', win: 'project' },
+      { key: 'spinnerTipsEnabled', user: 'false', project: '—', win: 'user' },
+      { key: 'alwaysThinkingEnabled', user: '—', project: 'true', win: 'project' },
+      { key: 'enableAllProjectMcpServers', user: '—', project: 'true', win: 'project' },
+      { key: 'enabledMcpjsonServers', user: '—', project: '["github","postgres-dev"]', win: 'project' },
+      { key: 'disabledMcpjsonServers', user: '—', project: '—', local: '["sentry"]', win: 'local' },
+      { key: 'diffTool', user: '"auto"', project: '—', win: 'user' },
+      { key: 'editorMode', user: '"vim"', project: '—', win: 'user' },
+      { key: 'autoCompactEnabled', user: 'true', project: '—', win: 'user' },
+      { key: 'todoFeatureEnabled', user: 'true', project: '—', win: 'user' },
+      { key: 'messageIdleNotifThresholdMs', user: '60000', project: '—', win: 'user' },
+      { key: 'preferredNotifChannel', user: '"iterm2"', project: '—', win: 'user' },
+      { key: 'env.BASH_DEFAULT_TIMEOUT_MS', user: '120000', project: '—', win: 'user' },
+      { key: 'env.BASH_MAX_TIMEOUT_MS', user: '—', project: '300000', win: 'project' },
+      { key: 'env.CLAUDE_CODE_MAX_OUTPUT_TOKENS', user: '32000', project: '—', win: 'user' },
+      { key: 'env.MCP_TIMEOUT', user: '—', project: '10000', win: 'project' },
+      { key: 'env.MCP_TOOL_TIMEOUT', user: '60000', project: '—', win: 'user' },
+      { key: 'env.MAX_THINKING_TOKENS', user: '—', project: '12000', win: 'project' },
+      { key: 'env.DISABLE_TELEMETRY', user: '"1"', project: '—', win: 'user' },
+      { key: 'env.DISABLE_ERROR_REPORTING', user: '"1"', project: '—', win: 'user' },
+      { key: 'env.DISABLE_AUTOUPDATER', user: '—', project: '—', local: '"1"', win: 'local' },
+      { key: 'env.RTK_ENABLED', user: '"1"', project: '—', local: '"0"', win: 'local' },
+      { key: 'env.ANTHROPIC_SMALL_FAST_MODEL', user: '"haiku"', project: '—', win: 'user' },
+      { key: 'env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', user: '—', project: '"1"', win: 'project' },
+      { key: 'env.CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR', user: 'true', project: '—', win: 'user' },
+      { key: 'env.HTTP_PROXY', user: '—', project: '"http://proxy.acme.internal:8080"', win: 'project' },
+      { key: 'env.NO_PROXY', user: '—', project: '"localhost,127.0.0.1"', win: 'project' } ],
+    memory: [
+      { name: 'CLAUDE.md', desc: 'Global behavioral guidelines — think before coding, simplicity first, surgical changes', scope: 'user', size: '4.1 KB', updated: '3d ago' },
+      { name: 'RTK.md', desc: 'RTK token-optimized CLI proxy usage (imported via @RTK.md)', scope: 'user', size: '1.2 KB', updated: '2w ago' },
+      { name: 'MEMORY.md', desc: 'Memory index — 6 entries across user + project topics', scope: 'user', size: '0.8 KB', updated: '5h ago' },
+      { name: 'CLAUDE.md', desc: 'Project conventions — API casing, test layout, deploy checklist', scope: 'project', size: '2.6 KB', updated: '1d ago' },
+      { name: 'memory/api-error-codes.md', desc: 'Reference — internal error-code registry for acme-api', scope: 'project', size: '1.4 KB', updated: '6d ago' } ],
+    rules: [
+      { name: 'Think before coding', detail: 'Surface assumptions and tradeoffs before implementing', scope: 'user', src: '~/.claude/CLAUDE.md §1', on: true, text: 'State your assumptions explicitly. If uncertain, ask.\nIf multiple interpretations exist, present them — don\'t pick silently.\nIf a simpler approach exists, say so.' },
+      { name: 'Simplicity first', detail: 'Minimum code that solves the problem, nothing speculative', scope: 'user', src: '~/.claude/CLAUDE.md §2', on: true, text: 'No features beyond what was asked.\nNo abstractions for single-use code.\nIf you write 200 lines and it could be 50, rewrite it.' },
+      { name: 'Surgical changes', detail: 'Touch only what you must; clean up only your own mess', scope: 'user', src: '~/.claude/CLAUDE.md §3', on: true, text: 'Don\'t "improve" adjacent code, comments, or formatting.\nMatch existing style.\nEvery changed line should trace directly to the user\'s request.' },
+      { name: 'Use RTK proxy for dev ops', detail: 'Route git/npm/test commands through rtk for token savings', scope: 'user', src: '~/.claude/RTK.md', on: true, text: 'All dev commands are automatically rewritten by the Claude Code hook.\nExample: git status → rtk git status.' },
+      { name: 'API responses use snake_case', detail: 'All JSON keys in acme-api responses are snake_case', scope: 'project', src: 'CLAUDE.md §Conventions', on: true, text: 'Response bodies, query params, and webhook payloads all use snake_case keys. camelCase only inside TS code.' },
+      { name: 'Tests colocated in __tests__', detail: 'Unit tests live beside source, not in a top-level tree', scope: 'project', src: 'CLAUDE.md §Testing', on: false, text: 'Place unit tests in a __tests__/ folder next to the module under test. Integration tests live in tests/integration.' } ],
+    hooks: { supported: true, events: ['PreToolUse','PostToolUse','Stop','SessionStart','Notification'], items: [
+      { event: 'PreToolUse', matcher: 'Bash', command: '~/.claude/hooks/rtk-rewrite.sh', scope: 'user', on: true },
+      { event: 'PostToolUse', matcher: 'Edit|Write', command: 'npx prettier --write "$FILE"', scope: 'project', on: true },
+      { event: 'Stop', matcher: '*', command: '~/.claude/hooks/notify-done.sh', scope: 'user', on: true },
+      { event: 'SessionStart', matcher: '*', command: './scripts/load-env.sh', scope: 'project', on: false } ] },
+    sessions: [
+      { id: 'a1f3c9', title: 'Refactor auth middleware to edge runtime', branch: 'main', turns: 42, tokens: '128k', when: '2h ago' },
+      { id: 'b7e210', title: 'Fix flaky webhook retry test', branch: 'fix/webhook-retry', turns: 18, tokens: '54k', when: '9h ago' },
+      { id: 'c4d882', title: 'Add rate limiting to /v2/orders', branch: 'feat/rate-limit', turns: 61, tokens: '203k', when: '1d ago' },
+      { id: 'd9a04f', title: 'Migrate ORM to drizzle — phase 1', branch: 'chore/drizzle', turns: 87, tokens: '340k', when: '3d ago' },
+      { id: 'e2c771', title: 'Investigate p99 latency regression', branch: 'main', turns: 29, tokens: '96k', when: '6d ago' } ],
+    mcp: [
+      { name: 'github', transport: 'stdio', tools: 12, scope: 'user', status: 'ok', on: true },
+      { name: 'postgres-dev', transport: 'stdio', tools: 8, scope: 'project', status: 'ok', on: true },
+      { name: 'sentry', transport: 'http', tools: 6, scope: 'project', status: 'err', on: true },
+      { name: 'notebooklm', transport: 'stdio', tools: 24, scope: 'user', status: 'ok', on: false } ],
+    permissions: { label: 'Default mode', modes: ['default','acceptEdits','plan','bypassPermissions'], mode: 'acceptEdits',
+      allow: [ { v: 'Bash(npm run *)', scope: 'project' }, { v: 'Bash(git *)', scope: 'user' }, { v: 'Read(~/dev/**)', scope: 'user' }, { v: 'WebFetch(docs.anthropic.com)', scope: 'project' } ],
+      deny: [ { v: 'Bash(rm -rf *)', scope: 'user' }, { v: 'Read(.env*)', scope: 'project' } ] }
+  },
+
+  codex: {
+    name: 'Codex', bin: 'codex', version: '0.29.0', launch: 'agentctl --agent codex',
+    userPath: '~/.codex', projectPath: './AGENTS.md', scopes: ['user','project'],
+    resume: id => `codex resume ${id}`,
+    terms: { memory: 'AGENTS.md', memorySub: 'Codex reads AGENTS.md guidance files, layered user → project.', hooks: 'Notifications', hooksSub: 'Codex has no lifecycle hooks — the closest equivalent is the notify command for turn events.', addHook: 'Edit notify' },
+    files: [
+      { path: '~/.codex/config.toml', scope: 'user', keys: 11, status: 'ok' },
+      { path: '~/.codex/AGENTS.md', scope: 'user', keys: '—', status: 'ok' },
+      { path: 'AGENTS.md', scope: 'project', keys: '—', status: 'ok' },
+      { path: '.codex/config.toml', scope: 'project', keys: 4, status: 'ok' } ],
+    health: [
+      { ok: true, text: 'config.toml parses cleanly (both scopes)' },
+      { ok: true, text: 'AGENTS.md found at user and project level' },
+      { ok: true, text: 'Sandbox available: Seatbelt (macOS)' } ],
+    config: [
+      { key: 'model', user: '"gpt-5-codex"', project: '—', win: 'user' },
+      { key: 'model_provider', user: '"openai"', project: '—', win: 'user' },
+      { key: 'approval_policy', user: '"on-request"', project: '"on-failure"', win: 'project' },
+      { key: 'sandbox_mode', user: '"workspace-write"', project: '—', win: 'user' },
+      { key: 'sandbox_workspace_write.network_access', user: '—', project: 'true', win: 'project' },
+      { key: 'model_reasoning_effort', user: '—', project: '"high"', win: 'project' },
+      { key: 'model_reasoning_summary', user: '"concise"', project: '—', win: 'user' },
+      { key: 'model_context_window', user: '—', project: '272000', win: 'project' },
+      { key: 'model_max_output_tokens', user: '32000', project: '—', win: 'user' },
+      { key: 'notify', user: '["notify-send"]', project: '—', win: 'user' },
+      { key: 'disable_response_storage', user: 'true', project: '—', win: 'user' },
+      { key: 'shell_environment_policy.inherit', user: '"core"', project: '"all"', win: 'project' },
+      { key: 'shell_environment_policy.exclude', user: '["AWS_*","AZURE_*"]', project: '—', win: 'user' },
+      { key: 'history.persistence', user: '"save-all"', project: '—', win: 'user' },
+      { key: 'history.max_bytes', user: '10485760', project: '—', win: 'user' },
+      { key: 'file_opener', user: '"vscode"', project: '—', win: 'user' },
+      { key: 'hide_agent_reasoning', user: 'false', project: '—', win: 'user' },
+      { key: 'project_doc_max_bytes', user: '—', project: '65536', win: 'project' },
+      { key: 'tui.theme', user: '"dark"', project: '—', win: 'user' },
+      { key: 'profile', user: '"work"', project: '—', win: 'user' },
+      { key: 'mcp_servers.github.command', user: '"github-mcp"', project: '—', win: 'user' },
+      { key: 'mcp_servers.playwright.command', user: '—', project: '"npx playwright-mcp"', win: 'project' } ],
+    memory: [
+      { name: 'AGENTS.md', desc: 'Global guidance — commit style, testing discipline, review etiquette', scope: 'user', size: '1.9 KB', updated: '1w ago' },
+      { name: 'AGENTS.md', desc: 'acme-api guidance — snake_case API, drizzle migrations, CI gates', scope: 'project', size: '2.2 KB', updated: '2d ago' } ],
+    rules: [
+      { name: 'Conventional commits', detail: 'feat/fix/chore prefixes, imperative mood', scope: 'user', src: '~/.codex/AGENTS.md', on: true, text: 'Write commit subjects in imperative mood with a conventional prefix. Body explains why, not what.' },
+      { name: 'Run impacted tests before finishing', detail: 'Never end a turn with red tests', scope: 'user', src: '~/.codex/AGENTS.md', on: true, text: 'Identify tests impacted by the diff and run them before declaring the task complete.' },
+      { name: 'API responses use snake_case', detail: 'Mirror of the project convention', scope: 'project', src: 'AGENTS.md §Conventions', on: true, text: 'Response bodies, query params, and webhook payloads all use snake_case keys.' } ],
+    hooks: { supported: false, note: 'Codex does not expose lifecycle hooks. agentctl maps the nearest equivalent: the notify command fires on turn completion and approval requests.', items: [
+      { event: 'notify', matcher: 'turn-complete', command: 'notify-send "Codex" "$MSG"', scope: 'user', on: true } ] },
+    sessions: [
+      { id: '01j9j2', title: 'Port billing worker to async', branch: 'feat/async-billing', turns: 33, tokens: '112k', when: '4h ago' },
+      { id: '01j8xq', title: 'Tighten TS strictness in packages/core', branch: 'chore/ts-strict', turns: 51, tokens: '187k', when: '2d ago' },
+      { id: '01j7pm', title: 'Repro & fix OOM in import pipeline', branch: 'fix/import-oom', turns: 22, tokens: '71k', when: '5d ago' } ],
+    mcp: [
+      { name: 'github', transport: 'stdio', tools: 12, scope: 'user', status: 'ok', on: true },
+      { name: 'playwright', transport: 'stdio', tools: 9, scope: 'project', status: 'ok', on: true } ],
+    permissions: { label: 'Approval policy', modes: ['untrusted','on-request','on-failure','never'], mode: 'on-failure',
+      seg2: { label: 'Sandbox mode', modes: ['read-only','workspace-write','danger-full-access'], mode: 'workspace-write' },
+      allow: [ { v: 'workspace write: ./', scope: 'project' }, { v: 'network: package registries', scope: 'user' } ],
+      deny: [ { v: 'write outside workspace', scope: 'user' } ] }
+  },
+
+  opencode: {
+    name: 'OpenCode', bin: 'opencode', version: '0.6.3', launch: 'agentctl --agent opencode',
+    userPath: '~/.config/opencode', projectPath: './opencode.json', scopes: ['user','project'],
+    resume: id => `opencode --session ${id}`,
+    terms: { memory: 'AGENTS.md', memorySub: 'OpenCode reads AGENTS.md instructions, layered global → project.', hooks: 'Plugins', hooksSub: 'Hooks ship as plugin JS — event handlers exported from files in .opencode/plugin/.', addHook: 'Add plugin' },
+    files: [
+      { path: '~/.config/opencode/opencode.json', scope: 'user', keys: 9, status: 'ok' },
+      { path: '~/.config/opencode/AGENTS.md', scope: 'user', keys: '—', status: 'ok' },
+      { path: 'opencode.json', scope: 'project', keys: 5, status: 'ok' },
+      { path: 'AGENTS.md', scope: 'project', keys: '—', status: 'ok' } ],
+    health: [
+      { ok: true, text: 'opencode.json valid against schema (both scopes)' },
+      { ok: true, text: '2 plugins loaded, 0 failed' },
+      { ok: false, text: 'Model "claude-sonnet-5" pinned in project — user default overridden' } ],
+    config: [
+      { key: 'model', user: '"anthropic/claude-opus-5"', project: '"anthropic/claude-sonnet-5"', win: 'project' },
+      { key: 'small_model', user: '"anthropic/claude-haiku-4-5"', project: '—', win: 'user' },
+      { key: 'theme', user: '"system"', project: '—', win: 'user' },
+      { key: 'autoupdate', user: 'true', project: '—', win: 'user' },
+      { key: 'share', user: '"manual"', project: '"disabled"', win: 'project' },
+      { key: 'permission.edit', user: '"ask"', project: '"allow"', win: 'project' },
+      { key: 'permission.bash', user: '"ask"', project: '"allow"', win: 'project' },
+      { key: 'permission.webfetch', user: '"allow"', project: '—', win: 'user' },
+      { key: 'formatter', user: '—', project: '"prettier"', win: 'project' },
+      { key: 'lsp.typescript.disabled', user: '—', project: 'false', win: 'project' },
+      { key: 'mcp.github.enabled', user: 'true', project: '—', win: 'user' },
+      { key: 'mcp.linear.enabled', user: '—', project: 'true', win: 'project' },
+      { key: 'keybinds.leader', user: '"ctrl+x"', project: '—', win: 'user' },
+      { key: 'tui.scroll_speed', user: '3', project: '—', win: 'user' },
+      { key: 'instructions', user: '—', project: '["AGENTS.md","docs/style.md"]', win: 'project' },
+      { key: 'provider.anthropic.options.timeout', user: '600000', project: '—', win: 'user' },
+      { key: 'agent.plan.model', user: '—', project: '"anthropic/claude-opus-5"', win: 'project' },
+      { key: 'snapshot', user: 'true', project: '—', win: 'user' },
+      { key: 'autoshare', user: 'false', project: '—', win: 'user' } ],
+    memory: [
+      { name: 'AGENTS.md', desc: 'Global instructions — style, tone, commit discipline', scope: 'user', size: '1.1 KB', updated: '3w ago' },
+      { name: 'AGENTS.md', desc: 'acme-api instructions — conventions and CI expectations', scope: 'project', size: '2.2 KB', updated: '2d ago' } ],
+    rules: [
+      { name: 'Prefer bun over npm', detail: 'Use bun for installs and scripts in this workspace', scope: 'project', src: 'AGENTS.md', on: true, text: 'Use bun install / bun run for all package operations. npm only when a tool hard-requires it.' },
+      { name: 'No console.log in commits', detail: 'Strip debug logging before committing', scope: 'user', src: '~/.config/opencode/AGENTS.md', on: true, text: 'Remove console.log/debugger statements before staging. Use the logger module for intentional output.' } ],
+    hooks: { supported: true, events: ['session.start','tool.execute.before','tool.execute.after','session.idle'], items: [
+      { event: 'tool.execute.after', matcher: 'edit', command: '.opencode/plugin/format-on-edit.js', scope: 'project', on: true },
+      { event: 'session.idle', matcher: '*', command: '.opencode/plugin/notify.js', scope: 'user', on: true } ] },
+    sessions: [
+      { id: 'ses_8kx1', title: 'Build admin audit-log screen', branch: 'feat/audit-log', turns: 47, tokens: '156k', when: '1h ago' },
+      { id: 'ses_7dq9', title: 'Chase down flaky e2e login spec', branch: 'main', turns: 15, tokens: '48k', when: '1d ago' } ],
+    mcp: [
+      { name: 'github', transport: 'local', tools: 12, scope: 'user', status: 'ok', on: true },
+      { name: 'linear', transport: 'remote', tools: 7, scope: 'project', status: 'ok', on: true } ],
+    permissions: { label: 'Permission defaults', modes: ['allow','ask','deny'], mode: 'ask',
+      allow: [ { v: 'edit', scope: 'project' }, { v: 'webfetch', scope: 'user' } ],
+      deny: [ { v: 'bash(rm *)', scope: 'user' } ] }
+  },
+
+  pi: {
+    name: 'Pi', bin: 'pi', version: '0.12.1', launch: 'agentctl --agent pi',
+    userPath: '~/.pi/agent', projectPath: './.pi', scopes: ['user','project'],
+    resume: id => `pi --continue ${id}`,
+    terms: { memory: 'AGENTS.md', memorySub: 'Pi reads AGENTS.md context files, layered user → project.', hooks: 'Extensions', hooksSub: 'Pi extends via TypeScript extensions that subscribe to agent events.', addHook: 'Add extension' },
+    files: [
+      { path: '~/.pi/agent/settings.json', scope: 'user', keys: 7, status: 'ok' },
+      { path: '~/.pi/agent/AGENTS.md', scope: 'user', keys: '—', status: 'ok' },
+      { path: '.pi/settings.json', scope: 'project', keys: 3, status: 'ok' },
+      { path: 'AGENTS.md', scope: 'project', keys: '—', status: 'ok' } ],
+    health: [
+      { ok: true, text: 'settings.json valid (both scopes)' },
+      { ok: true, text: '3 extensions loaded' },
+      { ok: true, text: 'Theme "dark-matter" resolved' } ],
+    config: [
+      { key: 'model', user: '"claude-opus-5"', project: '—', win: 'user' },
+      { key: 'defaultProvider', user: '"anthropic"', project: '—', win: 'user' },
+      { key: 'theme', user: '"dark-matter"', project: '—', win: 'user' },
+      { key: 'compaction.enabled', user: 'true', project: 'false', win: 'project' },
+      { key: 'editor', user: '"zed"', project: '—', win: 'user' },
+      { key: 'thinkingLevel', user: '"medium"', project: '"high"', win: 'project' },
+      { key: 'telemetry', user: 'false', project: '—', win: 'user' },
+      { key: 'extensions.enabled', user: '["guard-rm","ping-slack"]', project: '—', win: 'user' },
+      { key: 'statusLine', user: '"minimal"', project: '—', win: 'user' },
+      { key: 'keybindings.submit', user: '"enter"', project: '—', win: 'user' },
+      { key: 'sessionDir', user: '"~/.pi/agent/sessions"', project: '—', win: 'user' },
+      { key: 'maxTokens', user: '—', project: '16000', win: 'project' },
+      { key: 'autoResume', user: 'false', project: '—', win: 'user' },
+      { key: 'notify.onEnd', user: 'true', project: '—', win: 'user' } ],
+    memory: [
+      { name: 'AGENTS.md', desc: 'Global context — tone, review posture, tooling defaults', scope: 'user', size: '0.9 KB', updated: '2w ago' },
+      { name: 'AGENTS.md', desc: 'acme-api context — conventions and architecture notes', scope: 'project', size: '2.2 KB', updated: '2d ago' } ],
+    rules: [
+      { name: 'Ask before adding dependencies', detail: 'Any new package needs explicit approval', scope: 'user', src: '~/.pi/agent/AGENTS.md', on: true, text: 'Never add a dependency silently. Name the package, why it\'s needed, and the lighter alternative you rejected.' },
+      { name: 'Keep diffs reviewable', detail: 'Split work >400 changed lines into stacked commits', scope: 'project', src: 'AGENTS.md', on: true, text: 'If a change exceeds ~400 lines, split into logically stacked commits so review stays tractable.' } ],
+    hooks: { supported: true, events: ['agent.start','tool.call','tool.result','agent.end'], items: [
+      { event: 'tool.call', matcher: 'bash', command: '~/.pi/agent/extensions/guard-rm.ts', scope: 'user', on: true },
+      { event: 'agent.end', matcher: '*', command: '~/.pi/agent/extensions/ping-slack.ts', scope: 'user', on: false } ] },
+    sessions: [
+      { id: 'pi-4h2k', title: 'Prototype usage-metering service', branch: 'feat/metering', turns: 38, tokens: '134k', when: '3h ago' },
+      { id: 'pi-3fx8', title: 'Clean up feature-flag debris', branch: 'chore/flags', turns: 12, tokens: '31k', when: '2d ago' } ],
+    mcp: [
+      { name: 'github', transport: 'stdio', tools: 12, scope: 'user', status: 'ok', on: true } ],
+    permissions: { label: 'Tool approval', modes: ['always-ask','trusted-tools','yolo'], mode: 'trusted-tools',
+      allow: [ { v: 'read', scope: 'user' }, { v: 'bash(git *)', scope: 'project' } ],
+      deny: [ { v: 'bash(sudo *)', scope: 'user' } ] }
+  }
+};
+
+const PROJECTS = [
+  { path: '~/dev/acme-api', branch: 'main' },
+  { path: '~/dev/acme-web', branch: 'develop' },
+  { path: '~/dev/billing-worker', branch: 'main' },
+  { path: '~/oss/agentctl', branch: 'main' }
+];
+
+const NAV = [
+  { group: 'Workspace' },
+  { id: 'overview', label: 'Overview', glyph: '◈' },
+  { id: 'config', label: 'Effective config', glyph: '≡' },
+  { group: 'Configure' },
+  { id: 'memory', label: a => a.terms.memory.split(' ')[0] === 'AGENTS.md' ? 'AGENTS.md' : 'Memory', glyph: '¶', count: a => a.memory.length },
+  { id: 'rules', label: 'Rules', glyph: '§', count: a => a.rules.length },
+  { id: 'hooks', label: a => a.terms.hooks, glyph: '⚑', count: a => a.hooks.items.length },
+  { id: 'permissions', label: 'Permissions', glyph: '⊘' },
+  { group: 'Runtime' },
+  { id: 'sessions', label: 'Sessions', glyph: '❯', count: a => a.sessions.length },
+  { id: 'mcp', label: 'MCP servers', glyph: '⌁', count: a => a.mcp.length }
+];
+
+/* ───────────────────────── state ───────────────────────────────────── */
+const saved = JSON.parse(localStorage.getItem('agentctl-state') || '{}');
+const state = { agent: saved.agent || 'claude', project: saved.project || 0, section: saved.section || 'overview', theme: saved.theme || 'dark', filter: 'all', q: '', menu: null, cfgQ: '', cfgPage: 0, cfgSize: 20 };
+const save = () => localStorage.setItem('agentctl-state', JSON.stringify({ agent: state.agent, project: state.project, section: state.section, theme: state.theme }));
+const A = () => AGENTS[state.agent];
+const modal = document.getElementById('modal');
+
+/* ───────────────────────── shared bits ─────────────────────────────── */
+const badge = s => `<span class="scope s-${s}">${s}</span>`;
+const sw = (on, action, extra = '') => `<button class="switch ${on ? 'on' : ''}" data-action="${action}" ${extra} role="switch" aria-checked="${on}"></button>`;
+const inScope = item => state.filter === 'all' || item.scope === state.filter;
+const scopeChips = () => `<div class="chip-row" data-od-id="scope-filter">
+  ${['all', ...A().scopes].map(s => `<button class="chip ${state.filter === s ? 'active' : ''}" data-action="filter" data-v="${s}">${s === 'all' ? 'All scopes' : s[0].toUpperCase() + s.slice(1)}</button>`).join('')}</div>`;
+const pageHead = (title, sub, actions = '') =>
+  `<div class="page-head" data-od-id="page-head"><div><h1>${title}</h1><p class="page-sub">${sub}</p></div><div>${actions}</div></div>`;
+const toast = msg => { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2200); };
+function openModal(title, body, foot = `<button class="btn btn-secondary" onclick="modal.close()">Close</button>`) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').innerHTML = body;
+  document.getElementById('modal-foot').innerHTML = foot;
+  modal.showModal();
+}
+
+/* ───────────────────────── section renderers ───────────────────────── */
+function rOverview(a) {
+  const statusPill = s => s === 'ok' ? `<span class="pill p-ok">valid</span>` : `<span class="pill p-warn">check</span>`;
+  return pageHead(a.name, `Adaptive profile for <span class="code">${a.bin}</span> v${a.version} — sources merged user → project, project wins on conflict.`,
+      `<button class="btn btn-secondary" data-action="open-config">Open config dir</button>`)
+    + `<div class="tile-row" data-od-id="overview-tiles">
+        ${[['rules', a.rules.length, 'Rules'], ['hooks', a.hooks.items.length, a.terms.hooks], ['mcp', a.mcp.length, 'MCP servers'], ['sessions', a.sessions.length, 'Sessions']]
+          .map(([id, n, label]) => `<button class="tile" data-action="nav" data-v="${id}" data-od-id="tile-${id}"><div class="t-num">${n}</div><div class="t-label">${label}</div></button>`).join('')}
+      </div>
+      <div class="grid-2">
+        <div class="table-card" data-od-id="config-sources">
+          <div class="lc-head"><span>CONFIG SOURCES</span><span>${a.files.length} files</span></div>
+          <table class="ds-table"><thead><tr><th>File</th><th>Scope</th><th class="num-col">Keys</th><th></th></tr></thead><tbody>
+          ${a.files.map(f => `<tr><td class="mono">${f.path}</td><td>${badge(f.scope)}</td><td class="num-col">${f.keys}</td><td>${statusPill(f.status)}</td></tr>`).join('')}
+          </tbody></table>
+        </div>
+        <div class="card health" data-od-id="health-card">
+          <h2>Health</h2>
+          <ul>${a.health.map(h => `<li><span class="${h.ok ? 'h-ok' : 'h-warn'}">${h.ok ? '✓' : '▲'}</span><span>${h.text}</span></li>`).join('')}</ul>
+        </div>
+      </div>`;
+}
+
+function rConfig(a) {
+  const cell = (v, isWin) => v === '—' ? `<span class="muted">—</span>` : `<span class="${isWin ? 'win' : ''}">${v}</span>`;
+  const hasLocal = a.scopes.includes('local');
+  const q = state.cfgQ.toLowerCase();
+  const all = a.config.filter(r => !q || `${r.key} ${r.user} ${r.project} ${r.local || ''}`.toLowerCase().includes(q));
+  const pages = Math.max(1, Math.ceil(all.length / state.cfgSize));
+  state.cfgPage = Math.min(state.cfgPage, pages - 1);
+  const start = state.cfgPage * state.cfgSize;
+  const items = all.slice(start, start + state.cfgSize);
+  return pageHead('Effective config', 'Every key across scopes, with the winning value highlighted. Precedence: local overrides project overrides user.')
+    + `<div class="toolbar" data-od-id="config-toolbar">
+        <input class="search" id="config-search" placeholder="Filter by key or value…" value="${state.cfgQ}" />
+        <span class="meta">${all.length} of ${a.config.length} settings</span>
+        <span class="meta" style="margin-left:auto">Rows per page</span>
+        <select class="input" id="cfg-size" style="width:auto;padding:5px 8px;font-size:12px">${[10,20,50,100].map(n => `<option ${n === state.cfgSize ? 'selected' : ''}>${n}</option>`).join('')}</select>
+      </div>
+      <div class="table-card" data-od-id="effective-config">
+      <table class="ds-table"><thead><tr><th>Setting</th><th>User</th><th>Project</th>${hasLocal ? '<th>Local</th>' : ''}<th>Effective</th></tr></thead><tbody>
+      ${items.map(r => {
+        const winVal = r.win === 'user' ? r.user : r.win === 'project' ? r.project : r.local;
+        return `<tr><td class="mono">${r.key}</td>
+          <td class="mono">${cell(r.user, r.win === 'user')}</td>
+          <td class="mono">${cell(r.project, r.win === 'project')}</td>
+          ${hasLocal ? `<td class="mono">${cell(r.local ?? '—', r.win === 'local')}</td>` : ''}
+          <td><span class="mono win">${winVal}</span> ${badge(r.win)}</td></tr>`;
+      }).join('') || `<tr><td colspan="${hasLocal ? 5 : 4}" class="muted">No settings match "${state.cfgQ}".</td></tr>`}
+      </tbody></table></div>
+      <div class="pager" data-od-id="config-pager">
+        <span class="meta">${all.length ? `Showing ${start + 1}–${Math.min(start + state.cfgSize, all.length)} of ${all.length}` : '0 results'}</span>
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="btn btn-secondary" data-action="cfg-page" data-v="-1" ${state.cfgPage === 0 ? 'disabled' : ''}>← Prev</button>
+          <span class="meta">Page ${state.cfgPage + 1} / ${pages}</span>
+          <button class="btn btn-secondary" data-action="cfg-page" data-v="1" ${state.cfgPage >= pages - 1 ? 'disabled' : ''}>Next →</button>
+        </div>
+      </div>`;
+}
+
+function rMemory(a) {
+  const items = a.memory.filter(inScope);
+  return pageHead(a.terms.memory, a.terms.memorySub)
+    + `<div class="toolbar">${scopeChips()}</div>
+      <div class="list-card" data-od-id="memory-list">
+      ${items.map((m, i) => `<div class="list-row">
+        <div class="lr-main"><div class="lr-title"><span class="mono">${m.name}</span>${badge(m.scope)}</div><div class="lr-sub">${m.desc}</div></div>
+        <span class="meta">${m.size}</span><span class="meta">${m.updated}</span>
+        <button class="btn btn-ghost" data-action="view-memory" data-i="${a.memory.indexOf(m)}">View</button>
+      </div>`).join('') || `<div class="list-row muted">No entries in this scope.</div>`}
+      </div>`;
+}
+
+function rRules(a) {
+  const items = a.rules.filter(inScope);
+  return pageHead('Rules', 'Standing instructions the agent follows every turn. Toggle to disable without deleting.')
+    + `<div class="toolbar">${scopeChips()}</div>
+      <div class="list-card" data-od-id="rules-list">
+      ${items.map(r => { const i = a.rules.indexOf(r); return `<div class="list-row">
+        ${sw(r.on, 'toggle-rule', `data-i="${i}"`)}
+        <div class="lr-main"><div class="lr-title">${r.name}${badge(r.scope)}</div><div class="lr-sub">${r.detail} · <span class="mono">${r.src}</span></div></div>
+        <button class="btn btn-ghost" data-action="view-rule" data-i="${i}">Source</button>
+      </div>`; }).join('') || `<div class="list-row muted">No rules in this scope.</div>`}
+      </div>`;
+}
+
+function rHooks(a) {
+  const h = a.hooks;
+  let out = pageHead(a.terms.hooks, a.terms.hooksSub,
+    h.supported ? `<button class="btn btn-primary" data-action="add-hook">${a.terms.addHook}</button>` : '');
+  if (!h.supported) out += `<div class="notice" data-od-id="hooks-notice"><span class="n-mark">▲</span><div><strong>${a.name} doesn't support lifecycle hooks.</strong> ${h.note}</div></div>`;
+  const groups = [...new Set(h.items.map(x => x.event))];
+  out += groups.map(ev => `<div class="list-card" data-od-id="hooks-${ev}">
+    <div class="lc-head"><span>${ev}</span><span>${h.items.filter(x => x.event === ev).length}</span></div>
+    ${h.items.filter(x => x.event === ev).filter(inScope).map(x => { const i = h.items.indexOf(x); return `<div class="list-row">
+      ${sw(x.on, 'toggle-hook', `data-i="${i}"`)}
+      <div class="lr-main"><div class="lr-title"><span class="mono">${x.matcher}</span>${badge(x.scope)}</div><div class="lr-sub mono">${x.command}</div></div>
+      <button class="btn btn-ghost" data-action="del-hook" data-i="${i}">Remove</button>
+    </div>`; }).join('') || `<div class="list-row muted">No entries in this scope.</div>`}
+  </div>`).join('');
+  return out.replace('<div class="page-head"', `<div class="toolbar-slot"></div><div class="page-head"`).replace('<div class="toolbar-slot"></div>', '') +
+    (h.supported ? '' : '');
+}
+
+function rSessions(a) {
+  const q = state.q.toLowerCase();
+  const items = a.sessions.filter(s => !q || (s.title + s.id + s.branch).toLowerCase().includes(q));
+  return pageHead('Sessions', `Recent ${a.name} sessions in this project. Resume copies the exact CLI command.`)
+    + `<div class="toolbar"><input class="search" id="session-search" placeholder="Filter by title, id, branch…" value="${state.q}" /><span class="meta">${items.length} of ${a.sessions.length}</span></div>
+      <div class="table-card" data-od-id="sessions-table">
+      <table class="ds-table"><thead><tr><th>ID</th><th>Title</th><th>Branch</th><th class="num-col">Turns</th><th class="num-col">Tokens</th><th>Age</th><th></th></tr></thead><tbody>
+      ${items.map(s => `<tr><td class="mono">${s.id}</td><td>${s.title}</td><td class="mono">${s.branch}</td>
+        <td class="num-col">${s.turns}</td><td class="num-col">${s.tokens}</td><td class="mono">${s.when}</td>
+        <td><button class="btn btn-ghost" data-action="resume" data-id="${s.id}">Resume</button></td></tr>`).join('') || `<tr><td colspan="7" class="muted">No sessions match.</td></tr>`}
+      </tbody></table></div>`;
+}
+
+function rMcp(a) {
+  const items = a.mcp.filter(inScope);
+  const pill = m => !m.on ? `<span class="pill p-off">disabled</span>` : m.status === 'ok' ? `<span class="pill p-ok">connected</span>` : `<span class="pill p-err">error</span>`;
+  return pageHead('MCP servers', 'Tool servers available to the agent, with the scope each is registered in.')
+    + `<div class="toolbar">${scopeChips()}</div>
+      <div class="table-card" data-od-id="mcp-table">
+      <table class="ds-table"><thead><tr><th></th><th>Server</th><th>Transport</th><th class="num-col">Tools</th><th>Scope</th><th>Status</th></tr></thead><tbody>
+      ${items.map(m => { const i = a.mcp.indexOf(m); return `<tr>
+        <td style="width:44px">${sw(m.on, 'toggle-mcp', `data-i="${i}"`)}</td>
+        <td class="mono">${m.name}</td><td class="mono">${m.transport}</td><td class="num-col">${m.tools}</td>
+        <td>${badge(m.scope)}</td><td>${pill(m)}</td></tr>`; }).join('') || `<tr><td colspan="6" class="muted">No servers in this scope.</td></tr>`}
+      </tbody></table></div>`;
+}
+
+function rPermissions(a) {
+  const p = a.permissions;
+  const seg = (label, modes, cur, action) => `<div class="card" style="margin-bottom:14px">
+    <h2 style="margin-bottom:10px">${label}</h2>
+    <div class="seg">${modes.map(m => `<button class="${m === cur ? 'active' : ''}" data-action="${action}" data-v="${m}">${m}</button>`).join('')}</div></div>`;
+  const chips = (list, kind) => list.map((c, i) => `<span class="perm-chip">${c.v} ${badge(c.scope)}<button class="x" data-action="del-perm" data-kind="${kind}" data-i="${i}" title="Remove">✕</button></span>`).join('');
+  return pageHead('Permissions', `What ${a.name} may do without asking, and what is always blocked.`)
+    + seg(p.label, p.modes, p.mode, 'set-mode')
+    + (p.seg2 ? seg(p.seg2.label, p.seg2.modes, p.seg2.mode, 'set-mode2') : '')
+    + `<div class="grid-2">
+      <div class="card" data-od-id="perm-allow"><h2>Allow</h2><div class="perm-wrap">${chips(p.allow, 'allow') || '<span class="muted">Empty</span>'}</div>
+        <div style="display:flex;gap:8px;margin-top:14px"><input class="input" id="perm-input" placeholder="e.g. Bash(make *)" style="flex:1" /><button class="btn btn-secondary" data-action="add-perm">Add</button></div></div>
+      <div class="card" data-od-id="perm-deny"><h2>Deny</h2><div class="perm-wrap">${chips(p.deny, 'deny') || '<span class="muted">Empty</span>'}</div></div>
+    </div>`;
+}
+
+const SECTIONS = { overview: rOverview, config: rConfig, memory: rMemory, rules: rRules, hooks: rHooks, sessions: rSessions, mcp: rMcp, permissions: rPermissions };
+
+/* ───────────────────────── chrome renderers ────────────────────────── */
+function renderChooser() {
+  const p = PROJECTS[state.project], a = A();
+  document.getElementById('chooser').innerHTML = `
+    <button class="ch-side" data-action="menu" data-menu="folder" data-od-id="chooser-folder" aria-expanded="${state.menu === 'folder'}">
+      <span class="ch-label">Folder</span><span class="ch-value mono">${p.path}</span><span class="ch-caret">▾</span>
+    </button>
+    <span class="ch-div"></span>
+    <button class="ch-side" data-action="menu" data-menu="agent" data-od-id="chooser-agent" aria-expanded="${state.menu === 'agent'}">
+      <span class="ch-label">Agent</span><span class="ch-value">${a.name}</span><span class="ch-caret">▾</span>
+    </button>
+    <div class="ch-menu ch-left ${state.menu === 'folder' ? 'open' : ''}" data-od-id="folder-menu">
+      ${PROJECTS.map((x, i) => `<button class="ch-item ${i === state.project ? 'active' : ''}" data-action="pick-folder" data-i="${i}"><span class="mono">${x.path}</span><span class="meta">${x.branch}</span></button>`).join('')}
+    </div>
+    <div class="ch-menu ch-right ${state.menu === 'agent' ? 'open' : ''}" data-od-id="agent-menu">
+      ${Object.entries(AGENTS).map(([k, ag]) => `<button class="ch-item ${k === state.agent ? 'active' : ''}" data-action="pick-agent" data-v="${k}">${ag.name}<span class="meta">${ag.bin} v${ag.version}</span></button>`).join('')}
+    </div>`;
+}
+function renderSidebar() {
+  const a = A();
+  document.getElementById('sidebar').innerHTML = NAV.map(n => {
+    if (n.group) return `<div class="nav-group">${n.group}</div>`;
+    const label = typeof n.label === 'function' ? n.label(a) : n.label;
+    const count = n.count ? `<span class="count">${n.count(a)}</span>` : '';
+    return `<button class="nav-item ${state.section === n.id ? 'active' : ''}" data-action="nav" data-v="${n.id}" data-od-id="nav-${n.id}"><span class="glyph">${n.glyph}</span>${label}${count}</button>`;
+  }).join('')
+  + `<div class="side-legend" data-od-id="scope-legend">
+      <div class="lg-row">${badge('user')}<span class="lg-path">${a.userPath}</span></div>
+      <div class="lg-row">${badge('project')}<span class="lg-path">${a.projectPath}</span></div>
+      ${a.scopes.includes('local') ? `<div class="lg-row">${badge('local')}<span class="lg-path">.claude/settings.local.json</span></div>` : ''}
+    </div>`;
+}
+function renderStatusbar() {
+  const a = A();
+  document.getElementById('sb-cmd').textContent = `$ ${a.launch} ${PROJECTS[state.project].path}`;
+  document.getElementById('sb-paths').innerHTML = `<span>${a.userPath}</span><span>·</span><span>${a.projectPath}</span>`;
+}
+function render() {
+  renderChooser(); renderSidebar(); renderStatusbar();
+  document.getElementById('section-root').innerHTML = SECTIONS[state.section](A());
+  const s = document.getElementById('session-search');
+  if (s) { s.addEventListener('input', e => { state.q = e.target.value; render(); const s2 = document.getElementById('session-search'); s2.focus(); s2.setSelectionRange(s2.value.length, s2.value.length); }); }
+  const cs = document.getElementById('config-search');
+  if (cs) { cs.addEventListener('input', e => { state.cfgQ = e.target.value; state.cfgPage = 0; render(); const c2 = document.getElementById('config-search'); c2.focus(); c2.setSelectionRange(c2.value.length, c2.value.length); }); }
+  const sz = document.getElementById('cfg-size');
+  if (sz) { sz.addEventListener('change', e => { state.cfgSize = +e.target.value; state.cfgPage = 0; render(); }); }
+  save();
+}
+
+/* ───────────────────────── interactions ────────────────────────────── */
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-action]');
+  if (!el) { if (state.menu) { state.menu = null; renderChooser(); } return; }
+  const a = A(), act = el.dataset.action, i = +el.dataset.i;
+  if (state.menu && act !== 'menu' && act !== 'pick-folder' && act !== 'pick-agent') { state.menu = null; renderChooser(); }
+  if (act === 'menu') { state.menu = state.menu === el.dataset.menu ? null : el.dataset.menu; renderChooser(); }
+  else if (act === 'pick-folder') { state.project = i; state.menu = null; render(); toast(`Switched to ${PROJECTS[i].path}`); }
+  else if (act === 'pick-agent') { state.agent = el.dataset.v; state.menu = null; state.filter = 'all'; state.q = ''; state.cfgQ = ''; state.cfgPage = 0; render(); }
+  else if (act === 'nav') { state.section = el.dataset.v; state.filter = 'all'; state.q = ''; state.cfgQ = ''; state.cfgPage = 0; render(); }
+  else if (act === 'cfg-page') { state.cfgPage += +el.dataset.v; render(); }
+  else if (act === 'filter') { state.filter = el.dataset.v; render(); }
+  else if (act === 'toggle-rule') { a.rules[i].on = !a.rules[i].on; render(); toast(`${a.rules[i].name} ${a.rules[i].on ? 'enabled' : 'disabled'}`); }
+  else if (act === 'toggle-hook') { a.hooks.items[i].on = !a.hooks.items[i].on; render(); }
+  else if (act === 'toggle-mcp') { a.mcp[i].on = !a.mcp[i].on; render(); }
+  else if (act === 'del-hook') { const h = a.hooks.items.splice(i, 1)[0]; render(); toast(`Removed ${h.event} hook`); }
+  else if (act === 'view-rule') { const r = a.rules[i]; openModal(r.name, `<p class="meta" style="margin:0 0 10px">${badge(r.scope)} · ${r.src}</p><div class="rule-body">${r.text}</div>`); }
+  else if (act === 'view-memory') { const m = a.memory[i]; openModal(m.name, `<p class="meta" style="margin:0 0 10px">${badge(m.scope)} · ${m.size} · updated ${m.updated}</p><div class="rule-body">${m.desc}</div>`); }
+  else if (act === 'resume') { const cmd = a.resume(el.dataset.id); navigator.clipboard?.writeText(cmd); toast(`Copied: ${cmd}`); }
+  else if (act === 'open-config') { toast(`Would open ${a.userPath} in your file manager`); }
+  else if (act === 'set-mode') { a.permissions.mode = el.dataset.v; render(); toast(`${a.permissions.label}: ${el.dataset.v}`); }
+  else if (act === 'set-mode2') { a.permissions.seg2.mode = el.dataset.v; render(); toast(`${a.permissions.seg2.label}: ${el.dataset.v}`); }
+  else if (act === 'del-perm') { a.permissions[el.dataset.kind].splice(i, 1); render(); }
+  else if (act === 'add-perm') {
+    const inp = document.getElementById('perm-input');
+    if (inp.value.trim()) { a.permissions.allow.push({ v: inp.value.trim(), scope: 'project' }); render(); toast('Added to project allowlist'); }
+  }
+  else if (act === 'add-hook') {
+    const h = a.hooks;
+    openModal(a.terms.addHook, `
+      <div class="field"><label>Event</label><select class="input" id="nh-event">${h.events.map(ev => `<option>${ev}</option>`).join('')}</select></div>
+      <div class="field"><label>Matcher</label><input class="input" id="nh-matcher" placeholder="e.g. Bash, Edit|Write, *" value="*" /></div>
+      <div class="field"><label>Command</label><input class="input" id="nh-cmd" placeholder="./scripts/my-hook.sh" /></div>
+      <div class="field"><label>Scope</label><select class="input" id="nh-scope">${a.scopes.map(s => `<option>${s}</option>`).join('')}</select></div>`,
+      `<button class="btn btn-secondary" onclick="modal.close()">Cancel</button>
+       <button class="btn btn-primary" data-action="save-hook">Save hook</button>`);
+  }
+  else if (act === 'save-hook') {
+    const v = id => document.getElementById(id).value;
+    if (!v('nh-cmd').trim()) { toast('Command is required'); return; }
+    a.hooks.items.push({ event: v('nh-event'), matcher: v('nh-matcher') || '*', command: v('nh-cmd'), scope: v('nh-scope'), on: true });
+    modal.close(); render(); toast(`Hook added to ${v('nh-scope')} scope`);
+  }
+});
+
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  state.theme = state.theme === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = state.theme;
+  save();
+});
+
+document.documentElement.dataset.theme = state.theme;
+render();
+</script>
+</body>
+</html>

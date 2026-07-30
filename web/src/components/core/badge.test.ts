@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { sourceBadgeText } from './badge.js';
+import { scopeClass, sourceBadgeText } from './badge.js';
 import { SourceBadge } from './SourceBadge.js';
 
 describe('sourceBadgeText', () => {
@@ -22,18 +22,27 @@ describe('sourceBadgeText', () => {
   });
 });
 
+describe('scopeClass', () => {
+  it('maps every scope to its Console contract class', () => {
+    expect(scopeClass('project')).toBe('s-project');
+    expect(scopeClass('global')).toBe('s-global');
+    expect(scopeClass('local')).toBe('s-local');
+    expect(scopeClass('default')).toBe('s-default');
+  });
+});
+
 describe('SourceBadge', () => {
-  it('renders a micro-label span with the composed text', () => {
+  it('renders a .scope contract span with the composed text', () => {
     const html = renderToStaticMarkup(
       createElement(SourceBadge, { scope: 'global', detail: '~/.claude', readOnly: true }),
     );
     expect(html).toBe(
-      '<span class="source-badge micro-label">GLOBAL · ~/.claude · READ-ONLY</span>',
+      '<span class="scope s-global source-badge">GLOBAL · ~/.claude · READ-ONLY</span>',
     );
   });
 
   it('renders the bare scope without separators', () => {
     const html = renderToStaticMarkup(createElement(SourceBadge, { scope: 'project' }));
-    expect(html).toBe('<span class="source-badge micro-label">PROJECT</span>');
+    expect(html).toBe('<span class="scope s-project source-badge">PROJECT</span>');
   });
 });

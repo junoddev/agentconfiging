@@ -1,8 +1,8 @@
 /**
  * The custom React Flow node (bead ira.2) — a HAIRLINE BOX with a micro-label
- * header (DESIGN §6), themed to Signal Grid tokens (NOT default React Flow chrome).
- * Live run status colours the box (§5 live node status). Every field shown is
- * UNTRUSTED pipeline config (bash/url/path) rendered as a TEXT NODE only.
+ * header, themed to the Console tokens (NOT default React Flow chrome), so it
+ * is legible in both themes. Live run status colours the box. Every field shown
+ * is UNTRUSTED pipeline config (bash/url/path) rendered as a TEXT NODE only.
  */
 
 import { Handle, Position, type NodeProps } from '@xyflow/react';

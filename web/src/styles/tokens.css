@@ -1,98 +1,58 @@
-/* Signal Grid — design tokens (docs/DESIGN.md §2–§4).
-   Two first-class themes: Paper (light, default) and Ink (dark).
-   Theme resolution:
-     1. `:root` defaults to Paper.
-     2. `@media (prefers-color-scheme: dark)` applies Ink when no explicit
-        `data-theme` attribute pins the theme.
-     3. `[data-theme='ink']` / `[data-theme='paper']` on <html> always win.
-   Hex values mirror the DESIGN.md table exactly (vitest-checked via tokens.ts). */
+/* Console — design tokens (docs/DESIGN.md §1–§3).
+   Six core color tokens + derived tints. No raw hex anywhere: core values are
+   oklch(), everything else is color-mix(in oklch, …) of a core token.
+   Theme switching is a single data-theme attribute on <html>; components never
+   reference a theme directly.
+   Resolution: `:root` = light; `html[data-theme="dark"]` overrides. Dark is the
+   default — shell/theme.ts sets data-theme="dark" unless the OS or a stored
+   choice says light. Values mirror the docs/DESIGN.md token block exactly
+   (vitest-checked via tokens.ts / tokens.test.ts). */
 
 :root {
-  /* §2 Color — Paper (light) */
   color-scheme: light;
-  --bg: #fafaf7;
-  --surface: #ffffff;
-  --fg: #141519;
-  --fg-dim: #5c5f6a;
-  --hairline: #d9d9d2;
-  --signal: #2e7d32;
-  --warn: #8a6100;
-  --red: #e63329;
-  --trace-dim: rgba(46, 125, 50, 0.25);
 
-  /* §2 Shape — no radius above 2px, borders always 1px */
-  --radius: 2px;
-  --hairline-w: 1px;
+  /* §1 core six */
+  --bg: oklch(98% 0.005 250);
+  --surface: oklch(100% 0 0);
+  --fg: oklch(22% 0.02 240);
+  --muted: oklch(50% 0.018 240);
+  --border: oklch(90% 0.008 240);
+  --accent: oklch(58% 0.16 145);
 
-  /* §3 Typography */
-  --font-sans: 'Archivo', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  /* status — derived hues, restrained tinted backgrounds only */
+  --warn: oklch(62% 0.14 85);
+  --danger: oklch(56% 0.19 25);
 
-  /* §3 Scale (px): 96 / 64 (stats) · 28 (page title) · 18 (section) ·
-     15 (body) · 13 (mono data) · 11 (micro-labels).
-     Baseline grid 8px; paired line-heights snap to it. */
-  --baseline: 8px;
-  --size-stat-xl: 96px;
-  --leading-stat-xl: 96px;
-  --size-stat: 64px;
-  --leading-stat: 64px;
-  --size-title: 28px;
-  --leading-title: 32px;
-  --size-section: 18px;
-  --leading-section: 24px;
-  --size-body: 15px;
-  --leading-body: 24px;
-  --size-data: 13px;
-  --leading-data: 16px;
-  --size-micro: 11px;
-  --leading-micro: 16px;
-  --tracking-heading: -0.01em;
-  --tracking-micro: 0.08em;
+  /* soft washes — always color-mix, never new hex */
+  --accent-soft: color-mix(in oklch, var(--accent) 14%, transparent);
+  --warn-soft: color-mix(in oklch, var(--warn) 16%, transparent);
+  --danger-soft: color-mix(in oklch, var(--danger) 14%, transparent);
+  --fg-soft: color-mix(in oklch, var(--fg) 6%, transparent);
 
-  /* §4 Grid & layout */
-  --page-max: 1440px;
-  --gutter: 24px;
-  --rail-w: 220px;
-  --topbar-h: 48px;
-  --row-h: 40px;
+  /* §2 typography — one sans family, mono is a semantic signal */
+  --font-display: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, Menlo, monospace;
 
-  /* Motion hook point (§5): signal-layer code multiplies durations by this.
-     prefers-reduced-motion zeroes it; nothing else in the chassis animates. */
-  --motion: 1;
+  /* §2 scale — fixed px; this is a desktop tool, not a marketing page */
+  --fs-h1: 20px;
+  --fs-h2: 15px;
+  --fs-body: 13.5px;
+  --fs-meta: 12px;
+
+  /* §3 shape */
+  --radius: 8px;
+  --radius-lg: 12px;
 }
 
-/* System dark preference → Ink, unless the app pinned a theme explicitly. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='paper']) {
-    color-scheme: dark;
-    --bg: #0b0e17;
-    --surface: #121627;
-    --fg: #e8eaf2;
-    --fg-dim: #9aa1b5;
-    --hairline: #232a3e;
-    --signal: #b4ff39;
-    --warn: #ffc53d;
-    --red: #ff4d3d;
-    --trace-dim: rgba(180, 255, 57, 0.22);
-  }
-}
-
-/* Explicit Ink — wins over the media query (same specificity, later source). */
-:root[data-theme='ink'] {
+html[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #0b0e17;
-  --surface: #121627;
-  --fg: #e8eaf2;
-  --fg-dim: #9aa1b5;
-  --hairline: #232a3e;
-  --signal: #b4ff39;
-  --warn: #ffc53d;
-  --red: #ff4d3d;
-  --trace-dim: rgba(180, 255, 57, 0.22);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  :root {
-    --motion: 0;
-  }
+  --bg: oklch(17% 0.012 245);
+  --surface: oklch(21% 0.014 245);
+  --fg: oklch(93% 0.008 240);
+  --muted: oklch(64% 0.015 240);
+  --border: oklch(30% 0.014 245);
+  --accent: oklch(72% 0.17 148);
+  --warn: oklch(76% 0.14 85);
+  --danger: oklch(66% 0.18 25);
 }

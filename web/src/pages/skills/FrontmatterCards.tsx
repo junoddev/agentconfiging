@@ -12,10 +12,10 @@ function ChipRow({ label, items }: { label: string; items: readonly string[] }) 
   if (items.length === 0) return null;
   return (
     <div className="fmcard">
-      <div className="micro-label fmcard__label">{label}</div>
+      <div className="table-header fmcard__label">{label}</div>
       <div className="fmcard__chips">
         {items.map((item, i) => (
-          <span key={`${item}:${i}`} className="mono-data fmcard__chip">
+          <span key={`${item}:${i}`} className="code fmcard__chip">
             {item}
           </span>
         ))}
@@ -45,7 +45,7 @@ export function FrontmatterCards({ card }: { card: SkillCard }) {
 
       {card.description !== '' && <p className="fmcards__desc">{card.description}</p>}
 
-      {empty && <p className="micro-label fmcards__none">no frontmatter fields</p>}
+      {empty && <p className="meta fmcards__none">no frontmatter fields</p>}
 
       <ChipRow label="TOOLS" items={card.tools} />
       <ChipRow label="MCP" items={card.mcp} />
@@ -54,7 +54,7 @@ export function FrontmatterCards({ card }: { card: SkillCard }) {
 
       {card.other.length > 0 && (
         <div className="fmcard">
-          <div className="micro-label fmcard__label">OTHER</div>
+          <div className="table-header fmcard__label">OTHER</div>
           <div className="fmcard__rows">
             {card.other.map((entry) => (
               <div key={entry.key} className="fmcard__row">

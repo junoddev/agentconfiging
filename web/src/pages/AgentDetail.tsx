@@ -1,25 +1,29 @@
 import { useMemo } from 'react';
-import { EmptyState, FileChip, FindingRow, SourceBadge, Table } from '../components/core/index.js';
-import { VuMeter, Waveform } from '../components/signal/index.js';
+import {
+  EmptyState,
+  FileChip,
+  ListCard,
+  ListRow,
+  Pill,
+  SourceBadge,
+  Table,
+} from '../components/core/index.js';
 import type { DetectedAgent } from '../api/types.js';
-import { homeRel } from '../lib/format.js';
+import { homeRel, pluralize } from '../lib/format.js';
 import { useGlobalConfig, useReport } from '../state/index.js';
 import {
   artifactHref,
-  confidenceLevel,
+  confidencePillTone,
   extrasToRows,
   findAgent,
   findingsForAgent,
-  toConfigSources,
-  toRowSeverity,
   globalFilesForKind,
   type GlobalKindGroup,
 } from './agents/logic.js';
+import { severityPillTone } from './findings/logic.js';
 import './agents.css';
 
-/** The resolved detail body for a known agent. Split out so the waveform
- *  sources memo keys on the agent's file list, not on the page-level report
- *  object (which is a fresh reference after every WS refetch). */
+/** The resolved detail body for a known agent. */
 function AgentBody({
   agent,
   findings,
@@ -31,33 +35,35 @@ function AgentBody({
    *  exactly as before global data existed. */
   globalGroups: GlobalKindGroup[];
 }) {
-  const filesKey = agent.files.join(' ');
-  const sources = useMemo(() => toConfigSources(agent.files), [filesKey]);
   const extraRows = useMemo(() => extrasToRows(agent.extras), [agent.extras]);
 
   return (
     <>
-      <div className="agent-detail__head">
-        {/* `kind` is report-derived text — rendered as a text node, never HTML. */}
-        <span className="agent-detail__kind">{agent.kind.toUpperCase()}</span>
-        <span className="agent-detail__conf">
-          <span className="micro-label">{agent.confidence.toUpperCase()}</span>
-          <VuMeter level={confidenceLevel(agent.confidence)} label={`${agent.kind} confidence`} />
-        </span>
-      </div>
-
-      <div className="agent-detail__wave">
-        <Waveform sources={sources} label={`${agent.kind} fingerprint`} />
+      <div className="page-head">
+        <div>
+          {/* `kind` is report-derived text — rendered as a text node, never HTML. */}
+          <h1>{agent.kind}</h1>
+          <p className="page-sub">
+            Detected from {pluralize(agent.files.length, 'config file')} in this folder.
+          </p>
+        </div>
+        <div className="agent-detail__conf">
+          <Pill tone={confidencePillTone(agent.confidence)}>{agent.confidence} confidence</Pill>
+        </div>
       </div>
 
       <h2 className="micro-label agent-detail__caption">FILES</h2>
-      {/* With global groups present the chips gain provenance micro-headings:
+      {/* With global groups present the chips gain provenance headings:
           PROJECT first, then one GLOBAL · <dir> group per home config dir.
           Global chips deep-link by ABSOLUTE path (the file API's address for
           global files) — display stays entry-relative under the heading. */}
-      {globalGroups.length > 0 && <h3 className="micro-label agent-detail__filegroup">PROJECT</h3>}
+      {globalGroups.length > 0 && (
+        <h3 className="agent-detail__filegroup">
+          <SourceBadge scope="project" />
+        </h3>
+      )}
       {agent.files.length === 0 ? (
-        <p className="micro-label">no config files</p>
+        <p className="meta">no config files</p>
       ) : (
         <div className="agent-detail__chips">
           {agent.files.map((path) => (
@@ -92,13 +98,13 @@ function AgentBody({
 
       <h2 className="micro-label agent-detail__caption">METADATA</h2>
       {extraRows.length === 0 ? (
-        <p className="micro-label">no metadata</p>
+        <p className="meta">no metadata</p>
       ) : (
         <Table headers={['KEY', 'VALUE']}>
           {extraRows.map((row) => (
             <tr key={row.key}>
-              <td className="agent-extras__key">{row.key}</td>
-              <td className="agent-extras__val">{row.value}</td>
+              <td className="mono agent-extras__key">{row.key}</td>
+              <td className="mono agent-extras__val">{row.value}</td>
             </tr>
           ))}
         </Table>
@@ -106,17 +112,18 @@ function AgentBody({
 
       <h2 className="micro-label agent-detail__caption">FINDINGS</h2>
       {findings.length === 0 ? (
-        <p className="micro-label">no findings</p>
+        <p className="meta">no findings</p>
       ) : (
-        findings.map((finding, i) => (
-          <FindingRow
-            key={finding.id}
-            index={i + 1}
-            severity={toRowSeverity(finding.severity)}
-            title={finding.title}
-            fix={finding.suggestion}
-          />
-        ))
+        <ListCard>
+          {findings.map((finding) => (
+            <ListRow
+              key={finding.id}
+              leading={<Pill tone={severityPillTone(finding.severity)}>{finding.severity}</Pill>}
+              title={finding.title}
+              sub={finding.suggestion !== undefined ? `→ ${finding.suggestion}` : undefined}
+            />
+          ))}
+        </ListCard>
       )}
     </>
   );
@@ -136,18 +143,14 @@ export function AgentDetail({ kind }: { kind: string }) {
 
   let body;
   if (!report && error) {
-    body = <EmptyState title="NO SIGNAL" instruction={`scan failed · ${error.message}`} />;
+    body = <EmptyState title="Scan failed" instruction={error.message} />;
   } else if (!report) {
-    body = <EmptyState title="SCANNING" instruction={loading ? 'acquiring signal' : 'no report'} />;
+    body = <EmptyState instruction={loading ? 'scanning config …' : 'no report yet'} />;
   } else if (!agent) {
-    body = <EmptyState title="NO SIGNAL" instruction={`unknown agent · ${kind}`} />;
+    body = <EmptyState instruction={`unknown agent · ${kind}`} />;
   } else {
     body = <AgentBody agent={agent} findings={findings} globalGroups={globalGroups} />;
   }
 
-  return (
-    <main className="layout-main page">
-      <section className="page__section">{body}</section>
-    </main>
-  );
+  return <main className="layout-main page">{body}</main>;
 }

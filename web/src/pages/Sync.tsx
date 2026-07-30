@@ -1,15 +1,16 @@
 /**
- * Sync (rail `14 SYNC`, route `#/sync`, bead agentconfig-wmc.10) — the INSTRUCTION
- * SYNC page (SPEC §4.1 + §5 row 22). The user designates a SOURCE OF TRUTH (an
- * instruction file in the instance) and REGENERATES the other runtimes'
- * instruction files from it, with a mandatory per-target diff preview before any
- * write. Long-tail runtimes (Cline, Windsurf, Zed, Amazon Q, Junie, Roo, Qodo,
- * Aider) appear as sync TARGETS even when they are not detected.
+ * Sync (#/sync, Console page, E13.5) — the INSTRUCTION SYNC page (SPEC §4.1 +
+ * §5 row 22). The user designates a SOURCE OF TRUTH (an instruction file in the
+ * instance) and REGENERATES the other runtimes' instruction files from it, with
+ * a mandatory per-target diff preview before any write. Long-tail runtimes
+ * (Cline, Windsurf, Zed, Amazon Q, Junie, Roo, Qodo, Aider) appear as sync
+ * TARGETS even when they are not detected.
  *
  * FLOW: pick a source → the server dry-runs the plan (per-runtime sync status +
  * unified diffs, no disk touch) → select which targets to regenerate → REGENERATE
- * commits each selected target through the ONE guarded server write path. All diff
- * content is parsed and rendered by DiffPanel as TEXT nodes only — never markup.
+ * commits each selected target through the ONE guarded server write path and
+ * confirms via Toast. All diff content is parsed and rendered by DiffPanel as
+ * TEXT nodes only — never markup.
  *
  * CLIENT SEAM: the sync endpoint is not on the shell's app-state value (which
  * stays private), so — following the Settings/Instances pages — this page captures
@@ -19,8 +20,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ApiClient, ApiError, type SyncResponse, type SyncTarget } from '../api/index.js';
-import { parseTokenHash } from '../api/token.js';
-import { Button, DiffPanel, EmptyState } from '../components/core/index.js';
+import { bootstrapToken } from '../api/token.js';
+import {
+  Button,
+  DiffPanel,
+  EmptyState,
+  Pill,
+  SegmentedControl,
+  SourceBadge,
+  useToast,
+  type PillTone,
+} from '../components/core/index.js';
 import { useAppState } from '../state/index.js';
 import { parseDiff } from '../write/index.js';
 import {
@@ -34,10 +44,16 @@ import {
 } from './sync/logic.js';
 import './sync.css';
 
-const bootToken =
-  typeof window !== 'undefined' ? parseTokenHash(window.location.hash).token : undefined;
+const bootToken = typeof window !== 'undefined' ? bootstrapToken() : undefined;
 
 type LoadStatus = 'loading' | 'ok' | 'missing-source' | 'error';
+
+/** Map the logic layer's tone onto the Console pill tones. */
+const PILL_TONE: Record<ReturnType<typeof statusTone>, PillTone> = {
+  signal: 'ok',
+  warn: 'warn',
+  dim: 'off',
+};
 
 function loadError(err: unknown): { status: LoadStatus; msg: string } {
   if (err instanceof ApiError) {
@@ -62,7 +78,7 @@ function TargetRow({
   const hunks = useMemo(() => parseDiff(target.diff), [target.diff]);
   const actionable = isActionable(target);
   return (
-    <li className="sync__row">
+    <li className="card sync__row">
       <div className="sync__row-head">
         <label className="sync__pick">
           <input
@@ -74,11 +90,12 @@ function TargetRow({
           />
           <span className="mono-data sync__path">{target.path}</span>
         </label>
-        <span className={`sync__badge micro-label sync__badge--${statusTone(target.status)}`}>
-          {statusLabel(target.status)}
+        <span className="sync__row-marks">
+          <SourceBadge scope="project" />
+          <Pill tone={PILL_TONE[statusTone(target.status)]}>{statusLabel(target.status)}</Pill>
         </span>
       </div>
-      <div className="sync__meta micro-label">
+      <div className="sync__meta meta">
         <span>{target.displayNames.join(' · ')}</span>
         {target.lossy && target.note !== undefined && (
           <span className="sync__note" title="approximate mapping">
@@ -97,10 +114,11 @@ function TargetRow({
   );
 }
 
-export function Sync() {
+function SyncBody() {
   const { currentInstance, refetch } = useAppState();
   const client = useMemo(() => (bootToken ? new ApiClient(bootToken) : undefined), []);
   const instanceId = currentInstance?.id;
+  const toast = useToast();
 
   const [source, setSource] = useState<string>(SOURCE_CANDIDATES[0] ?? 'CLAUDE.md');
   const [plan, setPlan] = useState<SyncResponse | undefined>();
@@ -168,11 +186,11 @@ export function Sync() {
         instance: instanceId,
       });
       const written = res.targets.filter((t) => t.committed).length;
-      setCommitMsg(
-        res.committed
-          ? `regenerated ${written} file${written === 1 ? '' : 's'} from ${source}`
-          : 'some targets could not be written — see the rows',
-      );
+      const msg = res.committed
+        ? `regenerated ${written} file${written === 1 ? '' : 's'} from ${source}`
+        : 'some targets could not be written — see the rows';
+      setCommitMsg(msg);
+      if (res.committed) toast(`Regenerated ${written} file${written === 1 ? '' : 's'}`);
       // Pull the fresh report so resolved drift/conflict findings drop out, then
       // re-run the dry-run so the rows flip to in-sync.
       refetch();
@@ -182,54 +200,48 @@ export function Sync() {
     } finally {
       setCommitting(false);
     }
-  }, [client, selectedIds, source, instanceId, refetch]);
+  }, [client, selectedIds, source, instanceId, refetch, toast]);
 
   return (
     <main className="layout-main page">
-      <section className="page__section">
-        <h1 className="title-page">
-          SYNC
-          <span className="sync__sub micro-label">
-            {currentInstance ? currentInstance.name : 'no instance'}
-          </span>
-        </h1>
-        <p className="sync__lede micro-label">
-          regenerate every runtime&rsquo;s instruction file from one source of truth
-        </p>
-      </section>
+      <div className="page-head">
+        <div>
+          <h1>Sync</h1>
+          <p className="page-sub">
+            regenerate every runtime&rsquo;s instruction file from one source of truth
+          </p>
+        </div>
+        <span className="meta">{currentInstance ? currentInstance.name : 'no instance'}</span>
+      </div>
 
       <section className="page__section">
         <div className="sync__source">
-          <span className="micro-label sync__source-label">SOURCE OF TRUTH</span>
-          <div className="sync__source-pick">
-            {SOURCE_CANDIDATES.map((candidate) => (
-              <Button
-                key={candidate}
-                label={candidate}
-                variant={candidate === source ? 'primary' : 'default'}
-                onClick={() => setSource(candidate)}
-              />
-            ))}
-          </div>
+          <span className="table-header">SOURCE OF TRUTH</span>
+          <SegmentedControl
+            options={SOURCE_CANDIDATES}
+            value={source}
+            onChange={setSource}
+            label="Source of truth"
+          />
         </div>
       </section>
 
       <section className="page__section">
-        {status === 'loading' && <p className="micro-label">building sync plan…</p>}
+        {status === 'loading' && <p className="meta">building sync plan…</p>}
 
         {status === 'missing-source' && (
           <EmptyState
-            title="NO SOURCE"
-            instruction={`${source} is not in this instance — pick another source of truth`}
+            title="No source"
+            instruction={`${source} is not in this instance — pick another source of truth.`}
           />
         )}
 
-        {status === 'error' && <EmptyState title="NO SIGNAL" instruction={errMsg} />}
+        {status === 'error' && <EmptyState title="Sync unavailable" instruction={errMsg} />}
 
         {status === 'ok' && plan && (
           <>
             {summary && (
-              <p className="sync__summary micro-label" role="status">
+              <p className="sync__summary meta" role="status">
                 {summary.drifted} drifted · {summary.missing} missing · {summary.inSync} in sync
                 {summary.unwritable > 0 ? ` · ${summary.unwritable} unwritable` : ''}
               </p>
@@ -243,7 +255,7 @@ export function Sync() {
 
             <div className="sync__actions">
               <Button
-                label={committing ? 'regenerating…' : `regenerate ${selectedIds.length} selected`}
+                label={committing ? 'Regenerating…' : `Regenerate ${selectedIds.length} selected`}
                 variant="primary"
                 disabled={committing || selectedIds.length === 0}
                 onClick={() => void onRegenerate()}
@@ -251,7 +263,7 @@ export function Sync() {
             </div>
 
             {plan.targets.length === 0 ? (
-              <EmptyState instruction="no other runtimes to sync from this source" />
+              <EmptyState instruction="No other runtimes to sync from this source." />
             ) : (
               <ul className="sync__list">
                 {plan.targets.map((target) => (
@@ -269,4 +281,9 @@ export function Sync() {
       </section>
     </main>
   );
+}
+
+export function Sync() {
+  // Toasts confirm through the shell-level ToastProvider (App.tsx).
+  return <SyncBody />;
 }

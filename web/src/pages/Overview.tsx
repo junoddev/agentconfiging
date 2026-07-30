@@ -1,150 +1,215 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { EmptyState, FindingRow, SignalStrip, StatBlock } from '../components/core/index.js';
-import { SweepOverlay } from '../components/signal/index.js';
-import { useGlobalConfig, useReport } from '../state/index.js';
-import type { AppError } from '../state/index.js';
+import { useMemo, type ReactNode } from 'react';
 import {
-  buildAgentSignals,
+  EmptyState,
+  ListCard,
+  ListRow,
+  Pill,
+  SourceBadge,
+  StatBlock,
+} from '../components/core/index.js';
+import { homeRel, pluralize } from '../lib/format.js';
+import { routeHash } from '../routes.js';
+import { useGlobalConfig, useReport } from '../state/index.js';
+import { confidencePillTone } from './agents/logic.js';
+import { severityPillTone } from './findings/logic.js';
+import {
   computeStats,
+  configSourceRows,
+  healthItems,
   inheritedSummary,
   severitySummary,
-  severityToBlock,
   topFindings,
 } from './overview/stats.js';
 import './overview.css';
 
-/** Terse error panel (§7 voice) — an honest dead-signal state, never a crash.
- *  `unauthorized` is handled by the shell, so this covers network/unknown. */
-function ErrorPanel({ error }: { error: AppError }) {
-  return (
-    <div className="surface overview__error">
-      <div className="numeral-giant numeral-giant--sm">SIGNAL LOST</div>
-      <p className="mono-data overview__error-msg">{error.message}</p>
-    </div>
-  );
-}
-
-/** Overview dashboard (rail `01 SIGNAL`, DESIGN §5–§7): the read-only landing
- *  view of the current instance's report — stat blocks, one SignalStrip per
- *  detected agent, and a findings summary. Re-renders from the app-state hook,
- *  so a WS-driven refetch updates it automatically. */
+/** Overview (route `#/`, opendesign/DESIGN.md + reference rOverview): the
+ *  read-only landing view of the current instance's report — wayfinding tiles,
+ *  a CONFIG SOURCES table with provenance badges, a health card, and terse
+ *  agent/finding summaries. Re-renders from the app-state hook, so a WS-driven
+ *  refetch updates it automatically. All report strings are adversarial parsed
+ *  config — rendered as text nodes only. */
 export function Overview() {
   const { report, loading, error } = useReport();
-  // Inherited (machine-global) presence, one micro-line (E12). Absent global
-  // data ⇒ undefined ⇒ the page renders exactly as before; a global load
-  // failure only ever leaves `entries` empty and never touches `error`.
+  // Inherited (machine-global) presence (E12). Absent global data ⇒ empty
+  // entries ⇒ the page renders exactly as before; a global load failure only
+  // ever leaves `entries` empty and never touches `error`.
   const { entries: globalEntries } = useGlobalConfig();
   const inherited = inheritedSummary(globalEntries);
 
-  // Run one rescan sweep on each loading rising edge (a refetch over an existing
-  // report). No skeleton loaders (§9) — the sweep is the loading affordance.
-  const [sweepKey, setSweepKey] = useState(0);
-  const wasLoading = useRef(false);
-  useEffect(() => {
-    if (loading && !wasLoading.current) setSweepKey((k) => k + 1);
-    wasLoading.current = loading;
-  }, [loading]);
-
-  // Waveform compares `sources` by reference; deriving strip data once per
-  // report keeps those arrays stable across unrelated re-renders (ws state,
-  // theme) so the traces don't restart. Key the waveform-bearing signals on the
-  // agent kind+file set so a refetch that leaves agents unchanged keeps a stable
-  // sources reference (matches the Agents/AgentDetail pages' memo strategy).
-  const agentsKey = report
-    ? report.agents.map((a) => `${a.kind}:${a.files.join(',')}`).join('|')
-    : '';
-  // Memo intentionally keyed on agentsKey (the kind+file set), not `report`, so
-  // a refetch with unchanged agents keeps a stable sources reference.
-  const signals = useMemo(() => (report ? buildAgentSignals(report) : []), [agentsKey]);
   const stats = useMemo(() => (report ? computeStats(report) : undefined), [report]);
+  const sources = useMemo(
+    () => (report ? configSourceRows(report, globalEntries) : []),
+    [report, globalEntries],
+  );
   const summary = useMemo(() => (report ? topFindings(report.findings) : []), [report]);
 
-  if (error) {
+  if (error && !report) {
     return (
-      <main className="layout-main page">
-        <section className="page__section">
-          <ErrorPanel error={error} />
-        </section>
-      </main>
+      <Frame>
+        <EmptyState title="Scan failed" instruction={error.message} />
+      </Frame>
     );
   }
 
   if (!report || !stats) {
     return (
-      <main className="layout-main page">
-        <section className="page__section">
-          <p className="micro-label overview__acquiring">
-            {loading ? 'ACQUIRING SIGNAL' : 'NO REPORT'}
-          </p>
-        </section>
-      </main>
+      <Frame>
+        <EmptyState instruction={loading ? 'scanning config …' : 'no report yet'} />
+      </Frame>
     );
   }
 
+  const health = healthItems(stats);
+
   return (
-    <main className="layout-main page">
-      <section className="page__section sweep-panel">
-        <SweepOverlay sweepKey={sweepKey} />
-        <div className="grid-page overview__stats">
-          <div className="overview__stat">
-            <StatBlock value={stats.agentCount} label="AGENTS" />
-          </div>
-          <div className="overview__stat col-rule">
-            <StatBlock value={stats.tally.error} label="ERRORS" size="md" />
-          </div>
-          <div className="overview__stat col-rule">
-            <StatBlock value={stats.tally.warning} label="WARNINGS" size="md" />
-          </div>
-          <div className="overview__stat col-rule">
-            <StatBlock value={stats.fileCount} label="ARTIFACTS" size="md" />
-          </div>
+    <Frame>
+      <div className="page-head">
+        <div>
+          <h1>Overview</h1>
+          <p className="page-sub">
+            Agent config detected in this folder — project scope first, inherited global config
+            below it.
+          </p>
         </div>
-        {inherited !== undefined && (
-          <a className="micro-label overview__inherited" href="#/agents">
-            {inherited}
-          </a>
-        )}
-      </section>
+      </div>
 
-      <section className="page__section">
-        <h2 className="micro-label overview__heading">AGENTS</h2>
-        {signals.length === 0 ? (
-          <EmptyState instruction="add agent config to this folder to begin watching" />
+      <div className="tile-row">
+        <StatBlock
+          value={stats.agentCount}
+          label="Agents"
+          onClick={() => {
+            window.location.hash = '#/agents';
+          }}
+        />
+        <StatBlock
+          value={stats.tally.error}
+          label="Errors"
+          onClick={() => {
+            window.location.hash = '#/findings';
+          }}
+        />
+        <StatBlock
+          value={stats.tally.warning}
+          label="Warnings"
+          onClick={() => {
+            window.location.hash = '#/findings';
+          }}
+        />
+        <StatBlock
+          value={stats.fileCount}
+          label="Config files"
+          onClick={() => {
+            window.location.hash = '#/artifacts';
+          }}
+        />
+      </div>
+
+      <div className="grid-2 overview__grid">
+        <div className="table-card">
+          <div className="lc-head">
+            <span>CONFIG SOURCES</span>
+            <span>{pluralize(sources.length, 'file')}</span>
+          </div>
+          {sources.length === 0 ? (
+            <EmptyState instruction="no config files detected" />
+          ) : (
+            <table className="ds-table">
+              <thead>
+                <tr>
+                  <th scope="col">File</th>
+                  <th scope="col">Agent</th>
+                  <th scope="col">Scope</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sources.map((row) => (
+                  <tr key={`${row.root ?? ''}:${row.agent}:${row.path}`}>
+                    <td className="mono">{row.path}</td>
+                    <td className="mono">{row.agent}</td>
+                    <td>
+                      {row.scope === 'project' ? (
+                        <SourceBadge scope="project" />
+                      ) : (
+                        <SourceBadge scope="global" detail={homeRel(row.root ?? '')} />
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div className="card health">
+          <h2>Health</h2>
+          <ul>
+            {health.map((item) => (
+              <li key={item.text}>
+                <span className={item.ok ? 'h-ok' : 'h-warn'} aria-hidden="true">
+                  {item.ok ? '✓' : '▲'}
+                </span>
+                <span>{item.text}</span>
+              </li>
+            ))}
+          </ul>
+          {inherited !== undefined && (
+            <a className="meta overview__inherited" href="#/agents">
+              {inherited}
+            </a>
+          )}
+        </div>
+      </div>
+
+      <ListCard head="AGENTS" headMeta={String(report.agents.length)}>
+        {report.agents.length === 0 ? (
+          <EmptyState instruction="no agents detected in this folder" />
         ) : (
-          signals.map((signal) => (
-            <SignalStrip
-              key={signal.kind}
-              kind={signal.kind}
-              sources={signal.sources}
-              confidence={signal.confidence}
-              fileCount={signal.fileCount}
+          report.agents.map((agent) => (
+            <ListRow
+              key={agent.kind}
+              title={
+                <a className="lr-link" href={routeHash({ name: 'agent', kind: agent.kind })}>
+                  {agent.kind}
+                </a>
+              }
+              badge={<SourceBadge scope="project" />}
+              sub={<span className="mono">{agent.files.join(' · ')}</span>}
+              trailing={
+                <>
+                  <Pill tone={confidencePillTone(agent.confidence)}>{agent.confidence}</Pill>
+                  <span className="meta">{pluralize(agent.files.length, 'file')}</span>
+                </>
+              }
             />
           ))
         )}
-      </section>
+      </ListCard>
 
-      <section className="page__section">
-        <div className="overview__findings-head">
-          <h2 className="micro-label overview__heading">FINDINGS</h2>
-          <span className="mono-data overview__summary">{severitySummary(stats.tally)}</span>
-          <a className="mono-data overview__link" href="#/findings">
-            → FINDINGS
-          </a>
-        </div>
+      <ListCard
+        head="FINDINGS"
+        headMeta={
+          <span>
+            {severitySummary(stats.tally)} · <a href="#/findings">view all</a>
+          </span>
+        }
+      >
         {summary.length === 0 ? (
-          <p className="micro-label overview__acquiring">SIGNAL CLEAN</p>
+          <EmptyState instruction="clean config · nothing to fix" />
         ) : (
-          summary.map((finding, i) => (
-            <FindingRow
+          summary.map((finding) => (
+            <ListRow
               key={finding.id}
-              index={i + 1}
-              severity={severityToBlock(finding.severity)}
+              leading={<Pill tone={severityPillTone(finding.severity)}>{finding.severity}</Pill>}
               title={finding.title}
-              fix={finding.suggestion}
+              sub={finding.suggestion !== undefined ? `→ ${finding.suggestion}` : undefined}
             />
           ))
         )}
-      </section>
-    </main>
+      </ListCard>
+    </Frame>
   );
+}
+
+/** Shared page chassis so every state renders in the same main shell. */
+function Frame({ children }: { children: ReactNode }) {
+  return <main className="layout-main page overview">{children}</main>;
 }

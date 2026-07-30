@@ -1,169 +1,82 @@
-/* Signal Grid foundation (imported first — CSS requires @import before
+/* Console foundation (imported first — CSS requires @import before
    any other statement, including the @font-face rules below). */
 @import './styles/tokens.css';
 @import './styles/base.css';
 @import './styles/type.css';
 @import './styles/grid.css';
 
-/* Self-hosted fonts (DESIGN.md §3): Archivo 500/600/700, IBM Plex Mono
-   400/500/600. Latin + latin-ext subsets. Fontsource's stock per-subset
-   CSS also ships a legacy .woff fallback (~180KB) that every current
-   browser ignores in favour of .woff2, so we declare @font-face inline
-   against the woff2 files only — vite bundles woff2 exclusively and the
+/* Self-hosted mono (DESIGN.md §2): JetBrains Mono 400/500/600, latin +
+   latin-ext subsets. The sans stack is pure system fonts — nothing to ship.
+   Fontsource's stock per-subset CSS also ships a legacy .woff fallback that
+   every current browser ignores in favour of .woff2, so we declare @font-face
+   inline against the woff2 files only — vite bundles woff2 exclusively and the
    built app never fetches Google Fonts. */
 @font-face {
-  font-family: 'Archivo';
-  font-style: normal;
-  font-display: swap;
-  font-weight: 500;
-  src: url('@fontsource/archivo/files/archivo-latin-500-normal.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Archivo';
-  font-style: normal;
-  font-display: swap;
-  font-weight: 600;
-  src: url('@fontsource/archivo/files/archivo-latin-600-normal.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Archivo';
-  font-style: normal;
-  font-display: swap;
-  font-weight: 700;
-  src: url('@fontsource/archivo/files/archivo-latin-700-normal.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Archivo';
-  font-style: normal;
-  font-display: swap;
-  font-weight: 500;
-  src: url('@fontsource/archivo/files/archivo-latin-ext-500-normal.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Archivo';
-  font-style: normal;
-  font-display: swap;
-  font-weight: 600;
-  src: url('@fontsource/archivo/files/archivo-latin-ext-600-normal.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Archivo';
-  font-style: normal;
-  font-display: swap;
-  font-weight: 700;
-  src: url('@fontsource/archivo/files/archivo-latin-ext-700-normal.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'IBM Plex Mono';
+  font-family: 'JetBrains Mono';
   font-style: normal;
   font-display: swap;
   font-weight: 400;
-  src: url('@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2') format('woff2');
+  src: url('@fontsource/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2') format('woff2');
 }
 @font-face {
-  font-family: 'IBM Plex Mono';
+  font-family: 'JetBrains Mono';
   font-style: normal;
   font-display: swap;
   font-weight: 500;
-  src: url('@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff2') format('woff2');
+  src: url('@fontsource/jetbrains-mono/files/jetbrains-mono-latin-500-normal.woff2') format('woff2');
 }
 @font-face {
-  font-family: 'IBM Plex Mono';
+  font-family: 'JetBrains Mono';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
-  src: url('@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-600-normal.woff2') format('woff2');
+  src: url('@fontsource/jetbrains-mono/files/jetbrains-mono-latin-600-normal.woff2') format('woff2');
 }
 @font-face {
-  font-family: 'IBM Plex Mono';
+  font-family: 'JetBrains Mono';
   font-style: normal;
   font-display: swap;
   font-weight: 400;
-  src: url('@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-ext-400-normal.woff2')
+  src: url('@fontsource/jetbrains-mono/files/jetbrains-mono-latin-ext-400-normal.woff2')
     format('woff2');
 }
 @font-face {
-  font-family: 'IBM Plex Mono';
+  font-family: 'JetBrains Mono';
   font-style: normal;
   font-display: swap;
   font-weight: 500;
-  src: url('@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-ext-500-normal.woff2')
+  src: url('@fontsource/jetbrains-mono/files/jetbrains-mono-latin-ext-500-normal.woff2')
     format('woff2');
 }
 @font-face {
-  font-family: 'IBM Plex Mono';
+  font-family: 'JetBrains Mono';
   font-style: normal;
   font-display: swap;
   font-weight: 600;
-  src: url('@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-ext-600-normal.woff2')
+  src: url('@fontsource/jetbrains-mono/files/jetbrains-mono-latin-ext-600-normal.woff2')
     format('woff2');
 }
 
-/* ── App chrome (top bar + rail, DESIGN.md §4) ─────────────────────────── */
-
-.wordmark {
-  font-family: var(--font-sans);
-  font-weight: 700;
-  font-size: var(--size-data);
-  letter-spacing: 0.12em;
-}
-
-.topbar__path {
-  flex: 1;
-  text-align: center;
-  color: var(--fg-dim);
-}
-
-.rail__item {
-  display: block;
-  padding: 8px var(--gutter);
-}
-
-.rail__item[aria-current] {
-  color: var(--fg);
-}
-
-/* Two-digit rail numeral (doubles as the Cmd+1..9 shortcut label). */
-.rail__index {
-  font-family: var(--font-mono);
-  color: var(--fg-dim);
-}
-
-.rail__item[aria-current] .rail__index {
-  color: var(--signal);
-}
-
-/* Cost-widget placeholder slot (E7 fills it); reserves no width until then. */
-.topbar__cost {
-  display: none;
-}
-
-/* Hairline separating the numbered sections from internal rail entries. */
-.rail__break {
-  margin: var(--gutter) 0;
-}
+/* ── App chrome ────────────────────────────────────────────────────────── */
+/* The shell (topbar / chooser / sidebar / statusbar) lives in styles/grid.css
+   (E13.3). */
 
 /* ── Page scaffold (shared by dashboard + gallery routes) ──────────────── */
 
+/* Horizontal padding comes from the shell's .content region (26/34px). */
 .page {
-  padding: 0 var(--gutter) var(--gutter);
+  padding: 0;
 }
 
 .page__section {
-  padding: var(--gutter) 0;
+  padding: 20px 0;
 }
 
-/* Panel hosting a SweepOverlay — the sweep needs a positioned ancestor. */
-.sweep-panel {
-  position: relative;
-  padding: var(--gutter);
-}
-
-/* ── Gallery (#/gallery) — internal component spec page ────────────────── */
+/* ── Gallery (#/gallery) — the living Console spec page ────────────────── */
 
 /* One demo block: micro-label caption + the component states below it. */
 .gallery__demo {
-  margin-top: var(--gutter);
+  margin-top: 20px;
 }
 
 .gallery__demo > .micro-label:first-child {
@@ -182,16 +95,16 @@
 .swatch-row {
   display: flex;
   align-items: center;
-  gap: var(--gutter);
-  min-height: var(--row-h);
-  border-bottom: var(--hairline-w) solid var(--hairline);
+  gap: 20px;
+  min-height: 40px;
+  border-bottom: 1px solid var(--border);
 }
 
 .swatch {
   flex: none;
   width: 24px;
   height: 24px;
-  border: var(--hairline-w) solid var(--hairline);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
 }
 
@@ -200,15 +113,11 @@
 }
 
 .swatch-row__values {
-  color: var(--fg-dim);
+  color: var(--muted);
 }
 
-/* Grid demo cells (FOUNDATION section). */
-.grid-demo-cell {
-  padding: var(--gutter);
-}
-
+/* Shape demo surface (FOUNDATION section). */
 .grid-demo-surface {
-  margin-top: var(--gutter);
-  padding: var(--gutter);
+  margin-top: 20px;
+  padding: 20px;
 }

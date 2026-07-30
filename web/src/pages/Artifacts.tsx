@@ -1,6 +1,13 @@
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ApiError, type FileContent, type RedactionSpan } from '../api/index.js';
-import { Button, EmptyState, FileChip, SourceBadge } from '../components/core/index.js';
+import {
+  EmptyState,
+  FileChip,
+  Pill,
+  SegmentedControl,
+  SourceBadge,
+  type SourceScope,
+} from '../components/core/index.js';
 import { homeRel } from '../lib/format.js';
 import { useAppState, useGlobalConfig } from '../state/index.js';
 import { globalFileGroups } from './artifacts/logic.js';
@@ -8,6 +15,8 @@ import './artifacts.css';
 
 /** Which panel of a loaded file is showing. */
 type View = 'source' | 'parsed';
+
+const VIEWS: readonly View[] = ['source', 'parsed'];
 
 /** Read the optional `?path=` deep-link once, from the document query string.
  *  It lives in `location.search` (not the route hash) so the committed hash
@@ -23,6 +32,14 @@ function collectFiles(agents: readonly { files: string[] }[]): string[] {
   const set = new Set<string>();
   for (const agent of agents) for (const file of agent.files) set.add(file);
   return [...set].sort((a, b) => a.localeCompare(b));
+}
+
+/** Map the server's free-form pathScope onto a badge scope; anything unknown
+ *  falls back to plain mono text (never a wrong badge). */
+function badgeScope(pathScope: string): SourceScope | undefined {
+  return pathScope === 'project' || pathScope === 'global' || pathScope === 'local'
+    ? pathScope
+    : undefined;
 }
 
 /** Turn redacted `content` + its mark `spans` into React nodes: verbatim text
@@ -58,12 +75,12 @@ function errorText(err: unknown): string {
   return 'could not load file';
 }
 
-/** Artifact browser (rail `04 ARTIFACTS`, DESIGN §6). Left: the instance's
- *  referenced files as FileChips. Right: the selected file's REDACTED source
- *  (marks styled) plus, for JSON, a normalized structural view derived from the
- *  same redacted text. Config content is adversarial data: rendered as text
- *  nodes only, never HTML, and redaction happens server-side so raw secrets
- *  never reach the browser. */
+/** Artifacts — the file browser (Console page, E13.5). Left: the instance's
+ *  referenced files as `.code` chips, grouped by scope with the GLOBAL groups
+ *  badged. Right: the selected file's REDACTED source in a card plus, for JSON,
+ *  a normalized structural view derived from the same redacted text. Config
+ *  content is adversarial data: rendered as text nodes only, never HTML, and
+ *  redaction happens server-side so raw secrets never reach the browser. */
 export function Artifacts() {
   const { report, getFile } = useAppState();
 
@@ -123,29 +140,33 @@ export function Artifacts() {
   }, [file, selected]);
 
   const sourceNodes = useMemo(() => (file ? renderRedacted(file.content, file.spans) : []), [file]);
+  const scope = file ? badgeScope(file.pathScope) : undefined;
 
   return (
     <main className="layout-main page">
-      <section className="page__section">
-        <h1 className="title-page">
-          ARTIFACTS
-          <span className="artifact__count mono-data">
-            {files.length} REFERENCED
-            {report ? ` · ${report.stats.fileCount} SCANNED` : ''}
-          </span>
-        </h1>
-      </section>
+      <div className="page-head">
+        <div>
+          <h1>Artifacts</h1>
+          <p className="page-sub">
+            every file the detected agents reference — served redacted, shown verbatim
+          </p>
+        </div>
+        <span className="meta">
+          {files.length} referenced
+          {report ? ` · ${report.stats.fileCount} scanned` : ''}
+        </span>
+      </div>
 
       <section className="page__section">
         {files.length === 0 && globalGroups.length === 0 ? (
-          <EmptyState instruction="no artifacts referenced by any detected agent" />
+          <EmptyState instruction="No artifacts referenced by any detected agent." />
         ) : (
           <div className="artifact">
             <div className="artifact__list">
               {/* With global groups present the project chips gain a PROJECT
                   micro-heading so the layers stay visually distinct. */}
               {globalGroups.length > 0 && files.length > 0 && (
-                <h2 className="micro-label artifact__group-head">PROJECT</h2>
+                <h2 className="table-header artifact__group-head">PROJECT</h2>
               )}
               {files.map((path) => (
                 <span key={path} {...(path === selected ? { 'aria-current': 'true' } : {})}>
@@ -169,39 +190,35 @@ export function Artifacts() {
               ))}
             </div>
 
-            <div className="artifact__detail">
+            <div className="card artifact__detail">
               {selected === undefined && (
-                <EmptyState title="SELECT" instruction="choose a file to inspect" />
+                <EmptyState title="Select" instruction="Choose a file to inspect." />
               )}
               {selected !== undefined && status === 'loading' && (
-                <p className="micro-label">loading {selected}…</p>
+                <p className="meta">loading {selected}…</p>
               )}
               {selected !== undefined && status === 'error' && (
-                <EmptyState title="NO SIGNAL" instruction={errMsg} />
+                <EmptyState title="File unavailable" instruction={errMsg} />
               )}
               {selected !== undefined && status === 'idle' && file && (
                 <>
                   <div className="artifact__head">
-                    <span className="mono-data">{file.path}</span>
-                    <span className="artifact__scope micro-label">scope · {file.pathScope}</span>
-                    {file.spans.length > 0 && (
-                      <span className="artifact__scope micro-label">
-                        {file.spans.length} redacted
-                      </span>
+                    <span className="mono-data artifact__path">{file.path}</span>
+                    {scope !== undefined ? (
+                      <SourceBadge scope={scope} />
+                    ) : (
+                      <span className="meta">scope · {file.pathScope}</span>
                     )}
+                    {file.spans.length > 0 && <Pill tone="warn">{file.spans.length} redacted</Pill>}
                   </div>
 
                   {typeof parsedJson === 'string' && (
                     <div className="artifact__views">
-                      <Button
-                        label="source"
-                        variant={view === 'source' ? 'primary' : 'default'}
-                        onClick={() => setView('source')}
-                      />
-                      <Button
-                        label="parsed"
-                        variant={view === 'parsed' ? 'primary' : 'default'}
-                        onClick={() => setView('parsed')}
+                      <SegmentedControl
+                        options={VIEWS}
+                        value={view}
+                        onChange={(v) => setView(v === 'parsed' ? 'parsed' : 'source')}
+                        label="File view"
                       />
                     </div>
                   )}
@@ -213,9 +230,7 @@ export function Artifacts() {
                   )}
 
                   {view === 'source' && typeof parsedJson !== 'string' && (
-                    <p className="artifact__note micro-label">
-                      no parsed view — showing redacted source
-                    </p>
+                    <p className="artifact__note meta">no parsed view — showing redacted source</p>
                   )}
                 </>
               )}

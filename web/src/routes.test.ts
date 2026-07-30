@@ -21,8 +21,6 @@ describe('parseRoute', () => {
     expect(routeHash({ name: 'dashboard' })).toBe('#/dashboard');
     expect(parseRoute('#/sessions')).toEqual({ name: 'sessions' });
     expect(routeHash({ name: 'sessions' })).toBe('#/sessions');
-    expect(parseRoute('#/analytics')).toEqual({ name: 'analytics' });
-    expect(routeHash({ name: 'analytics' })).toBe('#/analytics');
     expect(parseRoute('#/search')).toEqual({ name: 'search' });
     expect(routeHash({ name: 'search' })).toBe('#/search');
     expect(parseRoute('#/context')).toEqual({ name: 'context' });
@@ -92,7 +90,6 @@ describe('routeHash', () => {
       { name: 'instances' },
       { name: 'dashboard' },
       { name: 'sessions' },
-      { name: 'analytics' },
       { name: 'search' },
       { name: 'context' },
       { name: 'git' },

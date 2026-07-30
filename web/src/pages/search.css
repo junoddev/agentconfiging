@@ -1,74 +1,44 @@
-/* Session search (rail 20 SEARCH, docs/DESIGN.md §5–§7, bead 7yb.4).
-   Page-local styles only; the shared chassis lives in app.css / styles/ and
-   components.css. Tokens only — no raw hex, no shadows, no gradients. */
+/* Session search (#/search, bead 7yb.4) — Console page-layout CSS only. The
+   chassis (.search, .notice, .btn-*, .code, type classes) comes from the §5
+   contract; everything here is arrangement. Tokens only — no raw hex. */
 
-.sr__lede {
-  margin-top: 8px;
-  color: var(--fg-dim);
-  max-width: 66ch;
-}
-
-.sr__controls {
+.sr-controls {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.sr__searchbar {
+.sr-bar {
   display: flex;
   gap: 8px;
   align-items: center;
 }
 
-.sr__input {
+/* The contract `.search` is 230px; the query box owns the row. */
+.search.sr-input {
   flex: 1;
+  width: auto;
   min-width: 0;
-  padding: 8px 10px;
-  background: var(--surface);
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  color: var(--fg);
 }
 
-.sr__semantic {
+.sr-semantic {
   display: flex;
   align-items: center;
-  gap: 6px;
-  color: var(--fg-dim);
+  gap: 9px;
 }
 
-.sr__flag-off {
-  color: var(--fg-dim);
-}
-
-.sr__index {
+.sr-index {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
 }
 
-.sr__coverage,
-.sr__reindex-note,
-.sr__reason,
-.sr__hint {
-  color: var(--fg-dim);
-}
-
-.sr__hint {
-  margin-top: 4px;
-}
-
-.sr__acquiring {
-  padding: var(--gutter) 0;
-}
-
-.sr__summary {
-  color: var(--fg-dim);
+.sr-summary {
   margin-bottom: 12px;
 }
 
-.sr__list {
+.sr-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -77,36 +47,40 @@
   gap: 12px;
 }
 
-.sr__hit {
-  padding: 12px;
+/* One hit: a resting hairline card (no shadow), head line + snippet. */
+.sr-hit {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 13px 16px;
 }
 
-.sr__hit-head {
+.sr-hit-head {
   display: flex;
   gap: 12px;
   align-items: baseline;
   flex-wrap: wrap;
   margin-bottom: 8px;
-  color: var(--fg-dim);
 }
 
-.sr__hit-link {
+.sr-hit-link {
   color: var(--fg);
-  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
-.sr__snippet {
+.sr-snippet {
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   margin: 0;
   color: var(--fg);
   max-height: 24vh;
   overflow: auto;
 }
 
-.sr__redact {
-  background: var(--warn);
-  color: var(--bg);
+/* [REDACTED:*] mark — status hue as text on its soft wash, never a solid fill. */
+.sr-redact {
+  background: var(--warn-soft);
+  color: var(--warn);
   padding: 0 2px;
-  border-radius: var(--radius);
+  border-radius: 4px;
 }

@@ -100,8 +100,6 @@ checksum-verified, diff-previewed, and stamped with provenance frontmatter
   growing on disk. Subagent (sidechain) entries render distinctly.
 - **Search** — full-text search over turns and tool results (requires the optional
   `better-sqlite3`; see below).
-- **Analytics** — token usage and cost per model with a daily trend, hourly
-  activity, and cache efficiency; a persistent cost widget lives in the chrome.
 - **Context health** — config size budgets, largest contributors, and
   optimization suggestions.
 

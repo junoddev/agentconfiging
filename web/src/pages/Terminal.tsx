@@ -23,11 +23,10 @@ import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { ApiClient } from '../api/client.js';
-import { parseTokenHash } from '../api/token.js';
+import { bootstrapToken } from '../api/token.js';
 import type { PtyStatusResponse, ShellChoice } from '../api/types.js';
-import { Button, EmptyState } from '../components/core/index.js';
+import { Button, EmptyState, Notice } from '../components/core/index.js';
 import { useAppState } from '../state/index.js';
-import type { Theme } from '../shell/TopBar.js';
 import {
   buildPtyWsUrl,
   encodeInput,
@@ -37,14 +36,54 @@ import {
   parseServerMessage,
   tabTitle,
   xtermTheme,
+  type ConsoleTheme,
+  type ConsoleTokenColors,
   type TerminalTab,
+  type TerminalTheme,
 } from './terminal/logic.js';
 import './terminal.css';
 
 /** The raw session token — read once at module load, BEFORE the app strips the
  *  fragment (mirrors the search page). Undefined when launched without a token. */
-const bootToken =
-  typeof window !== 'undefined' ? parseTokenHash(window.location.hash).token : undefined;
+const bootToken = typeof window !== 'undefined' ? bootstrapToken() : undefined;
+
+/** Normalize one CSS color value (oklch tokens included) to a form xterm can
+ *  parse, via canvas fillStyle round-tripping. Undefined when the value is
+ *  empty/unparsable or canvas is unavailable (jsdom). */
+function resolveCssColor(raw: string): string | undefined {
+  if (raw === '') return undefined;
+  const ctx = document.createElement('canvas').getContext('2d');
+  if (!ctx) return undefined;
+  const sentinel = '#010203';
+  ctx.fillStyle = sentinel;
+  ctx.fillStyle = raw;
+  const normalized = ctx.fillStyle;
+  // An unparsable value leaves the sentinel in place.
+  if (normalized === sentinel && raw.trim().toLowerCase() !== sentinel) return undefined;
+  return normalized;
+}
+
+/** Read the live Console core tokens off `<html>` — the single token block is
+ *  the source of truth, so the terminal tracks BOTH themes automatically. */
+function readConsoleTokens(): Partial<ConsoleTokenColors> {
+  if (typeof window === 'undefined') return {};
+  const styles = getComputedStyle(document.documentElement);
+  const tokens: Partial<ConsoleTokenColors> = {};
+  const bg = resolveCssColor(styles.getPropertyValue('--bg').trim());
+  const fg = resolveCssColor(styles.getPropertyValue('--fg').trim());
+  const accent = resolveCssColor(styles.getPropertyValue('--accent').trim());
+  const muted = resolveCssColor(styles.getPropertyValue('--muted').trim());
+  if (bg !== undefined) tokens.bg = bg;
+  if (fg !== undefined) tokens.fg = fg;
+  if (accent !== undefined) tokens.accent = accent;
+  if (muted !== undefined) tokens.muted = muted;
+  return tokens;
+}
+
+/** The current xterm palette: live tokens first, static equivalents as backup. */
+function currentPalette(theme: ConsoleTheme): TerminalTheme {
+  return xtermTheme(theme, readConsoleTokens());
+}
 
 /** A live tab: its xterm instance, fit addon, socket, and DOM container. */
 interface Session {
@@ -55,7 +94,7 @@ interface Session {
   closed: boolean;
 }
 
-export function Terminal({ active, theme }: { active: boolean; theme: Theme }) {
+export function Terminal({ active, theme }: { active: boolean; theme: ConsoleTheme }) {
   const client = useMemo(() => (bootToken ? new ApiClient(bootToken) : undefined), []);
   const { currentInstance } = useAppState();
   const instanceId = currentInstance?.id;
@@ -119,9 +158,9 @@ export function Terminal({ active, theme }: { active: boolean; theme: Theme }) {
     (tab: TerminalTab, container: HTMLDivElement) => {
       if (!bootToken || sessionsRef.current.has(tab.id)) return;
       const term = new XTerm({
-        fontFamily: "'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace",
+        fontFamily: "'JetBrains Mono', 'IBM Plex Mono', ui-monospace, Menlo, monospace",
         fontSize: 13,
-        theme: xtermTheme(theme),
+        theme: currentPalette(theme),
         cursorBlink: true,
         scrollback: 5000,
       });
@@ -217,12 +256,17 @@ export function Terminal({ active, theme }: { active: boolean; theme: Theme }) {
     return () => cancelAnimationFrame(raf);
   }, [active, activeId, tabs]);
 
-  // Recolor every live terminal when the app theme toggles.
+  // Recolor every live terminal when the app theme toggles. Deferred a frame:
+  // the shell flips `data-theme` on <html> in a parent effect that runs AFTER
+  // this child effect, so the token read must wait for it.
   useEffect(() => {
-    const palette = xtermTheme(theme);
-    for (const session of sessionsRef.current.values()) {
-      session.term.options.theme = palette;
-    }
+    const raf = requestAnimationFrame(() => {
+      const palette = currentPalette(theme);
+      for (const session of sessionsRef.current.values()) {
+        session.term.options.theme = palette;
+      }
+    });
+    return () => cancelAnimationFrame(raf);
   }, [theme]);
 
   // Keep the active terminal fitted on window resizes.
@@ -246,26 +290,30 @@ export function Terminal({ active, theme }: { active: boolean; theme: Theme }) {
 
   return (
     <main className="layout-main page terminal-page" hidden={!active} aria-hidden={!active}>
-      <header className="page__head">
-        <h1 className="page__title">Terminal</h1>
-        <p className="micro-label terminal-scope">
-          {currentInstance ? currentInstance.name : 'default instance'}
-        </p>
+      <header className="page-head">
+        <div>
+          <h1>Terminal</h1>
+          <p className="page-sub">
+            Shells and detected runtime CLIs for{' '}
+            <span className="mono">
+              {currentInstance ? currentInstance.name : 'default instance'}
+            </span>
+            .
+          </p>
+        </div>
       </header>
 
       {status === 'loading' ? (
         <section className="page__section">
-          <EmptyState instruction="checking terminal availability…" />
+          <p className="meta">checking terminal availability…</p>
         </section>
       ) : status === 'error' || !status.available ? (
         <section className="page__section">
-          <EmptyState
-            instruction={
-              status === 'error'
-                ? 'terminal unavailable — reopen agentconfig from the CLI'
-                : (status.reason ?? 'terminal unavailable')
-            }
-          />
+          <Notice>
+            {status === 'error'
+              ? 'terminal unavailable — reopen agentconfig from the CLI'
+              : (status.reason ?? 'terminal unavailable')}
+          </Notice>
         </section>
       ) : (
         <>
@@ -280,7 +328,7 @@ export function Terminal({ active, theme }: { active: boolean; theme: Theme }) {
                     type="button"
                     role="tab"
                     aria-selected={tab.id === activeId}
-                    className="terminal-tab__label micro-label"
+                    className="terminal-tab__label mono-data"
                     onClick={() => setActiveId(tab.id)}
                   >
                     {tab.label}

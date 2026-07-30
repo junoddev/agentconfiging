@@ -1,11 +1,12 @@
-/* Artifact browser (#/artifacts, bead c6p.4). Chassis only — tokens, hairlines,
-   mono. Nothing animates here; the config content is adversarial data rendered
-   as text nodes, never markup. */
+/* Artifacts (#/artifacts) — Console page layout only. Chips, badges, pills,
+   seg and card come from the §5 contract in components/core; only true page
+   geometry (the two-pane grid, the pre) lives here. Config content is
+   adversarial data rendered as text nodes, never markup. */
 
 .artifact {
   display: grid;
   grid-template-columns: minmax(200px, 280px) minmax(0, 1fr);
-  gap: var(--gutter);
+  gap: 16px;
   align-items: start;
 }
 
@@ -16,12 +17,7 @@
   }
 }
 
-.artifact__count {
-  margin-left: 8px;
-  color: var(--fg-dim);
-}
-
-/* ── File list: a column of FileChips ──────────────────────────────────── */
+/* ── File list: a column of .code chips ────────────────────────────────── */
 
 .artifact__list {
   display: flex;
@@ -32,7 +28,7 @@
   overflow-y: auto;
 }
 
-/* Scope group headings inside the chip list (E12): PROJECT, then one
+/* Scope group headings inside the chip list: PROJECT, then one
    GLOBAL · <dir> SourceBadge per home config dir. */
 .artifact__group-head {
   margin: 8px 0 2px;
@@ -42,48 +38,43 @@
   margin-top: 0;
 }
 
-.artifact__list .chip {
+.artifact__list .code {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* Selected chip: fill, matching the primary-button treatment. The wrapping
-   span carries aria-current; the chip inside it takes the fill. */
-.artifact__list [aria-current] .chip {
-  background: var(--fg);
-  border-color: var(--fg);
-  color: var(--bg);
+/* Selected chip: accent treatment (active selection, like .ch-item.active).
+   The wrapping span carries aria-current; the chip inside takes the tint. */
+.artifact__list [aria-current] .code {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
-/* ── Detail panel ──────────────────────────────────────────────────────── */
+/* ── Detail card ───────────────────────────────────────────────────────── */
 
 .artifact__detail {
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: var(--gutter);
   min-height: 200px;
 }
 
 .artifact__head {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px var(--gutter);
-  padding-bottom: 8px;
-  margin-bottom: var(--gutter);
-  border-bottom: var(--hairline-w) solid var(--hairline);
+  align-items: center;
+  gap: 8px 16px;
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border);
 }
 
-.artifact__scope {
-  color: var(--fg-dim);
+.artifact__path {
+  word-break: break-all;
 }
 
 .artifact__views {
-  display: flex;
-  gap: 8px;
-  margin-bottom: var(--gutter);
+  margin-bottom: 14px;
 }
 
 /* Redacted source / parsed structural view: mono, wrapping, own scroll. */
@@ -97,15 +88,14 @@
 /* [REDACTED:*] mark — a distinct token treatment on a TEXT node. Override the
    browser default <mark> yellow with theme tokens. */
 .artifact__redact {
-  background: none;
+  background: var(--warn-soft);
   color: var(--warn);
   font-weight: 600;
-  border: var(--hairline-w) solid var(--warn);
-  border-radius: var(--radius);
+  border: 1px solid color-mix(in oklch, var(--warn) 35%, transparent);
+  border-radius: 4px;
   padding: 0 2px;
 }
 
 .artifact__note {
-  margin-top: var(--gutter);
-  color: var(--fg-dim);
+  margin-top: 14px;
 }

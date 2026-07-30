@@ -1,22 +1,28 @@
 import { CoreSection } from './CoreSection.js';
 import { FoundationSection } from './FoundationSection.js';
-import { SignalSection } from './SignalSection.js';
 
-/** Internal component gallery (#/gallery): the living spec and visual
- *  regression surface. Every component, every state; load once per theme
- *  (top-bar toggle) to verify both. */
+/** Console spec (#/gallery): the living spec and visual regression surface for
+ *  the design system. Every contract component, every shipped state; load once
+ *  per theme (top-bar toggle) to verify both. Adding a component to the
+ *  contract? See docs/DESIGN.md §5 — it is not shipped until it renders here. */
 export function GalleryPage() {
   return (
     <main className="layout-main page">
       <section className="page__section">
-        <h1 className="micro-label">00 GALLERY · INTERNAL</h1>
-        <p className="mono-data">EVERY COMPONENT · EVERY STATE · TOGGLE THEME TO VERIFY BOTH</p>
+        <div className="page-head">
+          <div>
+            <h1>Console spec</h1>
+            <p className="page-sub">
+              The living spec for the Console design system — every contract component, every state.
+              Toggle the theme to verify light and dark. New components join the contract via{' '}
+              <span className="mono">docs/DESIGN.md</span> §5 and a demo on this page.
+            </p>
+          </div>
+        </div>
       </section>
 
       <hr className="rule-h" />
       <FoundationSection />
-      <hr className="rule-h" />
-      <SignalSection />
       <hr className="rule-h" />
       <CoreSection />
     </main>

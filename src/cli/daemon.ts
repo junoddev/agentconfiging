@@ -74,7 +74,7 @@ export interface DaemonDeps {
 function levelOf(line: string): LogLevel {
   if (line.startsWith('ERROR')) return 'error';
   if (line.startsWith('WARN')) return 'warn';
-  if (line.startsWith('RUN') || line.startsWith('DONE')) return 'signal';
+  if (line.startsWith('RUN') || line.startsWith('DONE')) return 'ok';
   return 'info';
 }
 
@@ -147,13 +147,13 @@ export async function runDaemon(opts: DaemonOptions, deps: DaemonDeps): Promise<
       });
 
   if (opts.once) {
-    emit('signal', 'DAEMON RUN-ONCE');
+    emit('ok', 'DAEMON RUN-ONCE');
     const { ran } = await scheduler.runOnce(now().getTime());
-    emit('signal', `DAEMON DONE · ${ran} pipeline${ran === 1 ? '' : 's'} run`);
+    emit('ok', `DAEMON DONE · ${ran} pipeline${ran === 1 ? '' : 's'} run`);
     return 0;
   }
 
-  emit('signal', `DAEMON UP · ticking every ${TICK_MS / 1000}s · state ${stateDir}`);
+  emit('ok', `DAEMON UP · ticking every ${TICK_MS / 1000}s · state ${stateDir}`);
 
   return new Promise<number>((resolve) => {
     let stopped = false;
@@ -166,7 +166,7 @@ export async function runDaemon(opts: DaemonOptions, deps: DaemonDeps): Promise<
       stopped = true;
       stopTicking();
       unregister();
-      emit('signal', 'DAEMON DOWN');
+      emit('ok', 'DAEMON DOWN');
       resolve(0);
     };
     const unregister = (deps.onShutdown ?? defaultOnShutdown)(shutdown);

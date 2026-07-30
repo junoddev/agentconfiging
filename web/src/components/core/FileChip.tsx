@@ -12,19 +12,20 @@ export interface FileChipProps {
   onClick?: () => void;
 }
 
-/** Mono path chip (DESIGN.md §6); hover shows size/sha via the native
- *  tooltip. Renders a real button only when clickable. */
+/** Mono path chip (DESIGN.md §5 `.code`): fg-soft wash, hairline, 12px mono;
+ *  hover shows size/sha via the native tooltip. Renders a real button only
+ *  when clickable. */
 export function FileChip({ path, size, sha, onClick }: FileChipProps) {
   const title = fileChipTitle(size, sha);
   if (onClick) {
     return (
-      <button type="button" className="chip mono-data" title={title} onClick={onClick}>
+      <button type="button" className="code" title={title} onClick={onClick}>
         {path}
       </button>
     );
   }
   return (
-    <span className="chip mono-data" title={title}>
+    <span className="code" title={title}>
       {path}
     </span>
   );

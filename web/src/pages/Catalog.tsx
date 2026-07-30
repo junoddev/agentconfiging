@@ -1,13 +1,15 @@
 /**
- * Catalog (rail `15 CATALOG`, route `#/catalog`) — the registry BROWSE + INSTALL
- * experience (SPEC §4.5, §5 row 9; DESIGN §6). It fetches the merged catalog
- * (entry metadata + this instance's installed records) and presents it as SHELVES
- * of {@link CatalogCard}s — an ARTIFACTS shelf (installable skills/subagents/
+ * Catalog (route `#/catalog`) — the registry BROWSE + INSTALL experience (SPEC
+ * §4.5, §5 row 9). It fetches the merged catalog (entry metadata + this
+ * instance's installed records) and presents it as SHELVES of
+ * {@link CatalogCard}s — an ARTIFACTS shelf (installable skills/subagents/
  * rules/hooks/commands/mcp-servers) and a RUNTIME SETUP shelf — over a client-
  * side SEARCH + kind/templates FILTER. A kind-scoped QUICK-ADD strip surfaces the
  * reusable {@link QuickAdd} primitive (the same one editor pages import). Each
  * entry's INSTALL/REMOVE runs the guarded dry-run-diff → COMMIT flow; a commit
- * refetches so the entry flips between INSTALL and REMOVE live.
+ * confirms via Toast and refetches so the entry flips between INSTALL and
+ * REMOVE live. Console treatment (opendesign/DESIGN.md §5): `.toolbar` search +
+ * `.chip` filters, `.card` entries with scope badges and status pills.
  *
  * SECURITY POSTURE (client side): registry content is UNTRUSTED. This page never
  * fetches or renders file BODIES itself — it shows metadata and the server's
@@ -21,8 +23,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ApiClient, ApiError, type CatalogResponse } from '../api/index.js';
-import { parseTokenHash } from '../api/token.js';
-import { EmptyState } from '../components/core/index.js';
+import { bootstrapToken } from '../api/token.js';
+import { ChipRow, EmptyState, SearchInput, useToast } from '../components/core/index.js';
 import {
   CatalogCard,
   QuickAdd,
@@ -42,23 +44,23 @@ import {
 import { useAppState, useReport } from '../state/index.js';
 import './catalog.css';
 
-const bootToken =
-  typeof window !== 'undefined' ? parseTokenHash(window.location.hash).token : undefined;
+const bootToken = typeof window !== 'undefined' ? bootstrapToken() : undefined;
 
 type LoadStatus = 'loading' | 'ok' | 'error';
 
 function loadError(err: unknown): string {
   if (err instanceof ApiError) {
-    if (err.kind === 'unauthorized') return 'session expired — reopen from the CLI';
-    if (err.kind === 'network') return 'cannot reach the local server';
-    if (err.kind === 'notfound') return 'no instance selected';
+    if (err.kind === 'unauthorized') return 'Session expired — reopen from the CLI.';
+    if (err.kind === 'network') return 'Cannot reach the local server.';
+    if (err.kind === 'notfound') return 'No instance selected.';
   }
-  return 'could not load the catalog';
+  return 'Could not load the catalog.';
 }
 
 const INSTALLABLE = new Set<string>(INSTALLABLE_KINDS);
 
-export function Catalog() {
+function CatalogPage() {
+  const toast = useToast();
   const { currentInstance, refetch } = useAppState();
   const { report } = useReport();
   const client = useMemo(() => (bootToken ? new ApiClient(bootToken) : undefined), []);
@@ -75,7 +77,7 @@ export function Catalog() {
     let cancelled = false;
     if (!client) {
       setStatus('error');
-      setErrMsg('session token missing');
+      setErrMsg('Session token missing.');
       return;
     }
     setStatus('loading');
@@ -141,25 +143,25 @@ export function Catalog() {
     <main className="layout-main page">
       <section className="page__section">
         <h1 className="title-page">
-          CATALOG
-          <span className="catalog__sub micro-label">
+          Catalog
+          <span className="catalog__sub meta">
             {currentInstance ? currentInstance.name : 'no instance'}
           </span>
         </h1>
-        <p className="catalog__lede micro-label">
-          browse &amp; install skills, subagents, hooks, rules &amp; runtime setup from the registry
-          — each with a diff preview and recorded provenance
+        <p className="page-sub">
+          Browse &amp; install skills, subagents, hooks, rules &amp; runtime setup from the registry
+          — each with a diff preview and recorded provenance.
         </p>
       </section>
 
       {status === 'loading' && (
         <section className="page__section">
-          <p className="micro-label">loading catalog…</p>
+          <p className="meta">Loading catalog…</p>
         </section>
       )}
       {status === 'error' && (
         <section className="page__section">
-          <EmptyState title="NO SIGNAL" instruction={errMsg} />
+          <EmptyState title="No catalog" instruction={errMsg} />
         </section>
       )}
 
@@ -167,67 +169,56 @@ export function Catalog() {
         <>
           {entries.length === 0 ? (
             <section className="page__section">
-              <EmptyState instruction="the registry catalog is empty" />
+              <EmptyState instruction="The registry catalog is empty." />
             </section>
           ) : (
             <>
               {/* ── Search + filters ──────────────────────────────────────── */}
-              <section className="page__section catalog__controls">
-                <input
-                  type="search"
-                  className="catalog__search mono-data"
-                  placeholder="search name, description, tags…"
-                  aria-label="search catalog"
-                  value={filter.query}
-                  onChange={(e) => setFilter((f) => ({ ...f, query: e.target.value }))}
-                />
-                <div className="catalog__chips" role="group" aria-label="filter by kind">
-                  {allKinds
-                    .filter((kind) => kind !== RUNTIME_TEMPLATE_KIND)
-                    .map((kind) => (
-                      <button
-                        key={kind}
-                        type="button"
-                        className="catalog-chip micro-label"
-                        aria-pressed={filter.kinds.includes(kind)}
-                        onClick={() => toggleKind(kind)}
-                      >
-                        {kind}
-                      </button>
-                    ))}
-                  {templates > 0 && (
-                    <button
-                      type="button"
-                      className="catalog-chip micro-label"
-                      aria-pressed={filter.templatesOnly}
-                      onClick={() => setFilter((f) => ({ ...f, templatesOnly: !f.templatesOnly }))}
-                    >
-                      templates
-                    </button>
-                  )}
+              <section className="page__section">
+                <div className="toolbar">
+                  <SearchInput
+                    value={filter.query}
+                    onChange={(v) => setFilter((f) => ({ ...f, query: v }))}
+                    placeholder="Filter by name, description, tag…"
+                    label="search catalog"
+                  />
+                  <ChipRow
+                    label="filter by kind"
+                    options={[
+                      ...allKinds
+                        .filter((kind) => kind !== RUNTIME_TEMPLATE_KIND)
+                        .map((kind) => ({ value: kind, label: kind })),
+                      // The templates toggle rides in the same chip track; its
+                      // pseudo-value never collides (RUNTIME_TEMPLATE_KIND kinds
+                      // are filtered out above).
+                      ...(templates > 0 ? [{ value: 'templates', label: 'templates' }] : []),
+                    ]}
+                    values={[...filter.kinds, ...(filter.templatesOnly ? ['templates'] : [])]}
+                    onToggle={(value) => {
+                      if (value === 'templates')
+                        setFilter((f) => ({ ...f, templatesOnly: !f.templatesOnly }));
+                      else toggleKind(value);
+                    }}
+                  />
                   {filterActive && (
-                    <button
-                      type="button"
-                      className="catalog-chip catalog-chip--clear micro-label"
-                      onClick={clearFilter}
-                    >
-                      clear
+                    <button type="button" className="btn btn-ghost" onClick={clearFilter}>
+                      Clear
                     </button>
                   )}
+                  <span className="meta" role="status">
+                    {filterActive
+                      ? `${filtered.length} of ${entries.length} entries`
+                      : `${entries.length} entries`}
+                    {' · '}
+                    {filteredInstalled} installed
+                  </span>
                 </div>
-                <p className="catalog__summary micro-label" role="status">
-                  {filterActive
-                    ? `${filtered.length} of ${entries.length} entries`
-                    : `${entries.length} entries`}
-                  {' · '}
-                  {filteredInstalled} installed
-                </p>
               </section>
 
               {/* ── Quick-add strip (reusable primitive; editor pages import it) ── */}
               {quickAddKinds.length > 0 && (
                 <section className="page__section catalog__quickadd" aria-label="quick add">
-                  <span className="catalog__quickadd-label micro-label">QUICK ADD</span>
+                  <span className="table-header">quick add</span>
                   {quickAddKinds.map((kind) => (
                     <QuickAdd
                       key={kind}
@@ -237,6 +228,7 @@ export function Catalog() {
                       entries={entries}
                       installed={installedMap}
                       onChanged={onChanged}
+                      onToast={toast}
                     />
                   ))}
                 </section>
@@ -246,18 +238,16 @@ export function Catalog() {
               {shelves.length === 0
                 ? filterActive && (
                     <section className="page__section">
-                      <EmptyState instruction="no artifacts match this filter" />
+                      <EmptyState instruction="No artifacts match this filter." />
                     </section>
                   )
                 : shelves.map((shelf) => (
                     <section key={shelf.id} className="page__section catalog__shelf">
                       <div className="catalog__shelf-head">
-                        <h2 className="catalog__shelf-title">{shelf.title}</h2>
-                        <span className="catalog__shelf-count micro-label">
-                          {shelf.entries.length}
-                        </span>
+                        <h2 className="title-section">{shelf.title}</h2>
+                        <span className="meta">{shelf.entries.length}</span>
                       </div>
-                      <p className="catalog__shelf-note micro-label">{shelf.note}</p>
+                      <p className="catalog__shelf-note meta">{shelf.note}</p>
                       <ul className="catalog__list">
                         {shelf.entries.map((entry) => (
                           <CatalogCard
@@ -267,6 +257,7 @@ export function Catalog() {
                             client={client}
                             instance={instanceId}
                             onChanged={onChanged}
+                            onToast={toast}
                           />
                         ))}
                       </ul>
@@ -282,6 +273,7 @@ export function Catalog() {
                 client={client}
                 instance={instanceId}
                 onChanged={onChanged}
+                onToast={toast}
               />
             </>
           )}
@@ -289,4 +281,9 @@ export function Catalog() {
       )}
     </main>
   );
+}
+
+export function Catalog() {
+  // Toasts confirm through the shell-level ToastProvider (App.tsx).
+  return <CatalogPage />;
 }

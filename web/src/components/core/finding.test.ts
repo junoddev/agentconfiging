@@ -1,21 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatIndex, severityClass, severityToken } from './finding.js';
-
-describe('severityToken', () => {
-  it('maps each severity onto its color token', () => {
-    expect(severityToken('ok')).toBe('--signal');
-    expect(severityToken('warn')).toBe('--warn');
-    expect(severityToken('error')).toBe('--red');
-  });
-});
-
-describe('severityClass', () => {
-  it('maps each severity onto its block modifier class', () => {
-    expect(severityClass('ok')).toBe('sev--ok');
-    expect(severityClass('warn')).toBe('sev--warn');
-    expect(severityClass('error')).toBe('sev--error');
-  });
-});
+import { formatIndex } from './finding.js';
 
 describe('formatIndex', () => {
   it('zero-pads single digits to the 2-digit timetable form', () => {

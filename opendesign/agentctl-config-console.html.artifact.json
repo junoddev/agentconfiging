@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "kind": "html",
+  "title": "agentctl · Agent Config Console",
+  "entry": "agentctl-config-console.html",
+  "renderer": "html",
+  "status": "complete",
+  "exports": [
+    "html",
+    "pdf",
+    "zip"
+  ],
+  "primary": true,
+  "createdAt": "2026-07-29T11:00:53.358Z",
+  "updatedAt": "2026-07-29T11:00:53.365Z",
+  "metadata": {
+    "identifier": "agentctl-config-console",
+    "artifactType": "text/html",
+    "inferred": false
+  }
+}

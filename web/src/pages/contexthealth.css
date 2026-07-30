@@ -1,106 +1,70 @@
-/* ContextHealth (rail 21 CONTEXT, docs/DESIGN.md §5–§7). Page-local styles only;
-   the shared chassis lives in app.css / styles/ and components.css. The storage
-   panel reuses settings.css. Tokens only — no raw hex, no shadows, no gradients. */
+/* ContextHealth (#/context) — Console page-layout CSS only. The chassis
+   (tiles, notices, table, chips) comes from the §5 contract in components.css;
+   the storage panel reuses settings.css. Tokens only — no raw hex. */
 
-.ctx__sub {
-  margin-left: var(--gutter);
-  color: var(--fg-dim);
+.ctx-heading {
+  margin-bottom: 10px;
 }
 
-.ctx__lede {
-  margin-top: 8px;
-  color: var(--fg-dim);
-  max-width: 68ch;
-}
-
-.ctx__acquiring {
-  padding: var(--gutter) 0;
-}
-
-.ctx__heading {
-  margin-bottom: 8px;
-}
-
-/* Top stat row: three figures on the 12-column page grid, hairline column rules
-   between them. Reflows to one-up on narrow viewports. */
-.ctx__stats {
-  row-gap: var(--gutter);
-}
-
-.ctx__stat {
-  grid-column: span 4;
+/* Three wayfinding tiles (the contract row defaults to four columns). */
+.tile-row.ctx-tiles {
+  grid-template-columns: repeat(3, 1fr);
 }
 
 @media (max-width: 560px) {
-  .ctx__stat {
-    grid-column: span 12;
-  }
-  .ctx__stat.col-rule {
-    border-left: 0;
+  .tile-row.ctx-tiles {
+    grid-template-columns: 1fr;
   }
 }
 
-/* Budget meter: the VU bar plus a mono caption, tinted by verdict. */
-.ctx__budget {
-  display: flex;
-  align-items: center;
-  gap: var(--gutter);
-  margin-top: var(--gutter);
-  min-height: var(--row-h);
+/* Plain meter: recessed hairline track, flat fill. Accent for the category
+   shares; the budget bar tints by verdict (ok/warn/over). Tokens only. */
+.ctx-meter {
+  flex: 1;
+  width: 100%;
+  height: 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--fg-soft);
+  overflow: hidden;
 }
 
-.ctx__budget-caption {
-  color: var(--fg-dim);
+.ctx-meter__fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
 }
 
-.ctx__budget--warn .ctx__budget-caption {
-  color: var(--warn);
-}
-
-.ctx__budget--over .ctx__budget-caption {
-  color: var(--red);
-}
-
-/* Optimization suggestions: a dotted list, severity-tinted marker. */
-.ctx__suggestions {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.ctx__suggestion {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.ctx__suggestion-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: var(--radius);
-  background: var(--fg-dim);
-  flex: none;
-  transform: translateY(-1px);
-}
-
-.ctx__suggestion--warn .ctx__suggestion-dot {
+.ctx-budget--warn .ctx-meter__fill {
   background: var(--warn);
 }
 
-.ctx__suggestion--info .ctx__suggestion-dot {
-  background: var(--signal);
+.ctx-budget--over .ctx-meter__fill {
+  background: var(--danger);
 }
 
-.ctx__suggestion-msg {
-  color: var(--fg);
-  max-width: 90ch;
+/* Budget meter: the bar plus a mono caption, tinted by verdict. */
+.ctx-budget {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
 }
 
-/* Per-category share rows: name · VU bar · size, hairline-separated. */
-.ctx__cats {
+.ctx-budget-caption {
+  color: var(--muted);
+}
+
+.ctx-budget--warn .ctx-budget-caption {
+  color: var(--warn);
+}
+
+.ctx-budget--over .ctx-budget-caption {
+  color: var(--danger);
+}
+
+/* Per-category share rows: name · segmented bar · size, hairline-separated. */
+.ctx-cats {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -109,26 +73,26 @@
   gap: 4px;
 }
 
-.ctx__cat-row {
+.ctx-cat-row {
   display: grid;
   grid-template-columns: minmax(120px, 200px) 1fr minmax(120px, auto);
-  gap: var(--gutter);
+  gap: 12px;
   align-items: center;
-  min-height: var(--row-h);
-  border-bottom: var(--hairline-w) solid var(--hairline);
+  min-height: 40px;
+  border-bottom: 1px solid var(--border);
 }
 
-.ctx__cat-name {
+.ctx-cat-name {
   color: var(--fg);
 }
 
-.ctx__cat-size {
-  color: var(--fg-dim);
+.ctx-cat-size {
+  color: var(--muted);
   text-align: right;
 }
 
 @media (max-width: 720px) {
-  .ctx__cat-row {
+  .ctx-cat-row {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 }

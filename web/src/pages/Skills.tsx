@@ -1,5 +1,5 @@
 /**
- * Skills & agents editor (rail `08`, route `#/skills`, bead agentconfig-wmc.4).
+ * Skills & agents editor (#/skills, Console page, E13.5).
  *
  * A full editor for the instance's SKILL.md and agent .md files. The list is
  * derived from the report (agents[].files); selecting an entry loads its
@@ -8,15 +8,15 @@
  * connections view graphs which skill/agent references which tool, MCP server,
  * or other agent (this doubles as the config graph). Saves go through the
  * reusable useWriteFlow ({kind:'file'}) → diff → commit path, the only write
- * seam.
+ * seam, and confirm via Toast.
  *
  * REDACTION-SAVE TRAP (SPEC §3): getFile returns content with secrets already
  * replaced by visible `[REDACTED:*]` marks. Committing that text back would
  * overwrite the real secret on disk with the placeholder. So when a loaded file
  * carries any redaction span, the editor is READ-ONLY and saving is blocked
- * with a note. SKILL/agent files rarely hold secrets, so this is the rare case;
- * normally these files are freely editable. New files from a template are fresh
- * client text with no redaction, so they are always editable.
+ * with a notice. SKILL/agent files rarely hold secrets, so this is the rare
+ * case; normally these files are freely editable. New files from a template are
+ * fresh client text with no redaction, so they are always editable.
  *
  * All file/frontmatter content is adversarial: rendered as text nodes only,
  * never markup.
@@ -24,7 +24,18 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { ApiError, type FileContent } from '../api/index.js';
-import { Button, EmptyState, FileChip, SourceBadge } from '../components/core/index.js';
+import {
+  Button,
+  EmptyState,
+  Field,
+  FileChip,
+  Input,
+  Notice,
+  SegmentedControl,
+  SourceBadge,
+  useToast,
+  type SourceScope,
+} from '../components/core/index.js';
 import { fileReadOnly } from '../lib/editable.js';
 import { homeRel } from '../lib/format.js';
 import { useAppState, useGlobalConfig } from '../state/index.js';
@@ -45,6 +56,9 @@ import './skills.css';
 type Tab = 'edit' | 'connections';
 type EditorView = 'cards' | 'raw';
 
+const TABS: readonly Tab[] = ['edit', 'connections'];
+const EDITOR_VIEWS: readonly EditorView[] = ['cards', 'raw'];
+
 /** What the editor is pointed at: an existing file, or a new-from-template draft. */
 type Selection =
   { kind: 'file'; entry: SkillEntry } | { kind: 'template'; template: StarterTemplate } | undefined;
@@ -60,6 +74,14 @@ function errorText(err: unknown): string {
   return 'could not load file';
 }
 
+/** Map the server's free-form pathScope onto a badge scope; anything unknown
+ *  falls back to plain mono text (never a wrong badge). */
+function badgeScope(pathScope: string): SourceScope | undefined {
+  return pathScope === 'project' || pathScope === 'global' || pathScope === 'local'
+    ? pathScope
+    : undefined;
+}
+
 /** Parse a document's frontmatter into a display card (frontmatter may be
  *  absent — an empty card falls back to the given name). */
 function cardFor(content: string, name: string) {
@@ -67,10 +89,11 @@ function cardFor(content: string, name: string) {
   return toCard(parseFrontmatter(frontmatter ?? ''), name);
 }
 
-export function Skills() {
+function SkillsBody() {
   const { report, getFile } = useAppState();
   const { entries: globalDirs } = useGlobalConfig();
   const flow = useWriteFlow();
+  const toast = useToast();
 
   const entries = useMemo(() => collectEntries(report), [report]);
   const entriesKey = entries.map((e) => e.path).join('|');
@@ -146,6 +169,11 @@ export function Skills() {
     // selKey captures the meaningful selection identity; flow.cancel is stable.
   }, [selKey, getFile]);
 
+  // §5: every mutating action confirms via Toast — a committed save toasts.
+  useEffect(() => {
+    if (flow.phase === 'done') toast('Saved');
+  }, [flow.phase, toast]);
+
   // ── Connections graph: bulk-load every entry's file, then derive. ─────────
   const [graphFiles, setGraphFiles] = useState<Map<string, FileContent>>(new Map());
   const [graphLoading, setGraphLoading] = useState(false);
@@ -190,7 +218,7 @@ export function Skills() {
     selection?.kind === 'file' &&
     loaded !== undefined &&
     (loaded.spans.length > 0 || loaded.content.includes('[REDACTED:'));
-  // Inherited global file: kept for provenance (badge/note), but since bead
+  // Inherited global file: kept for provenance (badge/notice), but since bead
   // 71h.10 it is EDITABLE — the save goes through the same /api/write flow and
   // the WriteFlow global-scope warning. Only redaction forces read-only.
   const inherited = selection?.kind === 'file' && globalByPath.has(selection.entry.path);
@@ -200,6 +228,7 @@ export function Skills() {
     () => cardFor(draft, selection?.kind === 'file' ? selection.entry.name : 'new'),
     [draft, selection],
   );
+  const loadedScope = loaded ? badgeScope(loaded.pathScope) : undefined;
 
   const canSave =
     selection !== undefined &&
@@ -216,31 +245,29 @@ export function Skills() {
 
   return (
     <main className="layout-main page">
-      <section className="page__section">
-        <h1 className="title-page">
-          SKILLS & AGENTS
-          <span className="skills__count mono-data">
-            {skills.length} SKILLS · {agents.length} AGENTS
-          </span>
-        </h1>
-        <div className="skills__tabs">
-          <Button
-            label="edit"
-            variant={tab === 'edit' ? 'primary' : 'default'}
-            onClick={() => setTab('edit')}
-          />
-          <Button
-            label="connections"
-            variant={tab === 'connections' ? 'primary' : 'default'}
-            onClick={() => setTab('connections')}
-          />
+      <div className="page-head">
+        <div>
+          <h1>Skills &amp; agents</h1>
+          <p className="page-sub">edit SKILL.md and agent files, or map what each one references</p>
         </div>
-      </section>
+        <span className="meta">
+          {skills.length} skills · {agents.length} agents
+        </span>
+      </div>
+
+      <div className="skills__tabs">
+        <SegmentedControl
+          options={TABS}
+          value={tab}
+          onChange={(v) => setTab(v === 'connections' ? 'connections' : 'edit')}
+          label="Skills view"
+        />
+      </div>
 
       {tab === 'connections' ? (
         <section className="page__section">
           {graphLoading && graphFiles.size === 0 ? (
-            <p className="micro-label">building graph…</p>
+            <p className="meta">building graph…</p>
           ) : (
             <ConnectionsGraph graph={graph} />
           )}
@@ -248,13 +275,13 @@ export function Skills() {
       ) : (
         <section className="page__section">
           {entries.length === 0 && globalEntries.length === 0 ? (
-            <EmptyState instruction="no skills or agents detected — start from a template below" />
+            <EmptyState instruction="No skills or agents detected — start from a template below." />
           ) : null}
 
           <div className="skills">
             <div className="skills__list">
-              <div className="micro-label skills__group">SKILLS</div>
-              {skills.length === 0 && <p className="micro-label skills__none">none</p>}
+              <div className="table-header skills__group">SKILLS</div>
+              {skills.length === 0 && <p className="meta skills__none">none</p>}
               {skills.map((entry) => (
                 <span
                   key={entry.path}
@@ -269,8 +296,8 @@ export function Skills() {
                 </span>
               ))}
 
-              <div className="micro-label skills__group">AGENTS</div>
-              {agents.length === 0 && <p className="micro-label skills__none">none</p>}
+              <div className="table-header skills__group">AGENTS</div>
+              {agents.length === 0 && <p className="meta skills__none">none</p>}
               {agents.map((entry) => (
                 <span
                   key={entry.path}
@@ -287,7 +314,7 @@ export function Skills() {
 
               {globalEntries.length > 0 && (
                 <>
-                  <div className="micro-label skills__group">
+                  <div className="skills__group">
                     <SourceBadge scope="global" detail={homeRel(globalEntries[0]?.root ?? '')} />
                   </div>
                   {globalEntries.map((entry) => (
@@ -306,7 +333,7 @@ export function Skills() {
                 </>
               )}
 
-              <div className="micro-label skills__group">TEMPLATES</div>
+              <div className="table-header skills__group">TEMPLATES</div>
               {STARTER_TEMPLATES.map((template) => (
                 <span
                   key={template.id}
@@ -322,19 +349,19 @@ export function Skills() {
               ))}
             </div>
 
-            <div className="skills__editor">
+            <div className="card skills__editor">
               {selection === undefined && (
                 <EmptyState
-                  title="SELECT"
-                  instruction="choose a skill or agent, or start from a template"
+                  title="Select"
+                  instruction="Choose a skill or agent, or start from a template."
                 />
               )}
 
               {selection?.kind === 'file' && status === 'loading' && (
-                <p className="micro-label">loading {selection.entry.path}…</p>
+                <p className="meta">loading {selection.entry.path}…</p>
               )}
               {selection?.kind === 'file' && status === 'error' && (
-                <EmptyState title="NO SIGNAL" instruction={errMsg} />
+                <EmptyState title="File unavailable" instruction={errMsg} />
               )}
 
               {selection !== undefined &&
@@ -342,17 +369,19 @@ export function Skills() {
                   <>
                     <div className="skills__head">
                       {selection.kind === 'template' ? (
-                        <label className="skills__path">
-                          <span className="micro-label">new file path</span>
-                          <input
-                            className="mono-data skills__path-input"
-                            value={newPath}
-                            spellCheck={false}
-                            onChange={(e) => setNewPath(e.target.value)}
-                          />
-                        </label>
+                        <div className="skills__path">
+                          <Field label="New file path" htmlFor="skills-new-path">
+                            <Input
+                              id="skills-new-path"
+                              className="mono"
+                              value={newPath}
+                              spellCheck={false}
+                              onChange={(e) => setNewPath(e.target.value)}
+                            />
+                          </Field>
+                        </div>
                       ) : (
-                        <span className="mono-data">{selection.entry.path}</span>
+                        <span className="mono-data skills__path-text">{selection.entry.path}</span>
                       )}
                       {inherited && selection.kind === 'file' ? (
                         <SourceBadge
@@ -361,37 +390,34 @@ export function Skills() {
                           readOnly={redacted}
                         />
                       ) : (
-                        loaded && (
-                          <span className="skills__scope micro-label">
-                            scope · {loaded.pathScope}
-                          </span>
-                        )
+                        loaded &&
+                        (loadedScope !== undefined ? (
+                          <SourceBadge scope={loadedScope} />
+                        ) : (
+                          <span className="meta">scope · {loaded.pathScope}</span>
+                        ))
                       )}
                     </div>
 
                     {redacted && (
-                      <p className="skills__redact micro-label">
-                        read-only — this file contains {loaded?.spans.length} redacted secret
+                      <Notice>
+                        Read-only — this file contains {loaded?.spans.length} redacted secret
                         {loaded && loaded.spans.length === 1 ? '' : 's'}; saving would overwrite the
-                        real value with the placeholder
-                      </p>
+                        real value with the placeholder.
+                      </Notice>
                     )}
                     {inherited && !redacted && (
-                      <p className="skills__redact micro-label">
-                        inherited · edits apply to all projects on this machine
-                      </p>
+                      <Notice tone="info">
+                        Inherited — edits apply to all projects on this machine.
+                      </Notice>
                     )}
 
                     <div className="skills__views">
-                      <Button
-                        label="cards"
-                        variant={editorView === 'cards' ? 'primary' : 'default'}
-                        onClick={() => setEditorView('cards')}
-                      />
-                      <Button
-                        label="raw"
-                        variant={editorView === 'raw' ? 'primary' : 'default'}
-                        onClick={() => setEditorView('raw')}
+                      <SegmentedControl
+                        options={EDITOR_VIEWS}
+                        value={editorView}
+                        onChange={(v) => setEditorView(v === 'raw' ? 'raw' : 'cards')}
+                        label="Editor view"
                       />
                     </div>
 
@@ -409,7 +435,7 @@ export function Skills() {
                     )}
 
                     <div className="skills__actions">
-                      <Button label="save" variant="primary" onClick={onSave} disabled={!canSave} />
+                      <Button label="Save" variant="primary" onClick={onSave} disabled={!canSave} />
                     </div>
 
                     <WriteFlow flow={flow} />
@@ -421,4 +447,9 @@ export function Skills() {
       )}
     </main>
   );
+}
+
+export function Skills() {
+  // Toasts confirm through the shell-level ToastProvider (App.tsx).
+  return <SkillsBody />;
 }

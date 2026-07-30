@@ -40,8 +40,8 @@ into a structured report, then serves a full control center over it:
   provenance so upgrade/removal stays traceable. Also scaffolds runtime config
   from templates.
 - **Sessions & analytics** — a dashboard of activity computed from real session
-  history, redacted session replay, token/cost analytics with a persistent cost
-  widget, context-health budgets, and full-text session search.
+  history, redacted session replay, context-health budgets, and full-text
+  session search.
 - **Operate** — a git panel (branch switcher, grouped changes, commit helper) and
   an embedded multi-tab terminal (xterm.js over an authenticated WebSocket) that
   can launch any detected runtime's CLI.

@@ -78,13 +78,13 @@ export function RunHistory({
     <div className="pipeline-history">
       <div className="pipeline-history__head">
         <span className="micro-label">RUN HISTORY</span>
-        <Button label="re-run" disabled={!canRerun} onClick={onRerun} />
+        <Button label="Re-run" disabled={!canRerun} onClick={onRerun} />
       </div>
 
       {loading ? (
-        <span className="micro-label pipeline-history__note">loading…</span>
+        <span className="meta">loading…</span>
       ) : runs.length === 0 ? (
-        <EmptyState title="NO RUNS YET" instruction="run this pipeline to record its first run" />
+        <EmptyState title="No runs yet" instruction="run this pipeline to record its first run" />
       ) : (
         <ul className="pipeline-history__list">
           {runs.map((entry) => (

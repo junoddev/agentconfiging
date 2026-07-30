@@ -5,12 +5,13 @@
  * App shell consume these and perform the actual effects.
  *
  * The nav command list and the Cmd+1..9 page shortcuts are derived from the real
- * routes (routes.ts) — the settings…sync run comes straight from `EDITOR_ROUTES`
- * and every nav hash round-trips through `parseRoute` (asserted in tests) — so
- * the palette can't drift from the router or the numbered rail.
+ * routes (routes.ts) — the settings…sync run comes straight from `EDITOR_ROUTES`,
+ * labels come from `ROUTE_LABELS`, and every nav hash round-trips through
+ * `parseRoute` (asserted in tests) — so the palette can't drift from the router
+ * or the grouped sidebar.
  */
 
-import { EDITOR_ROUTES, routeHash, type Route, type RouteName } from '../routes.js';
+import { EDITOR_ROUTES, ROUTE_LABELS, routeHash, type Route, type RouteName } from '../routes.js';
 import { fuzzyMatch } from './fuzzy.js';
 
 /** What running a command asks the shell to do. Discriminated so the effectful
@@ -20,7 +21,7 @@ export type CommandAction =
 
 export interface Command {
   id: string;
-  /** Display label (Signal Grid all-caps). */
+  /** Display label (routes.ts label seam — sentence-case nouns). */
   label: string;
   /** Right-aligned mono hint (the target hash, or the command category). */
   hint: string;
@@ -28,36 +29,38 @@ export interface Command {
 }
 
 /**
- * Rail order 01..24 (mirrors shell/Rail.tsx, which owns the rendered rail). The
- * settings…sync group is spread from routes' `EDITOR_ROUTES` so that block never
- * drifts. Cmd+1..9 map to the first nine entries (shared with the rail numbers).
+ * Sidebar order (mirrors shell/Sidebar.tsx grouping: WORKSPACE / CONFIGURE /
+ * LIBRARY / RUNTIME / OPERATE). The settings…sync group is spread from routes'
+ * `EDITOR_ROUTES` so that block never drifts. Cmd+1..9 map to the first nine
+ * entries.
  */
 export const RAIL_ORDER: RouteName[] = [
+  // WORKSPACE
   'overview',
   'agents',
   'findings',
-  'artifacts',
   'instances',
+  'artifacts',
+  // CONFIGURE
   ...EDITOR_ROUTES,
+  // LIBRARY
   'catalog',
   'marketplace',
+  // RUNTIME
   'dashboard',
   'sessions',
-  'analytics',
   'search',
   'context',
+  // OPERATE
   'git',
   'terminal',
   'pipelines',
 ];
 
-/** Labels where the rail text isn't just the upper-cased route name. */
-const LABEL_OVERRIDE: Partial<Record<RouteName, string>> = {
-  overview: 'SIGNAL',
-};
-
+/** Display label for a route — reads the routes.ts label seam so the palette
+ *  and the sidebar can never drift. */
 export function railLabel(name: RouteName): string {
-  return LABEL_OVERRIDE[name] ?? name.toUpperCase();
+  return ROUTE_LABELS[name];
 }
 
 /** Canonical hash for a simple (no-param) route name. */
@@ -76,20 +79,21 @@ export function railShortcutHash(digit: number): string | undefined {
 
 /**
  * The full command list, given the current theme (so the theme command can name
- * its target). Nav commands first (rail order, then the `00` gallery), then the
+ * its target). Nav commands first (rail order, then the gallery), then the
  * theme toggle and the refetch action.
  */
-export function buildCommands(theme: 'paper' | 'ink'): Command[] {
+export function buildCommands(theme: 'light' | 'dark'): Command[] {
   const nav: Command[] = RAIL_ORDER.map((name) => ({
     id: `nav:${name}`,
     label: railLabel(name),
     hint: navHash(name),
     action: { type: 'navigate', hash: navHash(name) },
   }));
-  // The internal gallery is rail slot `00` — navigable, but outside Cmd+1..9.
+  // The internal gallery is de-emphasized (sidebar bottom) — navigable, but
+  // outside Cmd+1..9.
   nav.push({
     id: 'nav:gallery',
-    label: 'GALLERY',
+    label: railLabel('gallery'),
     hint: navHash('gallery'),
     action: { type: 'navigate', hash: navHash('gallery') },
   });
@@ -97,14 +101,14 @@ export function buildCommands(theme: 'paper' | 'ink'): Command[] {
   const actions: Command[] = [
     {
       id: 'theme:toggle',
-      label: `THEME → ${theme === 'paper' ? 'INK' : 'PAPER'}`,
-      hint: 'TOGGLE',
+      label: `Theme → ${theme === 'light' ? 'dark' : 'light'}`,
+      hint: 'toggle',
       action: { type: 'toggle-theme' },
     },
     {
       id: 'action:refetch',
-      label: 'REFETCH REPORT',
-      hint: 'ACTION',
+      label: 'Refetch report',
+      hint: 'action',
       action: { type: 'refetch' },
     },
   ];

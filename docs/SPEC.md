@@ -59,7 +59,7 @@ no license issue):
 - **`~/.claude/` format notes** from `cli/src/core/agents/adapters/claude_code.js`
   (session JSONL layout, **lossy cwd slugs — read cwd from in-file entries, never
   decode the slug**, sidechain markers, tool-result spill files, ai-title lines) —
-  this directly powers Session Replay and Analytics (§5). Sibling adapters exist
+  this directly powers Session Replay (§5). Sibling adapters exist
   for codex/gemini/opencode with test fixtures.
 
 Leave behind: the hosted client/server trust machinery (WebSocket bridge, session
@@ -123,7 +123,7 @@ web/           Vite + React + TS single-page app. Custom CSS design tokens
   Windsurf, Zed, Amazon Q, JetBrains Junie, Roo, Qodo) as data files.
 - **History readers**: parse `~/.claude/history.jsonl` and
   `~/.claude/projects/<slug>/*.jsonl` into typed session/usage models (feeding
-  Dashboard, Analytics, Session Replay). Read-only, resilient to unknown line
+  Dashboard, Session Replay). Read-only, resilient to unknown line
   types.
 
 ### 4.2 Workspace model — lazy instances
@@ -208,7 +208,6 @@ The complete v1 feature set. "Epic" points into §6.
 | 12 | Pipelines | Visual workflow builder (React Flow): 14 node types (prompt, bash, github-action, http, transform, delay, input, output, git, filter, read-file, write-file, notification, json-extract), `{{input}}`/`{{NodeName}}` templating, async execution with live node status, run history + replay, cron + preset scheduling; scheduler lives in `agentconfig daemon` since npx sessions are ephemeral. | E9 |
 | 13 | Session replay | Browse and step through past sessions from the JSONL adapters (§3); tags, markdown export, paginated large sessions, live-session detection with signal pulse; subagent (sidechain) entries rendered distinctly. | E7 |
 | 14 | Templates gallery | 30+ starter configurations across skills/agents/rules/hooks/MCP, shipped as `template`-tagged registry entries; quick-add reachable from every relevant editor page. | E6 |
-| 15 | Analytics | Token usage and cost per model with plan-aware labels, daily trend + hourly activity charts, cache efficiency; persistent cost widget in the chrome with budget alerts. | E7 |
 | 16 | Context health | Config size budgets, largest context contributors, optimization suggestions; storage maintenance. | E7 |
 | 17 | Session search | Full-text search over turns and tool results (SQLite FTS5) with reindex + coverage stats; embeddings-based semantic mode behind an opt-in flag. | E7 |
 | 18 | Command palette | Cmd+K fuzzy palette: jump to any page, toggle theme, run actions; keyboard nav; Cmd+1..9 page shortcuts shared with rail numbering. | E10 |
@@ -228,7 +227,7 @@ The complete v1 feature set. "Epic" points into §6.
 - **E4 Inspector** — overview dashboard shell, per-agent detail, artifact browser, findings list. *Demo: the product, read-only.*
 - **E5 Editors** (write-back) — diff-preview write flow; then settings, instructions (@imports), skills/agents (+connections), hooks, rules, memory, MCP, keybindings editors; APPLY-fix. *Demo: fix a finding and edit every config type from the browser.*
 - **E6 Catalog** — registry repo + schema, seed content, templates gallery, browse UI, install/remove/provenance, Claude plugin marketplace, runtime scaffolding templates. *Demo: install a subagent + scaffold Cursor config.*
-- **E7 Sessions & analytics** — dashboard stats/streaks/achievements, session replay + search + tags + export, token/cost analytics, context health, storage maintenance. *Demo: replay yesterday's session; see this month's spend.*
+- **E7 Sessions & analytics** — dashboard stats/streaks/achievements, session replay + search + tags + export, context health, storage maintenance. *Demo: replay yesterday's session.*
 - **E8 Operate** — git panel, embedded multi-tab PTY terminal. *Demo: run `claude` inside the app and commit the result.*
 - **E9 Pipelines** — React Flow canvas, node library (14 types), executor, run history/replay, cron scheduler + `daemon` mode, schedule logs. *Demo: scheduled pipeline runs headless.*
 - **E10 Power UX** — command palette, onboarding, theme persistence, project switcher (other repos seen in `~/.claude/projects`). 

@@ -1,14 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { DetectedAgent, GlobalEntry, Report, ReportFinding } from '../../api/types.js';
 import {
-  buildAgentSignals,
   computeStats,
-  confidenceLevel,
-  deriveAgentSources,
-  displayKind,
+  configSourceRows,
+  healthItems,
   inheritedSummary,
   severitySummary,
-  severityToBlock,
   tallyFindings,
   topFindings,
 } from './stats.js';
@@ -51,23 +48,6 @@ const globalEntry = (over: Partial<GlobalEntry> = {}): GlobalEntry => ({
   ...over,
 });
 
-describe('confidenceLevel', () => {
-  it('maps qualitative confidence into an ascending [0, 1] band', () => {
-    expect(confidenceLevel('low')).toBeLessThan(confidenceLevel('medium'));
-    expect(confidenceLevel('medium')).toBeLessThan(confidenceLevel('high'));
-    expect(confidenceLevel('high')).toBeLessThanOrEqual(1);
-    expect(confidenceLevel('low')).toBeGreaterThan(0);
-  });
-});
-
-describe('severityToBlock', () => {
-  it('maps report severities onto the three-tone block palette', () => {
-    expect(severityToBlock('error')).toBe('error');
-    expect(severityToBlock('warning')).toBe('warn');
-    expect(severityToBlock('info')).toBe('ok');
-  });
-});
-
 describe('tallyFindings', () => {
   it('counts each severity', () => {
     const tally = tallyFindings([
@@ -99,41 +79,60 @@ describe('computeStats', () => {
   });
 });
 
-describe('deriveAgentSources', () => {
-  it('produces one deterministic ConfigSource per file path', () => {
-    const a = agent({ files: ['CLAUDE.md', '.mcp.json'] });
-    expect(deriveAgentSources(a)).toEqual(deriveAgentSources(a));
-    expect(deriveAgentSources(a)).toEqual([
-      { path: 'CLAUDE.md', size: 'CLAUDE.md'.length },
-      { path: '.mcp.json', size: '.mcp.json'.length },
+describe('configSourceRows', () => {
+  it('flattens project files first, then each global dir, with provenance', () => {
+    const rows = configSourceRows(
+      report({
+        agents: [
+          agent({ kind: 'claude-code', files: ['CLAUDE.md'] }),
+          agent({ kind: 'codex', files: ['AGENTS.md'] }),
+        ],
+      }),
+      [globalEntry({ agents: [agent({ kind: 'claude-code', files: ['settings.json'] })] })],
+    );
+    expect(rows).toEqual([
+      { path: 'CLAUDE.md', agent: 'claude-code', scope: 'project' },
+      { path: 'AGENTS.md', agent: 'codex', scope: 'project' },
+      {
+        path: 'settings.json',
+        agent: 'claude-code',
+        scope: 'global',
+        root: '/Users/x/.claude',
+      },
     ]);
   });
 
-  it('changes when the file set changes', () => {
-    const before = deriveAgentSources(agent({ files: ['CLAUDE.md'] }));
-    const after = deriveAgentSources(agent({ files: ['AGENTS.md'] }));
-    expect(after).not.toEqual(before);
+  it('is empty for a fileless report with no global data', () => {
+    expect(configSourceRows(report({ agents: [] }), [])).toEqual([]);
   });
 });
 
-describe('buildAgentSignals', () => {
-  it('maps each agent to display-ready strip data', () => {
-    const signals = buildAgentSignals(
-      report({
-        agents: [agent({ kind: 'claude-code', confidence: 'medium', files: ['CLAUDE.md'] })],
-      }),
-    );
-    expect(signals).toHaveLength(1);
-    expect(signals[0]?.kind).toBe('CLAUDE-CODE');
-    expect(signals[0]?.confidence).toBe(confidenceLevel('medium'));
-    expect(signals[0]?.fileCount).toBe(1);
-    expect(signals[0]?.sources).toEqual([{ path: 'CLAUDE.md', size: 'CLAUDE.md'.length }]);
+describe('healthItems', () => {
+  it('reads all-ok for a clean scan', () => {
+    const items = healthItems({
+      agentCount: 2,
+      fileCount: 5,
+      tally: { error: 0, warning: 0, info: 0 },
+    });
+    expect(items).toEqual([
+      { ok: true, text: '2 agents detected' },
+      { ok: true, text: 'no errors' },
+      { ok: true, text: 'no warnings' },
+    ]);
   });
-});
 
-describe('displayKind', () => {
-  it('renders the runtime id in terse caps', () => {
-    expect(displayKind('claude-code')).toBe('CLAUDE-CODE');
+  it('flags missing agents and non-zero severities, appending info notes', () => {
+    const items = healthItems({
+      agentCount: 0,
+      fileCount: 0,
+      tally: { error: 2, warning: 1, info: 1 },
+    });
+    expect(items).toEqual([
+      { ok: false, text: 'no agents detected in this folder' },
+      { ok: false, text: '2 errors' },
+      { ok: false, text: '1 warning' },
+      { ok: true, text: '1 info note' },
+    ]);
   });
 });
 
@@ -196,16 +195,16 @@ describe('inheritedSummary', () => {
 
 describe('severitySummary', () => {
   it('lists only non-zero severities in the terse voice', () => {
-    expect(severitySummary({ error: 1, warning: 3, info: 0 })).toBe('1 ERROR · 3 WARNINGS');
+    expect(severitySummary({ error: 1, warning: 3, info: 0 })).toBe('1 error · 3 warnings');
   });
 
   it('pluralizes and keeps info uncountable', () => {
     expect(severitySummary({ error: 2, warning: 1, info: 2 })).toBe(
-      '2 ERRORS · 1 WARNING · 2 INFO',
+      '2 errors · 1 warning · 2 info',
     );
   });
 
-  it('reads SIGNAL CLEAN when there are no findings', () => {
-    expect(severitySummary({ error: 0, warning: 0, info: 0 })).toBe('SIGNAL CLEAN');
+  it('reads clean when there are no findings', () => {
+    expect(severitySummary({ error: 0, warning: 0, info: 0 })).toBe('clean');
   });
 });

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { EmptyState } from './components/core/index.js';
+import { EmptyState, ToastProvider } from './components/core/index.js';
 import { GalleryPage } from './gallery/GalleryPage.js';
 import { AgentDetail } from './pages/AgentDetail.js';
 import { Agents } from './pages/Agents.js';
@@ -20,7 +20,6 @@ import { Catalog } from './pages/Catalog.js';
 import { Marketplace } from './pages/Marketplace.js';
 import { Dashboard } from './pages/Dashboard.js';
 import { Sessions } from './pages/Sessions.js';
-import { Analytics } from './pages/Analytics.js';
 import { Search } from './pages/Search.js';
 import { ContextHealth } from './pages/ContextHealth.js';
 import { Git } from './pages/Git.js';
@@ -29,8 +28,9 @@ import { Pipelines } from './pages/Pipelines.js';
 import { parseRoute, type Route } from './routes.js';
 import { parseGlobalKey, type CommandAction } from './command/commands.js';
 import { CommandPalette } from './shell/CommandPalette.js';
-import { Rail } from './shell/Rail.js';
-import { TopBar, type Theme } from './shell/TopBar.js';
+import { Sidebar } from './shell/Sidebar.js';
+import { StatusBar } from './shell/StatusBar.js';
+import { TopBar } from './shell/TopBar.js';
 import { About } from './shell/About.js';
 import { Onboarding } from './shell/Onboarding.js';
 import {
@@ -40,6 +40,7 @@ import {
   shouldShowOnboarding,
   writeOnboarded,
   writeTheme,
+  type Theme,
 } from './shell/theme.js';
 import { useAppState } from './state/index.js';
 
@@ -96,8 +97,6 @@ function renderRoute(route: Route) {
       return <Dashboard />;
     case 'sessions':
       return <Sessions />;
-    case 'analytics':
-      return <Analytics />;
     case 'search':
       return <Search />;
     case 'context':
@@ -115,9 +114,10 @@ function renderRoute(route: Route) {
   }
 }
 
-/** App shell (DESIGN §4): top bar + left rail chrome around a hash-route switch.
- *  Data comes from the AppStateProvider; the shell renders an honest error state
- *  (never a crash) when the session token is missing/rejected. */
+/** App shell (opendesign/DESIGN.md §4): 49px topbar + 232px grouped sidebar +
+ *  dot-grid content + 30px statusbar around a hash-route switch. Data comes
+ *  from the AppStateProvider; the shell renders an honest error state (never a
+ *  crash) when the session token is missing/rejected. */
 export function App() {
   // Seed theme from the saved choice, falling back to the OS preference; the
   // toggle then flips + persists explicitly (see toggleTheme).
@@ -127,22 +127,29 @@ export function App() {
   const route = useRoute();
   const app = useAppState();
 
-  // Cmd+K opens the command palette; Cmd+1..9 jump to the numbered rail pages.
+  // Cmd+K opens the command palette; Cmd+1..9 jump to the first nine sidebar pages.
   const [paletteOpen, setPaletteOpen] = useState(false);
   // First-run onboarding (once, flag-gated) + the about dialog.
   const [showOnboarding, setShowOnboarding] = useState(() => shouldShowOnboarding(readOnboarded()));
   const [aboutOpen, setAboutOpen] = useState(false);
+  // ≤860px: the sidebar hides; a topbar toggle overlays it (closed on nav).
+  const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+
+  // Any navigation closes the ≤860px sidebar overlay.
+  useEffect(() => {
+    setNavOpen(false);
+  }, [route]);
 
   // Flip + persist the theme. Persistence happens only on an explicit choice, so
   // an untouched install keeps following the OS preference across reloads. Both
   // the top-bar toggle and the palette's theme-toggle command route through here.
   const toggleTheme = () =>
     setTheme((t) => {
-      const next = t === 'paper' ? 'ink' : 'paper';
+      const next = t === 'light' ? 'dark' : 'light';
       writeTheme(next);
       return next;
     });
@@ -185,37 +192,50 @@ export function App() {
   const unauthorized = app.error?.kind === 'unauthorized';
 
   return (
-    <div className="layout-shell">
-      <TopBar
-        theme={theme}
-        onToggleTheme={toggleTheme}
-        onAbout={() => setAboutOpen(true)}
-        projectPath={app.currentInstance?.root}
-        wsState={app.wsState}
-      />
-      <Rail route={route} />
-      {unauthorized ? (
-        <main className="layout-main page">
-          <section className="page__section">
-            <EmptyState instruction="reopen agentconfig from the CLI — session token missing" />
-          </section>
-        </main>
-      ) : (
-        <>
-          {renderRoute(route)}
-          {/* Persistent terminal: mounted once, only hidden off-route, so its
-              tabs + live PTYs survive navigation (ngs.2). */}
-          <Terminal active={route.name === 'terminal'} theme={theme} />
-        </>
-      )}
-      <CommandPalette
-        open={paletteOpen}
-        theme={theme}
-        onClose={() => setPaletteOpen(false)}
-        onRun={runCommand}
-      />
-      {aboutOpen && <About onClose={() => setAboutOpen(false)} />}
-      {showOnboarding && <Onboarding onDone={finishOnboarding} />}
-    </div>
+    // One app-wide toast host (DESIGN §5): every routed page confirms
+    // mutations through useToast — no page mounts its own provider.
+    <ToastProvider>
+      <div className="layout-shell">
+        <TopBar
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          onAbout={() => setAboutOpen(true)}
+          onToggleNav={() => setNavOpen((o) => !o)}
+          route={route}
+        />
+        <div className={`app-main${navOpen ? ' nav-open' : ''}`}>
+          <Sidebar route={route} />
+          {/* Pages render their own <main>, so the scrollable content region is a
+            div (dot grid + 980px inner column, DESIGN §4). */}
+          <div className="content">
+            <div className="content-inner">
+              {unauthorized ? (
+                <main className="layout-main page">
+                  <section className="page__section">
+                    <EmptyState instruction="reopen agentconfig from the CLI — session token missing" />
+                  </section>
+                </main>
+              ) : (
+                <>
+                  {renderRoute(route)}
+                  {/* Persistent terminal: mounted once, only hidden off-route, so
+                    its tabs + live PTYs survive navigation (ngs.2). */}
+                  <Terminal active={route.name === 'terminal'} theme={theme} />
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+        <StatusBar />
+        <CommandPalette
+          open={paletteOpen}
+          theme={theme}
+          onClose={() => setPaletteOpen(false)}
+          onRun={runCommand}
+        />
+        {aboutOpen && <About onClose={() => setAboutOpen(false)} />}
+        {showOnboarding && <Onboarding onDone={finishOnboarding} />}
+      </div>
+    </ToastProvider>
   );
 }

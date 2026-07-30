@@ -55,7 +55,7 @@ JSON fixtures.
   a long tail of sync-only formats (Cline, Windsurf, Zed, Amazon Q, Junie, Roo,
   Qodo) as data.
 - **History readers** (`src/core/history/`) — parse `~/.claude/history.jsonl` and
-  session JSONL into typed session/usage models feeding the dashboard, analytics,
+  session JSONL into typed session/usage models feeding the dashboard,
   and replay. Read-only and resilient to unknown line types. cwd is read from
   in-file entries, never decoded from the lossy directory slug.
 

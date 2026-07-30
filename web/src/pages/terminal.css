@@ -1,6 +1,7 @@
-/* Embedded terminal (ngs.2) — the xterm surface themed to Signal Grid. The
-   xterm library owns its own DOM inside `.terminal-surface`; we only frame it
-   with the chassis tokens (hairlines, mono micro-labels, no radius > 2px). */
+/* Embedded terminal (#/terminal, bead ngs.2) — Console page-layout CSS only.
+   xterm owns its own DOM inside `.terminal-surface`; we frame it with the
+   Console chassis (hairlines, mono, token colors — the xterm palette itself is
+   fed from the same tokens in terminal/logic.ts). */
 
 .terminal-page {
   display: flex;
@@ -15,17 +16,14 @@
   display: none;
 }
 
-.terminal-scope {
-  color: var(--fg-dim);
-  margin-top: 4px;
-}
+/* ── Tab bar ────────────────────────────────────────────────────────────── */
 
 .terminal-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--gutter);
-  border-bottom: var(--hairline-w) solid var(--hairline);
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
   padding-bottom: 8px;
   margin-bottom: 12px;
   flex-wrap: wrap;
@@ -37,43 +35,52 @@
   flex-wrap: wrap;
 }
 
+/* Tabs follow the .seg treatment: mono outlined, selection wears the accent. */
 .terminal-tab {
   display: inline-flex;
   align-items: center;
-  border: var(--hairline-w) solid var(--hairline);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
+  transition:
+    border-color 0.12s ease,
+    color 0.12s ease;
 }
 
 .terminal-tab--active {
-  border-color: var(--signal);
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .terminal-tab__label {
   background: none;
   border: none;
-  color: var(--fg-dim);
+  color: var(--muted);
   cursor: pointer;
-  padding: 4px 8px;
-  font-family: var(--font-mono);
+  padding: 5px 9px;
+}
+
+.terminal-tab__label:hover {
+  color: var(--fg);
 }
 
 .terminal-tab--active .terminal-tab__label {
-  color: var(--fg);
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .terminal-tab__close {
   background: none;
   border: none;
-  color: var(--fg-dim);
+  color: var(--muted);
   cursor: pointer;
-  padding: 4px 8px 4px 0;
+  padding: 5px 9px 5px 0;
   font-size: 14px;
   line-height: 1;
 }
 
 .terminal-tab__close:hover {
-  color: var(--red);
+  color: var(--danger);
 }
 
 .terminal-launch {
@@ -82,20 +89,23 @@
   flex-wrap: wrap;
 }
 
+/* ── Stage ──────────────────────────────────────────────────────────────── */
+
 .terminal-stage {
   flex: 1 1 auto;
   min-height: 420px;
   display: flex;
 }
 
+/* Recessed like an input: the xterm background token is `--bg`. */
 .terminal-surface {
   flex: 1 1 auto;
   width: 100%;
   min-height: 420px;
-  background: var(--surface);
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 10px;
   overflow: hidden;
 }
 

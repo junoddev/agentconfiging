@@ -1,232 +1,40 @@
-/* Memory browser & editor (#/memory, bead agentconfig-wmc.7). Chassis only —
-   tokens, hairlines, mono. Memory content is adversarial data rendered as text
-   nodes, never markup. Type badges colour the four SPEC types with the shared
-   accent tokens; anything else falls back to the neutral badge. Nothing here
-   animates (motion belongs to the signal layer). */
+/* Memory browser & editor (#/memory) — Console conversion (bead 4u1.4). Rows,
+   badges, fields, dialog and toast come from the §5 contract classes in
+   components/core; only true page-layout rules live here. Memory content is
+   adversarial data rendered as text nodes, never markup. */
 
-.mem__count {
-  margin-left: 8px;
-  color: var(--fg-dim);
-}
-
-.mem__tabs {
+/* Dialog: the edited file's path + provenance badge. */
+.mem-dialog-path {
   display: flex;
-  gap: 8px;
-  margin-top: var(--gutter);
-}
-
-/* ── Card grid ─────────────────────────────────────────────────────────── */
-
-.mem__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: var(--gutter);
-  align-items: start;
-}
-
-.mem__card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  text-align: left;
-  width: 100%;
-  background: var(--surface);
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: var(--gutter);
-  cursor: pointer;
-  color: var(--fg);
-}
-
-.mem__card:hover {
-  border-color: var(--fg-dim);
-}
-
-.mem__card:focus-visible {
-  outline: none;
-  border-color: var(--signal);
-}
-
-.mem__card[aria-current] {
-  border-color: var(--fg);
-}
-
-.mem__card-head {
-  display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-}
-
-.mem__badge {
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: 1px 6px;
-  color: var(--fg-dim);
-}
-
-.mem__badge--user {
-  color: var(--signal);
-  border-color: var(--signal);
-}
-
-.mem__badge--project {
-  color: var(--warn);
-  border-color: var(--warn);
-}
-
-.mem__badge--feedback {
-  color: var(--red);
-  border-color: var(--red);
-}
-
-.mem__badge--reference {
-  color: var(--fg);
-  border-color: var(--fg);
-}
-
-.mem__badge--other {
-  color: var(--fg-dim);
-  border-color: var(--hairline);
-}
-
-.mem__redact-tag {
-  color: var(--warn);
-  border: var(--hairline-w) solid var(--warn);
-  border-radius: var(--radius);
-  padding: 1px 6px;
-}
-
-.mem__card-name {
-  font-family: var(--font-sans);
-  font-size: var(--size-section);
-  line-height: var(--leading-section);
-  font-weight: 700;
-  letter-spacing: var(--tracking-heading);
-  word-break: break-word;
-}
-
-.mem__card-desc {
-  color: var(--fg);
-  word-break: break-word;
-}
-
-.mem__card-preview {
-  color: var(--fg-dim);
-  word-break: break-word;
-}
-
-/* ── Editor / create panel ─────────────────────────────────────────────── */
-
-.mem__editor {
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: var(--gutter);
-}
-
-.mem__editor-head {
-  display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px var(--gutter);
-  padding-bottom: 8px;
-  margin-bottom: var(--gutter);
-  border-bottom: var(--hairline-w) solid var(--hairline);
+  margin-bottom: 14px;
+  overflow-wrap: anywhere;
 }
 
-.mem__editor-spacer {
-  flex: 1 1 auto;
-}
-
-.mem__scope {
-  color: var(--fg-dim);
-}
-
-.mem__note {
-  color: var(--warn);
-  border: var(--hairline-w) solid var(--warn);
-  border-radius: var(--radius);
-  padding: 6px 8px;
-  margin-bottom: var(--gutter);
-}
-
-.mem__fields-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--gutter);
-}
-
-.mem__field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: var(--gutter);
-  flex: 1 1 auto;
-}
-
-.mem__field--type {
-  flex: 0 0 160px;
-}
-
-.mem__field--name {
-  flex: 1 1 200px;
-}
-
-.mem__label {
-  color: var(--fg-dim);
-}
-
-.mem__input,
-.mem__select {
-  background: var(--bg);
-  color: var(--fg);
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: 6px 8px;
-}
-
-.mem__input:focus-visible,
-.mem__select:focus-visible,
-.mem__textarea:focus-visible {
-  outline: none;
-  border-color: var(--signal);
-}
-
-.mem__textarea {
-  width: 100%;
-  min-height: 240px;
+/* Body textarea inside the dialog. */
+.mem-body {
+  min-height: 140px;
   resize: vertical;
-  background: var(--bg);
-  color: var(--fg);
-  border: var(--hairline-w) solid var(--hairline);
+}
+
+/* Read-only redacted source view: visible marks over text nodes. */
+.redact-pre {
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--fg-soft);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: var(--gutter);
+  font-size: 12px;
+  line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
-  tab-size: 2;
 }
 
-.mem__source {
-  background: var(--bg);
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: var(--gutter);
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: var(--fg-dim);
-  max-height: 60vh;
-  overflow: auto;
-}
-
-.mem__redact {
-  background: var(--warn);
-  color: var(--bg);
-  padding: 0 2px;
-  border-radius: var(--radius);
-}
-
-.mem__actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
+.redact-mark {
+  background: var(--warn-soft);
+  color: var(--warn);
+  border-radius: 4px;
+  padding: 0 3px;
 }

@@ -1,160 +1,703 @@
-/* Core components (docs/DESIGN.md §6). All chassis — nothing here animates;
-   motion belongs to the signal layer alone. Tokens only: no raw hex, no
-   gradients, no shadows, no radius above 2px. */
+/* Core components — Console §5 contract (opendesign/DESIGN.md).
+   Class names ARE the contract: .scope · .pill · .switch · .btn-primary/
+   secondary/ghost · .ds-table · .list-card · .chip · .seg · .tile · .search ·
+   .notice · .toast · .pager · .perm-chip are copied from the reference
+   implementation, not reinvented.
+   Tokens only — no raw hex; colors are core tokens or color-mix of them. */
 
-/* ── Button: rectangular, 2px radius, mono all-caps bracket labels ─────── */
+/* ── Buttons (.btn-*): labels are verbs, sans, 550 weight ──────────────── */
 
 .btn {
-  font-family: var(--font-mono);
-  font-size: var(--size-micro);
-  line-height: var(--leading-micro);
-  letter-spacing: var(--tracking-micro);
-  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
   border-radius: var(--radius);
-  padding: 4px 8px;
+  font-size: 13px;
+  font-weight: 550;
+  border: 1px solid transparent;
+  background: none;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.05s ease;
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn[disabled] {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.btn-primary:hover {
+  background: color-mix(in oklch, var(--accent) 86%, var(--fg));
+}
+
+.btn-secondary {
+  border-color: var(--border);
+  color: var(--fg);
+  background: var(--surface);
+}
+
+.btn-secondary:hover {
+  border-color: var(--muted);
+}
+
+.btn-ghost {
+  color: var(--muted);
+  padding: 5px 9px;
+  border: 0;
+  background: none;
   cursor: pointer;
 }
 
-.btn--default {
-  background: none;
-  border: var(--hairline-w) solid var(--hairline);
+.btn-ghost:hover {
   color: var(--fg);
+  background: var(--fg-soft);
+  border-radius: 6px;
 }
 
-.btn--primary {
-  background: var(--fg);
-  border: var(--hairline-w) solid var(--fg);
-  color: var(--bg);
+/* Destructive actions (discard/remove). Not in the reference sheet — status
+   colors never appear as solid fills (§1), so this is a secondary with the
+   danger hue, danger-soft on hover. */
+.btn-danger {
+  border-color: color-mix(in oklch, var(--danger) 35%, transparent);
+  color: var(--danger);
+  background: var(--surface);
 }
 
-.btn--destructive {
-  background: var(--red);
-  border: var(--hairline-w) solid var(--red);
-  color: var(--bg);
+.btn-danger:hover {
+  border-color: var(--danger);
+  background: var(--danger-soft);
 }
 
-.btn:disabled {
-  background: none;
-  border-color: var(--hairline);
-  color: var(--fg-dim);
+/* ── Scope badges (.scope.s-*): the system's signature ─────────────────── */
+
+.scope {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.s-project {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* agentconfig's "global" scope wears the Console "user" treatment
+   (outlined neutral) but keeps its GLOBAL label + path detail. */
+.s-user,
+.s-global {
+  border: 1px solid var(--border);
+  color: var(--muted);
+  background: var(--surface);
+}
+
+.s-local {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+/* Effective-config defaults: value came from no file at all. */
+.s-default {
+  color: var(--muted);
+  border: 1px dashed var(--border);
+}
+
+/* SourceBadge pre-uppercases scope/READ-ONLY in sourceBadgeText; the detail
+   slot carries filesystem paths whose case is meaningful (~/.claude,
+   case-sensitive on Linux) — so the badge must not re-transform. */
+.scope.source-badge {
+  text-transform: none;
+}
+
+/* ── Status pills (.pill.p-*) ──────────────────────────────────────────── */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.p-ok {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.p-warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.p-err {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.p-off {
+  background: var(--fg-soft);
+  color: var(--muted);
+}
+
+/* ── Switch: 34×19 track, 13px knob ────────────────────────────────────── */
+
+.switch {
+  position: relative;
+  width: 34px;
+  height: 19px;
+  padding: 0;
+  border-radius: 999px;
+  background: var(--fg-soft);
+  border: 1px solid var(--border);
+  transition: background 0.15s ease;
+  flex: none;
+  cursor: pointer;
+}
+
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
+}
+
+.switch.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.switch.on::after {
+  transform: translateX(15px);
+  background: var(--surface);
+}
+
+.switch[disabled] {
+  opacity: 0.45;
   cursor: default;
+  pointer-events: none;
 }
 
-/* ── StatBlock: giant numeral + micro-label, hairline-boxed ────────────── */
+/* ── Data tables (.ds-table in .table-card) ────────────────────────────── */
 
-.statblock {
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: var(--gutter);
+.ds-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
 }
 
-.statblock__delta--signal {
-  color: var(--signal);
+.ds-table th,
+.ds-table td {
+  padding: 9px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
 }
 
-.statblock__delta--red {
-  color: var(--red);
-}
-
-.statblock__delta--dim {
-  color: var(--fg-dim);
-}
-
-/* ── SignalStrip: agent row hosting signal-layer primitives ────────────── */
-
-.strip {
-  display: flex;
-  align-items: center;
-  gap: var(--gutter);
-  min-height: var(--row-h);
-  border-bottom: var(--hairline-w) solid var(--hairline);
-}
-
-.strip__kind {
-  font-family: var(--font-sans);
-  font-size: var(--size-body);
-  line-height: var(--leading-body);
-  font-weight: 600;
-  letter-spacing: var(--tracking-heading);
-  min-width: 96px;
-}
-
-.strip__count {
-  margin-left: auto;
-  color: var(--fg-dim);
-}
-
-/* ── Severity block: 8px colored square (FindingRow) ───────────────────── */
-
-.sev {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-}
-
-.sev--ok {
-  background: var(--signal);
-}
-
-.sev--warn {
-  background: var(--warn);
-}
-
-.sev--error {
-  background: var(--red);
-}
-
-/* ── FindingRow: timetable row ─────────────────────────────────────────── */
-
-.finding {
-  display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
-  align-items: center;
-  column-gap: var(--gutter);
-  min-height: var(--row-h);
-  padding: 4px 0;
-  border-bottom: var(--hairline-w) solid var(--hairline);
-}
-
-.finding__index {
-  color: var(--fg-dim);
-}
-
-.finding__body {
-  display: flex;
-  flex-direction: column;
-}
-
-.finding__title {
-  font-family: var(--font-sans);
-  font-size: var(--size-body);
-  line-height: var(--leading-body);
+.ds-table th {
+  color: var(--muted);
   font-weight: 500;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
-.finding__fix {
-  color: var(--fg-dim);
+.ds-table tbody tr {
+  transition: background 0.1s ease;
 }
 
-/* ── FileChip: mono path chip ──────────────────────────────────────────── */
+.ds-table tbody tr:hover {
+  background: var(--fg-soft);
+}
+
+.ds-table td.mono,
+.ds-table .num-col {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+}
+
+.ds-table .num-col {
+  text-align: right;
+}
+
+.table-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.table-card .ds-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* ── Stat tiles (.tile): clickable wayfinding, not marketing stats ─────── */
+
+.tile-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  text-align: left;
+  transition:
+    border-color 0.15s ease,
+    transform 0.05s ease;
+}
+
+.tile:hover {
+  border-color: var(--muted);
+}
+
+button.tile {
+  cursor: pointer;
+}
+
+button.tile:active {
+  transform: translateY(1px);
+}
+
+.tile .t-num {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile .t-label {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* Optional mono delta beside the label (StatBlock). Growth may wear accent
+   (a winning value); loss is danger; flat stays muted. */
+.tile .t-delta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile .t-delta--accent {
+  color: var(--accent);
+}
+
+.tile .t-delta--danger {
+  color: var(--danger);
+}
+
+.tile .t-delta--dim {
+  color: var(--muted);
+}
+
+/* ── List rows (.list-card / .lc-head / .list-row) ─────────────────────── */
+
+.list-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+/* .lc-head also appears directly inside a .table-card (reference
+   CONFIG SOURCES pattern: group header above a ds-table). */
+.list-card .lc-head,
+.table-card .lc-head {
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--fg-soft);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s ease;
+}
+
+.list-row:last-child {
+  border-bottom: 0;
+}
+
+.list-row:hover {
+  background: var(--fg-soft);
+}
+
+.list-row .lr-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.list-row .lr-title {
+  font-weight: 550;
+  font-size: 13.5px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.list-row .lr-sub {
+  color: var(--muted);
+  font-size: 12.5px;
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Filter chips (.chip-row / .chip): recessed track, active lifts ────── */
+
+.chip-row {
+  display: flex;
+  gap: 4px;
+  background: var(--fg-soft);
+  border-radius: var(--radius);
+  padding: 3px;
+}
 
 .chip {
-  display: inline-block;
-  background: var(--surface);
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: 2px 8px;
-  color: var(--fg);
-}
-
-button.chip {
+  padding: 3px 11px;
+  border: 0;
+  background: none;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--muted);
   cursor: pointer;
 }
 
-/* ── DiffPanel: unified diff, mono 13 ──────────────────────────────────── */
+.chip:hover {
+  color: var(--fg);
+}
+
+.chip.active {
+  background: var(--surface);
+  color: var(--fg);
+  font-weight: 550;
+  box-shadow: 0 1px 2px color-mix(in oklch, var(--fg) 12%, transparent);
+}
+
+/* ── Segmented options (.seg): for enum settings ───────────────────────── */
+
+.seg {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.seg button {
+  padding: 6px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12.5px;
+  font-family: var(--font-mono);
+  color: var(--muted);
+  background: var(--surface);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.seg button:hover {
+  color: var(--fg);
+}
+
+.seg button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+
+/* ── Search input (.search): shared accent focus ring ──────────────────── */
+
+.search {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 11px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--fg);
+  width: 230px;
+}
+
+.search:focus {
+  outline: 2px solid var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.search::placeholder {
+  color: var(--muted);
+}
+
+/* ── Notices (.notice / .notice-info): capability gaps, mono ▲ mark ────── */
+
+.notice {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: var(--warn-soft);
+  border: 1px solid color-mix(in oklch, var(--warn) 35%, transparent);
+  border-radius: var(--radius-lg);
+  padding: 13px 16px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.notice .n-mark {
+  font-family: var(--font-mono);
+  color: var(--warn);
+  font-weight: 700;
+}
+
+.notice-info {
+  background: var(--accent-soft);
+  border-color: color-mix(in oklch, var(--accent) 35%, transparent);
+}
+
+.notice-info .n-mark {
+  color: var(--accent);
+}
+
+/* ── Card (.card) ──────────────────────────────────────────────────────── */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+}
+
+/* ── Inline code / path chip (.code) + winning values (.win) ───────────── */
+
+.code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--fg-soft);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+
+button.code {
+  color: inherit;
+  cursor: pointer;
+}
+
+.win {
+  color: var(--accent);
+  font-weight: 650;
+}
+
+/* ── Dialog: head/body/foot with hairline separators ───────────────────── */
+
+dialog {
+  background: var(--surface);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0;
+  width: min(560px, 90vw);
+  box-shadow: 0 24px 60px color-mix(in oklch, var(--fg) 22%, transparent);
+}
+
+dialog::backdrop {
+  background: color-mix(in oklch, var(--fg) 32%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-body {
+  padding: 18px 20px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 13px 20px;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Form field (.field / .input) ──────────────────────────────────────── */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 14px;
+}
+
+.field label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.input,
+select.input {
+  width: 100%;
+  padding: 8px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 13px;
+}
+
+.input:focus {
+  outline: 2px solid var(--accent-soft);
+  border-color: var(--accent);
+}
+
+/* ── Toast: inverted, bottom-right, confirms every mutating action ─────── */
+
+.toast {
+  position: fixed;
+  bottom: 42px;
+  right: 20px;
+  z-index: 50;
+  background: var(--fg);
+  color: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 9px 14px;
+  border-radius: var(--radius);
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+  pointer-events: none;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: none;
+}
+
+/* ── Pager (.pager): "Showing x–y of n" · Prev / Page x / Next ─────────── */
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+.pager .pager-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ── Permission chips (.perm-chip) ─────────────────────────────────────── */
+
+.perm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 6px;
+  padding: 4px 6px 4px 10px;
+}
+
+.perm-chip .x {
+  color: var(--muted);
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.perm-chip .x:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.perm-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+/* ── Empty state: §7 voice — name the filter that caused it ────────────── */
+
+.empty {
+  padding: 28px 20px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.empty__title {
+  color: var(--fg);
+  font-weight: 550;
+  margin-bottom: 3px;
+}
+
+/* ── Unified diff panel: add = accent, del = danger ────────────────────── */
 
 .diff {
-  padding: var(--gutter);
+  padding: 16px 18px;
 }
 
 .diff__label {
@@ -166,7 +709,7 @@ button.chip {
 }
 
 .diff__header {
-  color: var(--fg-dim);
+  color: var(--muted);
 }
 
 .diff__line {
@@ -174,50 +717,20 @@ button.chip {
 }
 
 .diff__line--add {
-  color: var(--signal);
+  color: var(--accent);
 }
 
 .diff__line--del {
-  color: var(--red);
+  color: var(--danger);
 }
 
 .diff__actions {
   display: flex;
   gap: 8px;
-  margin-top: var(--gutter);
+  margin-top: 14px;
 }
 
-/* ── SourceBadge: scope-provenance micro-label (PROJECT / LOCAL / GLOBAL) ─ */
-
-.source-badge,
-.source-badge.micro-label {
-  white-space: nowrap;
-  color: var(--fg-dim);
-  /* .micro-label uppercases; the detail slot carries filesystem paths whose
-     case is meaningful (~/.claude, case-sensitive on Linux). Scope/READ-ONLY
-     are pre-uppercased in sourceBadgeText. The compound selector outranks
-     .micro-label regardless of bundle order — plain .source-badge ties with
-     it and loses when type.css lands later. */
-  text-transform: none;
-}
-
-/* ── EmptyState: NO SIGNAL + flat-line trace ───────────────────────────── */
-
-.empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--gutter);
-  padding: calc(var(--gutter) * 2) var(--gutter);
-  text-align: center;
-}
-
-.empty__flatline {
-  width: 120px;
-  border-top: var(--hairline-w) solid var(--trace-dim);
-}
-
-/* ── Heatmap: activity calendar, 7-row weekday grid, 2px gap ────────────── */
+/* ── Heatmap: activity calendar, 7-row weekday grid, 2px gap ───────────── */
 
 .heatmap {
   display: grid;
@@ -231,8 +744,8 @@ button.chip {
 .heatmap__cell {
   width: 11px;
   height: 11px;
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  border-radius: 2px;
 }
 
 .heatmap__blank {
@@ -240,21 +753,21 @@ button.chip {
 }
 
 .heatmap__cell--l1 {
-  background: color-mix(in srgb, var(--signal) 25%, transparent);
+  background: color-mix(in oklch, var(--accent) 25%, transparent);
   border-color: transparent;
 }
 
 .heatmap__cell--l2 {
-  background: color-mix(in srgb, var(--signal) 50%, transparent);
+  background: color-mix(in oklch, var(--accent) 50%, transparent);
   border-color: transparent;
 }
 
 .heatmap__cell--l3 {
-  background: color-mix(in srgb, var(--signal) 75%, transparent);
+  background: color-mix(in oklch, var(--accent) 75%, transparent);
   border-color: transparent;
 }
 
 .heatmap__cell--l4 {
-  background: var(--signal);
+  background: var(--accent);
   border-color: transparent;
 }

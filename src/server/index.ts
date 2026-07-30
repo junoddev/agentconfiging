@@ -14,8 +14,9 @@
  *     http://127.0.0.1:<port>/#token=<token>
  *
  * The fragment never reaches the server, proxies, or logs. On boot the UI
- * reads `location.hash`, keeps the token in memory (stripping the fragment
- * via history.replaceState), and sends `Authorization: Bearer <token>` on
+ * reads `location.hash`, strips the fragment via history.replaceState, and
+ * persists the token to tab-scoped sessionStorage so a refresh survives (see
+ * web api/token.ts). It then sends `Authorization: Bearer <token>` on
  * every /api call. This header is the ONLY accepted channel — there is no
  * `?token=` query fallback (query strings leak into Referer/history/logs).
  * Static assets (the public app shell — no user data) are served without the

@@ -1,51 +1,14 @@
-/* Onboarding + about overlays (E10 qoc.2). DESIGN §9: NO blur, NO glass, NO
-   shadow — elevation is a hairline border over a faint scrim, exactly like the
-   command palette. Tokens only; text nodes only. */
+/* Shell dialog content (About / Onboarding, E13.3) — the frame comes from the
+   shared Dialog primitive (components.css); these style only the body copy on
+   Console tokens. */
 
-.shell-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 110;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding: 14vh var(--gutter) var(--gutter);
-  /* Faint scrim — no backdrop-filter (glassmorphism, refused §9). */
-  background: color-mix(in srgb, var(--fg) 12%, transparent);
+.shell-lead {
+  margin: 0 0 14px;
+  font-size: 13.5px;
+  line-height: 1.5;
 }
 
-.shell-modal__panel {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  box-sizing: border-box;
-  width: min(480px, 100%);
-  max-height: 72vh;
-  overflow-y: auto;
-  padding: var(--gutter);
-  background: var(--bg);
-  color: var(--fg);
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-}
-
-.shell-modal__title {
-  margin: 0;
-  font-family: var(--font-sans);
-  font-size: var(--size-body);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
-.shell-modal__lead {
-  margin: 0;
-  font-family: var(--font-sans);
-  font-size: var(--size-body);
-  line-height: var(--leading-body);
-  color: var(--fg);
-}
-
-.shell-modal__list {
+.shell-list {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -54,66 +17,56 @@
   gap: 10px;
 }
 
-.shell-modal__item {
+.shell-item {
   display: flex;
   align-items: baseline;
   gap: 12px;
-  font-family: var(--font-sans);
-  font-size: var(--size-body);
-  line-height: var(--leading-body);
+  font-size: 13.5px;
+  line-height: 1.5;
 }
 
-.shell-modal__key {
+.shell-item__key {
   flex: none;
+  width: 64px;
   font-family: var(--font-mono);
-  font-size: var(--size-micro);
+  font-size: 10.5px;
+  font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--signal);
+  color: var(--accent);
 }
 
-.shell-modal__note {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: var(--size-micro);
-  line-height: var(--leading-data);
-  color: var(--fg-dim);
-}
-
-.shell-modal__rows {
+.shell-rows {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.shell-modal__row {
+.shell-row {
   display: flex;
   align-items: baseline;
   gap: 12px;
-  font-family: var(--font-mono);
-  font-size: var(--size-data);
-  line-height: var(--leading-data);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
-.shell-modal__row-key {
+.shell-row__key {
   flex: none;
   width: 84px;
-  color: var(--fg-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  font-size: var(--size-micro);
-  letter-spacing: 0.06em;
+  color: var(--muted);
 }
 
-.shell-modal__row-val {
+.shell-row__val {
   flex: 1;
   min-width: 0;
-  color: var(--fg);
   word-break: break-word;
 }
 
-.shell-modal__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 4px;
+.shell-note {
+  margin: 14px 0 0;
 }

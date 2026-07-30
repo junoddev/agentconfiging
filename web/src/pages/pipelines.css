@@ -1,12 +1,15 @@
-/* Pipeline canvas (#/pipelines, bead ira.2). Chassis only — Signal-Grid tokens,
-   hairlines, mono. Themes React Flow's own chrome (nodes/edges/minimap/controls)
-   to the two first-class themes; nothing here animates. Every node field is
+/* Pipeline canvas (#/pipelines, bead ira.2) — Console page-layout CSS plus the
+   React Flow chrome reskin (nodes/edges/minimap/controls colored from the §1
+   tokens so the canvas is legible in BOTH themes). Inputs/buttons/pills/
+   notices come from the §5 contract in components.css. Every node field is
    adversarial pipeline config rendered as a text node, never markup. */
 
 .pipeline-page {
   display: flex;
   flex-direction: column;
 }
+
+/* ── Toolbar ─────────────────────────────────────────────────────────────── */
 
 .pipeline-toolbar {
   display: flex;
@@ -15,7 +18,7 @@
   flex-wrap: wrap;
 }
 
-.pipeline-toolbar .title-page {
+.pipeline-toolbar h1 {
   margin: 0;
 }
 
@@ -25,36 +28,15 @@
   margin-left: auto;
 }
 
-.pipeline-name {
+.input.pipeline-name {
   max-width: 200px;
+  width: auto;
 }
 
-.pipeline-runinput {
+.input.pipeline-runinput {
   max-width: 280px;
+  width: auto;
   flex: 1;
-}
-
-.pipeline-runbadge {
-  padding: 2px 8px;
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  color: var(--fg-dim);
-}
-.pipeline-runbadge--running {
-  color: var(--warn);
-  border-color: var(--warn);
-}
-.pipeline-runbadge--ok {
-  color: var(--signal);
-  border-color: var(--signal);
-}
-.pipeline-runbadge--error {
-  color: var(--red);
-  border-color: var(--red);
-}
-
-.pipeline-notice {
-  color: var(--fg-dim);
 }
 
 /* ── Schedule control (bead ira.4) ───────────────────────────────────────── */
@@ -64,39 +46,25 @@
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 10px 16px;
 }
 
-.pipeline-schedule__title {
-  color: var(--fg-dim);
-}
-
-.pipeline-schedule__cron {
+.input.pipeline-schedule__cron {
   max-width: 320px;
+  width: auto;
   flex: 1;
 }
 
 .pipeline-schedule__toggle {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  color: var(--fg-dim);
+  gap: 8px;
 }
 
-.pipeline-schedule__next {
-  color: var(--fg-dim);
-}
-
-.pipeline-schedule__note {
-  color: var(--fg-dim);
-  opacity: 0.8;
-}
-
-.pipeline-schedule__note code {
-  font-family: var(--font-mono, monospace);
-}
+/* ── Workspace: palette · canvas · config panel ──────────────────────────── */
 
 .pipeline-workspace {
   display: grid;
@@ -113,63 +81,67 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   padding: 8px;
   overflow-y: auto;
   max-height: 640px;
 }
 
 .pipeline-palette__title {
-  color: var(--fg-dim);
-  letter-spacing: var(--tracking-micro);
   margin-top: 4px;
 }
+
 .pipeline-palette__saved {
   margin-top: 12px;
-  border-top: var(--hairline-w) solid var(--hairline);
+  border-top: 1px solid var(--border);
   padding-top: 8px;
 }
 
 .pipeline-palette__item,
 .pipeline-saved__open,
 .pipeline-saved__del {
-  background: transparent;
-  border: var(--hairline-w) solid var(--hairline);
+  background: none;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--fg);
   text-align: left;
   padding: 4px 6px;
   cursor: pointer;
   font-family: var(--font-mono);
+  transition:
+    border-color 0.12s ease,
+    color 0.12s ease;
 }
+
 .pipeline-palette__item:hover,
 .pipeline-saved__open:hover {
-  border-color: var(--signal);
-  color: var(--signal);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .pipeline-saved {
   display: flex;
   gap: 4px;
 }
+
 .pipeline-saved__open {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .pipeline-saved__del {
   width: 24px;
   text-align: center;
   padding: 4px 0;
 }
+
 .pipeline-saved__del:hover {
-  border-color: var(--red);
-  color: var(--red);
-}
-.pipeline-palette__empty {
-  color: var(--fg-dim);
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 /* ── Canvas ──────────────────────────────────────────────────────────────── */
@@ -177,8 +149,8 @@
 .pipeline-canvas {
   position: relative;
   height: 640px;
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   background: var(--surface);
   overflow: hidden;
 }
@@ -189,114 +161,146 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--fg-dim);
+  color: var(--muted);
   pointer-events: none;
   z-index: 5;
 }
 
-/* React Flow chrome themed to Signal Grid. */
+/* React Flow chrome themed from the Console tokens (both themes). */
 .pipeline-canvas .react-flow__background {
   background: var(--surface);
 }
+
 .pipeline-canvas .react-flow__edge-path {
-  stroke: var(--fg-dim);
+  stroke: var(--muted);
   stroke-width: 1;
 }
+
 .pipeline-canvas .react-flow__edge.selected .react-flow__edge-path,
 .pipeline-canvas .react-flow__edge:hover .react-flow__edge-path {
-  stroke: var(--signal);
+  stroke: var(--accent);
 }
+
+.pipeline-canvas .react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
 .pipeline-canvas .react-flow__controls-button {
   background: var(--surface);
-  border-bottom: var(--hairline-w) solid var(--hairline);
+  border-bottom: 1px solid var(--border);
   color: var(--fg);
   fill: var(--fg);
 }
+
+.pipeline-canvas .react-flow__controls-button:hover {
+  background: var(--fg-soft);
+}
+
 .pipeline-canvas .react-flow__minimap.pipeline-minimap {
   background: var(--surface);
-  border: var(--hairline-w) solid var(--hairline);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
+
 .pipeline-canvas .react-flow__minimap-mask {
   fill: var(--bg);
   fill-opacity: 0.6;
 }
+
 .pipeline-canvas .react-flow__minimap-node {
-  fill: var(--fg-dim);
+  fill: var(--muted);
 }
 
-/* ── Custom hairline-box node (DESIGN §6) ────────────────────────────────── */
+.pipeline-canvas .react-flow__attribution {
+  display: none;
+}
+
+/* ── Custom hairline-box node ────────────────────────────────────────────── */
 
 .pipeline-node {
   min-width: 140px;
   max-width: 200px;
   background: var(--surface);
-  border: var(--hairline-w) solid var(--hairline);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 6px 8px;
 }
+
 .pipeline-node--selected {
-  border-color: var(--signal);
+  border-color: var(--accent);
 }
+
 .pipeline-node__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: var(--fg-dim);
-  letter-spacing: var(--tracking-micro);
-  border-bottom: var(--hairline-w) solid var(--hairline);
+  border-bottom: 1px solid var(--border);
   padding-bottom: 4px;
   margin-bottom: 4px;
 }
+
 .pipeline-node__type {
   text-transform: uppercase;
 }
+
 .pipeline-node__name {
   color: var(--fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .pipeline-node__summary {
-  color: var(--fg-dim);
-  font-size: var(--size-micro);
+  color: var(--muted);
+  font-size: 10px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .pipeline-node__dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--fg-dim);
+  background: var(--muted);
 }
 
-/* Live run status (§5). */
+/* Live run status (§5): running = warn, ok = accent, error = danger. */
 .pipeline-node--pending {
   opacity: 0.65;
 }
+
 .pipeline-node--running {
   border-color: var(--warn);
 }
+
 .pipeline-node--running .pipeline-node__dot {
   background: var(--warn);
 }
+
 .pipeline-node--ok {
-  border-color: var(--signal);
+  border-color: var(--accent);
 }
+
 .pipeline-node--ok .pipeline-node__dot {
-  background: var(--signal);
+  background: var(--accent);
 }
+
 .pipeline-node--error {
-  border-color: var(--red);
+  border-color: var(--danger);
 }
+
 .pipeline-node--error .pipeline-node__dot {
-  background: var(--red);
+  background: var(--danger);
 }
 
 .pipeline-node__handle {
   width: 6px;
   height: 6px;
-  background: var(--fg-dim);
+  background: var(--muted);
   border: none;
   border-radius: 50%;
 }
@@ -308,37 +312,44 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   padding: 12px;
   overflow-y: auto;
   max-height: 640px;
 }
+
 .pipeline-panel__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: var(--fg-dim);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-micro);
 }
+
 .pipeline-panel__del {
-  background: transparent;
-  border: var(--hairline-w) solid var(--hairline);
+  background: none;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  color: var(--fg-dim);
+  color: var(--muted);
   padding: 2px 6px;
   cursor: pointer;
+  transition:
+    border-color 0.12s ease,
+    color 0.12s ease;
 }
+
 .pipeline-panel__del:hover {
-  border-color: var(--red);
-  color: var(--red);
+  border-color: var(--danger);
+  color: var(--danger);
+  background: var(--danger-soft);
 }
+
 .pipeline-panel__err {
-  color: var(--red);
+  color: var(--danger);
 }
+
 .pipeline-panel__note {
-  color: var(--fg-dim);
+  color: var(--muted);
 }
 
 .pipeline-field {
@@ -346,26 +357,8 @@
   flex-direction: column;
   gap: 4px;
 }
-.pipeline-field .micro-label {
-  color: var(--fg-dim);
-  letter-spacing: var(--tracking-micro);
-}
 
-.pipeline-input {
-  background: var(--bg);
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  color: var(--fg);
-  padding: 4px 6px;
-  font-family: var(--font-mono);
-  font-size: var(--size-data);
-  width: 100%;
-}
-.pipeline-input:focus {
-  outline: none;
-  border-color: var(--signal);
-}
-textarea.pipeline-input {
+.pipeline-field textarea {
   resize: vertical;
 }
 
@@ -375,21 +368,16 @@ textarea.pipeline-input {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border: var(--hairline-w) solid var(--hairline);
-  border-radius: var(--radius);
-  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px 16px;
 }
+
 .pipeline-history__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-}
-.pipeline-history__head .micro-label {
-  color: var(--fg-dim);
-  letter-spacing: var(--tracking-micro);
-}
-.pipeline-history__note {
-  color: var(--fg-dim);
 }
 
 .pipeline-history__list {
@@ -402,6 +390,7 @@ textarea.pipeline-input {
   max-height: 240px;
   overflow-y: auto;
 }
+
 .pipeline-history__row {
   display: grid;
   grid-template-columns: 1fr auto auto;
@@ -409,38 +398,47 @@ textarea.pipeline-input {
   align-items: center;
   width: 100%;
   text-align: left;
-  background: transparent;
-  border: var(--hairline-w) solid var(--hairline);
+  background: none;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--fg);
   padding: 4px 8px;
   cursor: pointer;
   font-family: var(--font-mono);
+  transition: border-color 0.12s ease;
 }
-.pipeline-history__row:hover {
-  border-color: var(--signal);
-}
+
+.pipeline-history__row:hover,
 .pipeline-history__row--active {
-  border-color: var(--signal);
+  border-color: var(--accent);
 }
+
 .pipeline-history__when {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .pipeline-history__status {
   text-transform: uppercase;
-  letter-spacing: var(--tracking-micro);
 }
+
 .pipeline-history__meta {
-  color: var(--fg-dim);
+  color: var(--muted);
 }
+
+.pipeline-history__note {
+  color: var(--muted);
+}
+
 .pipeline-run--ok .pipeline-history__status {
-  color: var(--signal);
+  color: var(--accent);
 }
+
 .pipeline-run--error .pipeline-history__status {
-  color: var(--red);
+  color: var(--danger);
 }
+
 .pipeline-run--running .pipeline-history__status {
   color: var(--warn);
 }
@@ -451,74 +449,78 @@ textarea.pipeline-input {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border-top: var(--hairline-w) solid var(--hairline);
+  border-top: 1px solid var(--border);
   padding-top: 8px;
 }
+
 .pipeline-replay__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
-.pipeline-replay__head .micro-label {
-  color: var(--fg-dim);
-  letter-spacing: var(--tracking-micro);
-}
+
 .pipeline-replay__nav {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+
 .pipeline-replay__count {
-  color: var(--fg-dim);
+  color: var(--muted);
 }
+
 .pipeline-replay__node {
-  border: var(--hairline-w) solid var(--hairline);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 8px;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
+
 .pipeline-replay__node-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
+
 .pipeline-replay__name {
   color: var(--fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .pipeline-replay__node-status {
   text-transform: uppercase;
-  letter-spacing: var(--tracking-micro);
-  color: var(--fg-dim);
+  color: var(--muted);
 }
+
 .pipeline-replay__output,
 .pipeline-replay__error {
   margin: 0;
   padding: 6px 8px;
   background: var(--bg);
-  border: var(--hairline-w) solid var(--hairline);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   max-height: 200px;
   overflow: auto;
-  font-size: var(--size-data);
-}
-.pipeline-replay__error {
-  color: var(--red);
-  border-color: var(--red);
+  font-size: 12.5px;
 }
 
-/* [REDACTED:*] mark within replay output — a secret was stripped server-side. */
+.pipeline-replay__error {
+  color: var(--danger);
+  border-color: color-mix(in oklch, var(--danger) 35%, transparent);
+}
+
+/* [REDACTED:*] mark within replay output — a secret was stripped server-side.
+   Status hue as text on its soft wash, never a solid fill. */
 .pipeline-redact {
-  background: transparent;
+  background: var(--warn-soft);
   color: var(--warn);
-  border: var(--hairline-w) solid var(--warn);
-  border-radius: var(--radius);
+  border-radius: 4px;
   padding: 0 2px;
 }
 
@@ -526,6 +528,7 @@ textarea.pipeline-input {
   .pipeline-workspace {
     grid-template-columns: 1fr;
   }
+
   .pipeline-panel {
     width: auto;
   }
