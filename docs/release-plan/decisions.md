@@ -31,7 +31,15 @@ place where they flagged these as open gates.
    framework. Both chosen launch-blocking to close table-stakes gaps and carry
    the "closes the loop" narrative.
 
-5. **Repositioning adopted** (from `market-research.md`): lead with the
+5. **Per-agent context cost — token tile launch-blocking, deep links
+   fast-follow** (from `context-cost-feature.md`). Epic `agentconfig-ub3`.
+   Launch-blocking: shared token util (`ub3.1`, also required by `3hi`),
+   per-agent context-cost pass (`ub3.2`), per-agent token tile (`ub3.5`).
+   Post-launch fast-follow: per-section attribution (`ub3.3`), file/section
+   deep-link route infra (`ub3.4`), linked per-section breakdown (`ub3.6`).
+   Builds on the existing `src/core/context-health/` byte-level pass.
+
+6. **Repositioning adopted** (from `market-research.md`): lead with the
    cross-runtime closed loop, not lint-in-isolation; reframe "sync" →
    "reconcile + govern"; never market redaction as "secret scanning"; treat the
    marketplace as an aggregator, not a store; position git/terminal as
