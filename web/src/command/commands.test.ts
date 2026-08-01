@@ -16,11 +16,11 @@ import {
 const EXPECTED_NAV = new Set([...RAIL_ORDER, 'gallery']);
 
 describe('RAIL_ORDER', () => {
-  it('covers the 23 sidebar pages, overview first', () => {
-    expect(RAIL_ORDER).toHaveLength(23);
+  it('covers the 24 sidebar pages, overview first', () => {
+    expect(RAIL_ORDER).toHaveLength(24);
     expect(RAIL_ORDER[0]).toBe('overview');
     expect(RAIL_ORDER[RAIL_ORDER.length - 1]).toBe('pipelines');
-    expect(new Set(RAIL_ORDER).size).toBe(23); // no dupes
+    expect(new Set(RAIL_ORDER).size).toBe(24); // no dupes
   });
 
   it('groups WORKSPACE first (instances before artifacts), then CONFIGURE', () => {
@@ -64,6 +64,15 @@ describe('buildCommands', () => {
 
   it('includes the refetch action', () => {
     expect(buildCommands('light').some((c) => c.action.type === 'refetch')).toBe(true);
+  });
+
+  it('hiddenRoutes drops those nav commands only (bead a6y adaptive rail)', () => {
+    const cmds = buildCommands('light', new Set(['hooks', 'settings']));
+    const ids = cmds.map((c) => c.id);
+    expect(ids).not.toContain('nav:hooks');
+    expect(ids).not.toContain('nav:settings');
+    expect(ids).toContain('nav:instructions');
+    expect(ids).toContain('nav:overview');
   });
 
   it('labels routes from the routes.ts label seam', () => {

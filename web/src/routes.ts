@@ -21,6 +21,7 @@ export type RouteName =
   | 'keybindings'
   | 'sync'
   | 'catalog'
+  | 'extensions'
   | 'marketplace'
   | 'dashboard'
   | 'sessions'
@@ -56,6 +57,7 @@ export const ROUTE_LABELS: Record<RouteName, string> = {
   keybindings: 'Keybindings',
   sync: 'Sync',
   catalog: 'Catalog',
+  extensions: 'Extensions',
   marketplace: 'Marketplace',
   dashboard: 'Dashboard',
   sessions: 'Sessions',
@@ -99,6 +101,7 @@ export function parseRoute(hash: string): Route {
   if (path === '/artifacts') return { name: 'artifacts' };
   if (path === '/instances') return { name: 'instances' };
   if (path === '/catalog') return { name: 'catalog' };
+  if (path === '/extensions') return { name: 'extensions' };
   if (path === '/marketplace') return { name: 'marketplace' };
   if (path === '/dashboard') return { name: 'dashboard' };
   if (path === '/sessions') return { name: 'sessions' };

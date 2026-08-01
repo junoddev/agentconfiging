@@ -56,3 +56,14 @@ export function ListRow({ leading, title, badge, sub, trailing }: ListRowProps) 
     </div>
   );
 }
+
+export interface EmptyRowProps {
+  /** Muted placeholder copy, e.g. "No servers in this file." */
+  children: ReactNode;
+}
+
+/** Placeholder row (`.list-row.muted`) for an empty `ListCard` — same row
+ *  hairline as `ListRow`, muted single line. */
+export function EmptyRow({ children }: EmptyRowProps) {
+  return <div className="list-row muted">{children}</div>;
+}

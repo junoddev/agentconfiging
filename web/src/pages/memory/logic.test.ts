@@ -5,10 +5,7 @@ import {
   buildCard,
   collectGlobalMemoryFiles,
   collectMemoryFiles,
-  hasRedactionMarks,
   isMemoryFile,
-  isRedacted,
-  joinGlobalPath,
   memoryName,
   parseMemory,
   serializeMemory,
@@ -78,15 +75,6 @@ describe('collectMemoryFiles', () => {
   });
 });
 
-describe('joinGlobalPath', () => {
-  it('joins a root and a root-relative path, normalizing stray slashes', () => {
-    expect(joinGlobalPath('/Users/x/.claude', 'memory/a.md')).toBe('/Users/x/.claude/memory/a.md');
-    expect(joinGlobalPath('/Users/x/.claude/', '/memory/a.md')).toBe(
-      '/Users/x/.claude/memory/a.md',
-    );
-  });
-});
-
 describe('collectGlobalMemoryFiles', () => {
   it('applies the memory filter, joins absolute paths, de-dupes, and sorts', () => {
     const files = collectGlobalMemoryFiles([
@@ -109,21 +97,6 @@ describe('collectGlobalMemoryFiles', () => {
     expect(
       collectGlobalMemoryFiles([{ root: '/u/.codex', agents: [{ files: ['AGENTS.md'] }] }]),
     ).toEqual([]);
-  });
-});
-
-describe('redaction detection (spans OR marks)', () => {
-  it('flags on server spans', () => {
-    expect(isRedacted(file('clean', [{ start: 0, end: 3, id: 'k' }]))).toBe(true);
-  });
-
-  it('flags on a [REDACTED:*] mark even with no spans', () => {
-    expect(hasRedactionMarks('token is [REDACTED:api_key] here')).toBe(true);
-    expect(isRedacted(file('token is [REDACTED:api_key]'))).toBe(true);
-  });
-
-  it('is false for clean content and no spans', () => {
-    expect(isRedacted(file('nothing secret here'))).toBe(false);
   });
 });
 

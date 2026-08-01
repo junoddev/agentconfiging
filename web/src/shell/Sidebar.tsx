@@ -12,7 +12,7 @@
 import { sourceBadgeText } from '../components/core/index.js';
 import { ROUTE_LABELS, routeHash, type Route, type RouteName } from '../routes.js';
 import { isGlobalEntryError } from '../api/types.js';
-import { useAppState } from '../state/index.js';
+import { sectionApplies, useAppState, type ConfigSection } from '../state/index.js';
 import { useConfigureCounts, type ConfigureCountKey } from './useConfigureCounts.js';
 
 /** A no-param route name (every nav target; `agent/:kind` has no nav slot). */
@@ -66,6 +66,7 @@ const GROUPS: NavGroup[] = [
     group: 'Library',
     items: [
       { name: 'catalog', glyph: '▦' },
+      { name: 'extensions', glyph: '⊕' },
       { name: 'marketplace', glyph: '◫' },
     ],
   },
@@ -95,7 +96,7 @@ function activeSection(route: Route): RouteName {
 }
 
 export function Sidebar({ route }: { route: Route }) {
-  const { report, instances, globalReport, currentInstance } = useAppState();
+  const { report, instances, globalReport, currentInstance, agentScopeKind } = useAppState();
   const active = activeSection(route);
   const configureCounts = useConfigureCounts();
 
@@ -133,12 +134,20 @@ export function Sidebar({ route }: { route: Route }) {
 
   return (
     <nav className="sidebar" aria-label="Sections">
-      {GROUPS.map(({ group, items }) => (
-        <div key={group} className="side-group">
-          <div className="nav-group">{group}</div>
-          {items.map(navItem)}
-        </div>
-      ))}
+      {GROUPS.map(({ group, items }) => {
+        // Configure adapts to the ACTIVE agent (bead a6y): sections the runtime
+        // has no concept of (e.g. Hooks for Codex) are removed, not zeroed.
+        const visible =
+          group === 'Configure'
+            ? items.filter((i) => sectionApplies(i.name as ConfigSection, agentScopeKind))
+            : items;
+        return (
+          <div key={group} className="side-group">
+            <div className="nav-group">{group}</div>
+            {visible.map(navItem)}
+          </div>
+        );
+      })}
       {/* Internal component gallery — reachable, deliberately de-emphasized. */}
       <div className="side-dev">{navItem({ name: 'gallery', glyph: '◧' })}</div>
       <div className="side-legend">

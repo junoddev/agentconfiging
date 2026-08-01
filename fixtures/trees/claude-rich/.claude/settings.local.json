@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker compose:*)",
+      "WebFetch(domain:docs.example.com)"
+    ]
+  },
+  "enableAllProjectMcpServers": false,
+  "env": {
+    "OPENAI_API_KEY": "sk-FAKE00000000000000000000000000000000FAKE",
+    "GITHUB_TOKEN": "ghp_FAKE0000000000000000000000000000FAKE",
+    "ORBIT_BUS_URL": "amqp://guest:FAKEFAKE@localhost:5672"
+  }
+}

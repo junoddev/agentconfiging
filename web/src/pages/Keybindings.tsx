@@ -35,7 +35,12 @@ import { ApiError, type FileContent } from '../api/index.js';
 import type { GlobalEntry } from '../api/types.js';
 import { Button, EmptyState, Notice, SourceBadge, useToast } from '../components/core/index.js';
 import { homeRel } from '../lib/format.js';
-import { useAppState, useGlobalConfig } from '../state/index.js';
+import {
+  displayNameForKind,
+  sectionApplies,
+  useAppState,
+  useGlobalConfig,
+} from '../state/index.js';
 import { WriteFlow, useWriteFlow } from '../write/index.js';
 import { BindingCard } from './keybindings/BindingCard.js';
 import { BindingForm } from './keybindings/BindingForm.js';
@@ -132,7 +137,7 @@ function Frame({ children }: { children: ReactNode }) {
 }
 
 function KeybindingsBody() {
-  const { getFile, report, loading, error } = useAppState();
+  const { getFile, report, loading, error, agentScopeKind } = useAppState();
   const { entries: globalEntries } = useGlobalConfig();
   const flow = useWriteFlow();
   const toast = useToast();
@@ -355,6 +360,29 @@ function KeybindingsBody() {
           instruction={loading ? 'scanning config …' : 'awaiting report'}
         />
       </Frame>
+    );
+  }
+
+  // Claude-only surface (bead a6y): .claude/keybindings.json is read by Claude
+  // Code alone, so any other active agent gets an honest not-applicable state.
+  // Placed AFTER every hook call so the hook order never changes.
+  const notApplicable =
+    agentScopeKind !== undefined && !sectionApplies('keybindings', agentScopeKind);
+  if (notApplicable) {
+    return (
+      <main className="layout-main page">
+        <div className="page-head">
+          <div>
+            <h1>Keybindings</h1>
+            <p className="kb__path meta">{KEYBINDINGS_PATH}</p>
+          </div>
+        </div>
+        <Notice tone="info">
+          <strong>Not applicable to {displayNameForKind(agentScopeKind)}.</strong>{' '}
+          .claude/keybindings.json is a Claude Code surface — switch the Agent picker to Claude Code
+          to view or edit it.
+        </Notice>
+      </main>
     );
   }
 

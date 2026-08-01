@@ -27,8 +27,22 @@
  *  - bash runs arbitrary shell the graph author wrote (cwd-scoped, timed,
  *    token-free env). {{input}} is substituted as TEXT into the script; the
  *    author already has arbitrary execution, so templating grants nothing more.
+ *    CODE-EXECUTION GATE (np7): the bash runtime is arbitrary execution just like
+ *    the PTY, so — mirroring the PTY's interactive-only posture — the pipeline
+ *    route substitutes {@link runBashDisabled} for the real bash runtime unless
+ *    the server was launched interactively (or a daemon explicitly opts in). A
+ *    future HEADLESS daemon therefore does not expose arbitrary execution by
+ *    default. http/git/file/transform nodes stay available headless (each is
+ *    individually bounded + scoped), so scheduled non-bash pipelines still run.
  *  - http may reach an internal address (SSRF) because the URL is author-chosen.
- *    Bounded by timeout + size cap; not otherwise restricted in v1.
+ *    Bounded by timeout + size cap. DEFENSE-IN-DEPTH (np7): a link-local/loopback/
+ *    private-range denylist ({@link isBlockedHttpHost}) rejects the obvious
+ *    cloud-metadata (169.254.169.254) / 127.x / 10.x / 192.168.x / 172.16-31.x
+ *    targets — enforced on the initial URL AND re-checked on every redirect hop
+ *    (redirects are followed MANUALLY so a 3xx cannot bounce past the denylist).
+ *    It is an IP-literal check (no DNS resolution), so a hostname that RESOLVES to
+ *    a private IP is still a residual risk — this is cheap defense-in-depth, not a
+ *    full SSRF firewall.
  *
  * v1 DOCUMENTED STUBS (validated, not executed — they need an external CLI +
  * token that is out of scope for this bead): prompt (LLM CLI), github-action
@@ -133,6 +147,60 @@ export const defaultBashExec: BashExec = (script, { cwd, timeoutMs, maxBytes, en
     );
   });
 
+// ── SSRF denylist (np7, defense-in-depth) ─────────────────────────────────────
+
+/** Max redirect hops the default http fetch follows (each re-checked). */
+export const HTTP_MAX_REDIRECTS = 5;
+
+/** True for a blocked IPv4 literal: loopback (127/8), this-host (0/8), and the
+ *  RFC-1918 private + link-local ranges (10/8, 172.16-31, 192.168/16,
+ *  169.254/16 incl. the 169.254.169.254 cloud-metadata endpoint). */
+function isBlockedV4(host: string): boolean {
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (!m) return false;
+  const a = Number(m[1]);
+  const b = Number(m[2]);
+  if (a > 255 || b > 255) return false;
+  if (a === 0 || a === 10 || a === 127) return true; // this-host, private, loopback
+  if (a === 169 && b === 254) return true; // link-local (incl. cloud metadata)
+  if (a === 192 && b === 168) return true; // private
+  if (a === 172 && b >= 16 && b <= 31) return true; // private
+  return false;
+}
+
+/**
+ * True when an http node must NOT reach `hostname` — the cloud metadata IP,
+ * loopback, link-local, and private ranges. IP-LITERAL check only (no DNS
+ * resolution): it blocks the obvious `http://169.254.169.254/…`,
+ * `http://127.0.0.1/…`, `http://10.x/…` shapes (direct or via a redirect). A
+ * hostname that resolves to a private IP is a documented residual (see header).
+ */
+export function isBlockedHttpHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, ''); // strip IPv6 brackets
+  if (host === 'localhost' || host.endsWith('.localhost')) return true;
+  if (host.includes(':')) {
+    // IPv6 literal (a DNS name never contains ':').
+    if (host === '::1' || host === '::') return true; // loopback / unspecified
+    if (/^(fe80:|fc|fd)/.test(host)) return true; // link-local (fe80::/10) + ULA (fc00::/7)
+    if (host.startsWith('::ffff:')) return isBlockedV4(host.slice(7)); // v4-mapped
+    return false;
+  }
+  return isBlockedV4(host);
+}
+
+/** Throw when `url`'s host is on the SSRF denylist (or the url is unparseable). */
+export function assertHttpTargetAllowed(url: string): void {
+  let host: string;
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    throw new Error('http node: invalid url');
+  }
+  if (isBlockedHttpHost(host)) {
+    throw new Error('http node: blocked host (link-local/loopback/private range)');
+  }
+}
+
 /** Read a web ReadableStream body, capped at `maxBytes` (aborting the rest). */
 async function readCapped(res: Response, maxBytes: number): Promise<string> {
   const body = res.body;
@@ -156,7 +224,11 @@ async function readCapped(res: Response, maxBytes: number): Promise<string> {
 }
 
 /** Default http fetch: global fetch, AbortController timeout (wired by the
- *  runtime), response body streamed + capped. */
+ *  runtime), response body streamed + capped. Redirects are followed MANUALLY
+ *  (bounded by {@link HTTP_MAX_REDIRECTS}) so the SSRF denylist can re-gate EVERY
+ *  hop — a 3xx cannot bounce the request past {@link isBlockedHttpHost} to an
+ *  internal/metadata address. Method/body downgrade on 301/302/303 follows
+ *  browser semantics; 307/308 preserve them. */
 export const defaultHttpFetch: HttpFetch = async ({
   url,
   method,
@@ -165,17 +237,44 @@ export const defaultHttpFetch: HttpFetch = async ({
   signal,
   maxBytes,
 }) => {
-  const res = await fetch(url, { method, headers, body, signal, redirect: 'follow' });
-  const headerObj: Record<string, string> = {};
-  res.headers.forEach((v, k) => {
-    headerObj[k] = v;
-  });
-  const response: HttpResponseLike = {
-    status: res.status,
-    headers: headerObj,
-    text: () => readCapped(res, maxBytes),
-  };
-  return response;
+  let currentUrl = url;
+  let currentMethod = method;
+  let currentBody = body;
+  for (let hop = 0; ; hop += 1) {
+    assertHttpTargetAllowed(currentUrl); // re-checked on the initial URL + each hop
+    const res = await fetch(currentUrl, {
+      method: currentMethod,
+      headers,
+      body: currentBody,
+      signal,
+      redirect: 'manual',
+    });
+    const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null;
+    if (location && hop < HTTP_MAX_REDIRECTS) {
+      currentUrl = new URL(location, currentUrl).toString();
+      // 303 → GET always; 301/302 downgrade a non-GET/HEAD to GET (drop the body).
+      if (
+        res.status === 303 ||
+        ((res.status === 301 || res.status === 302) &&
+          currentMethod !== 'GET' &&
+          currentMethod !== 'HEAD')
+      ) {
+        currentMethod = 'GET';
+        currentBody = undefined;
+      }
+      continue;
+    }
+    const headerObj: Record<string, string> = {};
+    res.headers.forEach((v, k) => {
+      headerObj[k] = v;
+    });
+    const response: HttpResponseLike = {
+      status: res.status,
+      headers: headerObj,
+      text: () => readCapped(res, maxBytes),
+    };
+    return response;
+  }
 };
 
 /** Default git exec adapts the git.ts execFile pattern (fixed `git`, arg array,
@@ -228,6 +327,22 @@ const O_NOFOLLOW = fs.constants.O_NOFOLLOW ?? 0;
 
 // ── The 14 runtimes ───────────────────────────────────────────────────────────
 
+/** The message a gated (non-interactive) bash node fails with. */
+export const BASH_DISABLED_MESSAGE =
+  'bash node execution is disabled: arbitrary code execution is available only ' +
+  'when agentconfig is launched interactively';
+
+/**
+ * The GATED stand-in for the bash runtime (np7). Mirrors the PTY's interactive-
+ * only posture: when the server is NOT interactive, the pipeline route swaps the
+ * real bash runtime for this one, so a headless daemon never runs author-supplied
+ * shell. It refuses (the executor captures the throw as the node's error, isolating
+ * downstream nodes) rather than executing.
+ */
+export const runBashDisabled: NodeRuntime = async () => {
+  throw new Error(BASH_DISABLED_MESSAGE);
+};
+
 const runBash: NodeRuntime = async ({ node, ctx, resolve }) => {
   const script = resolve((node as BashNode).script);
   const exec = ctx.bashExec ?? defaultBashExec;
@@ -245,6 +360,9 @@ const runHttp: NodeRuntime = async ({ node, ctx, resolve }) => {
   const cfg = node as HttpNode;
   const url = resolve(cfg.url);
   if (!/^https?:\/\//i.test(url)) throw new Error('http node: url must be http(s)');
+  // SSRF defense-in-depth (np7): reject link-local/loopback/private targets up
+  // front (the default fetch re-checks each redirect hop too).
+  assertHttpTargetAllowed(url);
   const method = (cfg.method ?? 'GET').toUpperCase();
   const headers: Record<string, string> = {};
   for (const [k, v] of Object.entries(cfg.headers ?? {})) headers[k] = resolve(v);

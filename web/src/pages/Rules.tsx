@@ -15,8 +15,8 @@
  * are already replaced by visible `[REDACTED:*]` marks. Committing that text
  * back would overwrite the real secret on disk. Rules rarely hold secrets, but
  * when a loaded file carries EITHER a redaction span OR a `[REDACTED:*]` mark
- * (belt-and-braces — see isRedacted), the editor is READ-ONLY and saving is
- * blocked with a notice. New files from a template are fresh client text with
+ * (belt-and-braces — see lib isRedactedFile), the editor is READ-ONLY and saving
+ * is blocked with a notice. New files from a template are fresh client text with
  * no redaction, so they are always editable.
  *
  * All rule content (globs, description, body) is adversarial: rendered as TEXT
@@ -24,10 +24,11 @@
  */
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ApiError, type FileContent, type RedactionSpan } from '../api/index.js';
 import {
+  AlsoAgents,
   Button,
   Card,
+  EmptyRow,
   EmptyState,
   Field,
   Input,
@@ -38,16 +39,25 @@ import {
   SourceBadge,
   useToast,
 } from '../components/core/index.js';
-import { fileReadOnly } from '../lib/editable.js';
 import { homeRel } from '../lib/format.js';
-import { useAppState, useGlobalConfig } from '../state/index.js';
+import { renderRedacted } from '../lib/redacted.js';
+import { useCommitToast } from '../lib/useCommitToast.js';
+import { useFileEditor } from '../lib/useFileEditor.js';
+import {
+  displayNameForKind,
+  otherAgentKinds,
+  scopedAgents,
+  scopeReport,
+  sectionApplies,
+  useAppState,
+  useGlobalConfig,
+} from '../state/index.js';
 import { WriteFlow, useWriteFlow } from '../write/index.js';
 import { RulePreview } from './rules/RulePreview.js';
 import {
   collectGlobalRules,
   collectRules,
   groupGlobalRulesByRoot,
-  isRedacted,
   type RuleEntry,
 } from './rules/logic.js';
 import { STARTER_TEMPLATES, type StarterTemplate } from './rules/templates.js';
@@ -60,49 +70,24 @@ type Mode = 'preview' | 'edit';
 type Selection =
   { kind: 'file'; entry: RuleEntry } | { kind: 'template'; template: StarterTemplate } | undefined;
 
-/** Honest one-line error voice per API failure kind (§7). */
-function errorText(err: unknown): string {
-  if (err instanceof ApiError) {
-    if (err.kind === 'notfound') return 'file not found';
-    if (err.kind === 'forbidden') return 'file out of scope';
-    if (err.kind === 'unauthorized') return 'session expired — reopen from the CLI';
-    if (err.kind === 'network') return 'cannot reach the local server';
-  }
-  return 'could not load file';
-}
-
-/** Redacted `content` + mark `spans` → text nodes with styled `[REDACTED:*]`
- *  marks. Everything is a TEXT node — never markup; marks are already redacted
- *  server-side so no secret is present to leak. */
-function renderRedacted(content: string, spans: readonly RedactionSpan[]): ReactNode[] {
-  const nodes: ReactNode[] = [];
-  let cursor = 0;
-  spans.forEach((span, i) => {
-    if (span.start < cursor || span.end > content.length) return;
-    if (span.start > cursor) nodes.push(content.slice(cursor, span.start));
-    nodes.push(
-      <mark key={i} className="redact-mark" title={`redacted: ${span.id}`}>
-        {content.slice(span.start, span.end)}
-      </mark>,
-    );
-    cursor = span.end;
-  });
-  if (cursor < content.length) nodes.push(content.slice(cursor));
-  return nodes;
-}
-
 export function Rules() {
   // Toasts confirm through the shell-level ToastProvider (App.tsx).
   return <RulesPage />;
 }
 
 function RulesPage() {
-  const { report, getFile } = useAppState();
+  const { report, getFile, agentScopeKind } = useAppState();
   const { entries: globalDirs } = useGlobalConfig();
   const flow = useWriteFlow();
   const toast = useToast();
+  const agentKind = agentScopeKind;
 
-  const entries = useMemo(() => collectRules(report), [report]);
+  // Scoped to the ACTIVE agent (bead a6y); each row notes the other detected
+  // agents that read the same file via the AlsoAgents badge.
+  const entries = useMemo(
+    () => collectRules(report ? scopeReport(report, agentKind) : undefined),
+    [report, agentKind],
+  );
   const claudeRules = entries.filter((e) => e.source === 'claude');
   const cursorRules = entries.filter((e) => e.source === 'cursor');
 
@@ -110,21 +95,34 @@ function RulesPage() {
   // 71h.10 they are editable when served unredacted — saves take the same
   // write flow, gated by its global-scope warning. Absent/failed global data ⇒
   // empty lists and the page renders exactly as before.
-  const globalRules = useMemo(() => collectGlobalRules(globalDirs), [globalDirs]);
+  const scopedGlobalDirs = useMemo(
+    () => globalDirs.map((e) => ({ ...e, agents: scopedAgents(e.agents, agentKind) })),
+    [globalDirs, agentKind],
+  );
+  const globalRules = useMemo(() => collectGlobalRules(scopedGlobalDirs), [scopedGlobalDirs]);
   const globalGroups = useMemo(() => groupGlobalRulesByRoot(globalRules), [globalRules]);
   const globalByPath = useMemo(() => new Map(globalRules.map((e) => [e.path, e])), [globalRules]);
 
   const [selection, setSelection] = useState<Selection>(undefined);
   const [mode, setMode] = useState<Mode>('preview');
-
-  // Loaded existing-file state (template mode has no server file).
-  const [loaded, setLoaded] = useState<FileContent | undefined>();
-  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
-  const [errMsg, setErrMsg] = useState('');
-
-  // The editable draft + (template mode only) the new file's path.
-  const [draft, setDraft] = useState('');
+  // Template mode only: the new file's path. The loaded-file machine (draft
+  // included) lives in useFileEditor below.
   const [newPath, setNewPath] = useState('');
+
+  // Inherited global rule: kept for provenance (badge/notice), but since bead
+  // 71h.10 it is EDITABLE — the save goes through the same /api/write flow and
+  // the WriteFlow global-scope warning. Only redaction forces read-only.
+  const inherited = selection?.kind === 'file' && globalByPath.has(selection.entry.path);
+
+  // The shared single-file load / reload / redaction machine. Template mode
+  // passes `path: undefined` so the hook releases the file and LEAVES the draft
+  // alone — the template body seeded below is never clobbered.
+  const { file, draft, setDraft, status, errMsg, redacted, readOnly, dirty, reload } =
+    useFileEditor({
+      path: selection?.kind === 'file' ? selection.entry.path : undefined,
+      getFile,
+      inherited,
+    });
 
   const selKey =
     selection?.kind === 'file'
@@ -133,82 +131,30 @@ function RulesPage() {
         ? `tpl:${selection.template.id}`
         : 'none';
 
-  // Load / initialize the editor whenever the selection changes.
+  // On every selection change reset the pane and cancel any in-flight write; in
+  // template mode seed the draft + suggested path (useFileEditor owns the draft
+  // only for a real file).
   useEffect(() => {
     flow.cancel();
     setMode('preview');
-    if (selection === undefined) {
-      setLoaded(undefined);
-      setStatus('idle');
-      setDraft('');
-      return;
-    }
-    if (selection.kind === 'template') {
-      setLoaded(undefined);
-      setStatus('idle');
+    if (selection?.kind === 'template') {
       setDraft(selection.template.content);
       setNewPath(selection.template.defaultPath);
-      return;
     }
-    let cancelled = false;
-    setStatus('loading');
-    setLoaded(undefined);
-    getFile(selection.entry.path)
-      .then((file) => {
-        if (cancelled) return;
-        setLoaded(file);
-        setDraft(file.content);
-        setStatus('idle');
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setErrMsg(errorText(err));
-        setStatus('error');
-      });
-    return () => {
-      cancelled = true;
-    };
-    // selKey captures the meaningful selection identity; flow.cancel is stable.
-  }, [selKey, getFile]);
+    // selKey captures the meaningful selection identity; flow.cancel / setDraft are stable.
+  }, [selKey]);
 
-  // After our own commit lands, reload so the draft baseline matches disk
-  // (keeps the save button honestly disabled post-write).
-  useEffect(() => {
-    if (flow.phase !== 'done' || selection?.kind !== 'file') return;
-    let cancelled = false;
-    getFile(selection.entry.path)
-      .then((file) => {
-        if (cancelled) return;
-        setLoaded(file);
-        setDraft(file.content);
-      })
-      .catch(() => {
-        /* non-fatal; the toast already confirmed the commit. */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [flow.phase, selKey, getFile]);
-
-  // Every committed mutation confirms via Toast (§5). A template save created a
-  // new file — close the editor and let the refetched report list it.
-  useEffect(() => {
-    if (flow.phase !== 'done') return;
-    const label = flow.request?.label;
-    toast(label !== undefined ? `Applied — ${label}` : 'Change applied');
-    if (selection?.kind === 'template') setSelection(undefined);
-    flow.cancel();
-    // flow.phase is the trigger; toast + flow.cancel are stable.
-  }, [flow.phase]);
+  // After our own commit lands, confirm via Toast (§5) and settle the editor: a
+  // template save created a new file — close it and let the refetched report
+  // list it; a file save reloads so the draft baseline matches disk.
+  useCommitToast(flow, toast, {
+    onDone: () => {
+      if (selection?.kind === 'template') setSelection(undefined);
+      else reload();
+    },
+  });
 
   // ── Derived editor state ──────────────────────────────────────────────────
-  const redacted =
-    selection?.kind === 'file' && loaded !== undefined && isRedacted(loaded.spans, loaded.content);
-  // Inherited global rule: kept for provenance (badge/notice), but since bead
-  // 71h.10 it is EDITABLE — the save goes through the same /api/write flow and
-  // the WriteFlow global-scope warning. Only redaction forces read-only.
-  const inherited = selection?.kind === 'file' && globalByPath.has(selection.entry.path);
-  const readOnly = fileReadOnly({ redacted, inherited });
   const savePath = selection?.kind === 'template' ? newPath.trim() : selection?.entry.path;
   const busy = flow.phase === 'loading' || flow.phase === 'committing';
 
@@ -218,7 +164,7 @@ function RulesPage() {
     savePath !== undefined &&
     savePath !== '' &&
     !busy &&
-    (selection.kind === 'template' || draft !== loaded?.content);
+    (selection.kind === 'template' || dirty);
 
   const onSave = () => {
     if (!canSave || savePath === undefined) return;
@@ -227,7 +173,7 @@ function RulesPage() {
 
   const ruleCard = (head: string, list: RuleEntry[], badge: (e: RuleEntry) => ReactNode) => (
     <ListCard head={head} headMeta={String(list.length)}>
-      {list.length === 0 && <div className="list-row muted">No rules here yet.</div>}
+      {list.length === 0 && <EmptyRow>No rules here yet.</EmptyRow>}
       {list.map((entry) => (
         <ListRow
           key={entry.path}
@@ -246,15 +192,36 @@ function RulesPage() {
     </ListCard>
   );
 
+  // The sidebar hides RULES for agents without the concept (bead a6y); this
+  // covers deep links with an honest not-applicable state. After all hooks.
+  const notApplicable = agentScopeKind !== undefined && !sectionApplies('rules', agentScopeKind);
+  if (notApplicable) {
+    return (
+      <main className="layout-main">
+        <div className="page-head">
+          <div>
+            <h1>Rules</h1>
+            <p className="page-sub">Contextual instructions the agent follows.</p>
+          </div>
+        </div>
+        <Notice tone="info">
+          <strong>Not applicable to {displayNameForKind(agentScopeKind)}.</strong> Contextual rules
+          (.claude/rules/*.md, .cursor/rules/*.mdc) are Claude Code and Cursor surfaces — switch the
+          Agent picker to one of those to view or edit them.
+        </Notice>
+      </main>
+    );
+  }
+
   return (
     <main className="layout-main">
       <div className="page-head">
         <div>
           <h1>Rules</h1>
           <p className="page-sub">
-            Contextual instructions the agent follows — {claudeRules.length} Claude ·{' '}
-            {cursorRules.length} Cursor. Open a rule to preview or edit it, or start from a
-            template.
+            Contextual instructions {agentKind ? displayNameForKind(agentKind) : 'the agent'}{' '}
+            follows — {claudeRules.length} Claude · {cursorRules.length} Cursor. Open a rule to
+            preview or edit it, or start from a template.
           </p>
         </div>
       </div>
@@ -268,11 +235,17 @@ function RulesPage() {
 
       {(entries.length > 0 || globalRules.length > 0) && (
         <>
-          {ruleCard('.CLAUDE/RULES', claudeRules, () => (
-            <SourceBadge scope="project" />
+          {ruleCard('.CLAUDE/RULES', claudeRules, (e) => (
+            <>
+              <SourceBadge scope="project" />
+              <AlsoAgents kinds={otherAgentKinds(report?.agents ?? [], e.path, agentKind)} />
+            </>
           ))}
-          {ruleCard('.CURSOR/RULES', cursorRules, () => (
-            <SourceBadge scope="project" />
+          {ruleCard('.CURSOR/RULES', cursorRules, (e) => (
+            <>
+              <SourceBadge scope="project" />
+              <AlsoAgents kinds={otherAgentKinds(report?.agents ?? [], e.path, agentKind)} />
+            </>
           ))}
         </>
       )}
@@ -307,7 +280,7 @@ function RulesPage() {
       )}
 
       {selection !== undefined &&
-        (selection.kind === 'template' || (status === 'idle' && loaded)) && (
+        (selection.kind === 'template' || (status === 'idle' && file)) && (
           <Card>
             <div className="rule-editor-head">
               {selection.kind === 'template' ? (
@@ -331,9 +304,7 @@ function RulesPage() {
                     readOnly={redacted}
                   />
                 ) : (
-                  loaded && (
-                    <SourceBadge scope={loaded.pathScope === 'local' ? 'local' : 'project'} />
-                  )
+                  file && <SourceBadge scope={file.pathScope === 'local' ? 'local' : 'project'} />
                 ))}
               <span className="rule-editor-spacer" />
               <Button label="Close" variant="ghost" onClick={() => setSelection(undefined)} />
@@ -342,8 +313,8 @@ function RulesPage() {
             {redacted && (
               <Notice>
                 <strong>
-                  Read-only — this file contains {loaded?.spans.length ?? 0} redacted secret
-                  {loaded && loaded.spans.length === 1 ? '' : 's'}.
+                  Read-only — this file contains {file?.spans.length ?? 0} redacted secret
+                  {file && file.spans.length === 1 ? '' : 's'}.
                 </strong>{' '}
                 Saving would overwrite the real value with the placeholder.
               </Notice>
@@ -369,10 +340,8 @@ function RulesPage() {
             {mode === 'preview' && <RulePreview content={draft} />}
 
             {mode === 'edit' &&
-              (readOnly && loaded ? (
-                <pre className="mono redact-pre">
-                  {renderRedacted(loaded.content, loaded.spans)}
-                </pre>
+              (readOnly && file ? (
+                <pre className="mono redact-pre">{renderRedacted(file.content, file.spans)}</pre>
               ) : (
                 <textarea
                   className="input mono rule-editor-raw"

@@ -18,26 +18,26 @@
  * file is rendered strictly READ-ONLY (see ScopePanel / model.ts). All config
  * content is adversarial data and is rendered as TEXT nodes only.
  *
- * CLIENT SEAM: the storage endpoints are not on the shell's app-state value, and
- * the shell keeps its client private. Following the Instances page, this page
- * captures the launch token at module load and builds its own ApiClient for
- * getStorage / cleanupStorage. Config WRITES still go through useWriteFlow (the
- * shell's guarded write path); reads go through useAppState().getFile.
+ * CLIENT SEAM: the storage endpoints are not on the shell's narrow app-state
+ * method surface, so this page reads the shared, token-bearing ApiClient off the
+ * context (useAppState().client) for getStorage / cleanupStorage. Config WRITES
+ * still go through useWriteFlow (the shell's guarded write path); reads go
+ * through useAppState().getFile.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ApiClient, ApiError, type FileContent, type StorageReport } from '../api/index.js';
-import { bootstrapToken } from '../api/token.js';
+import { ApiError, type FileContent, type StorageReport } from '../api/index.js';
 import {
   ChipRow,
   EmptyState,
+  Notice,
   Pager,
   SearchInput,
   SourceBadge,
   formatBytes,
   useToast,
 } from '../components/core/index.js';
-import { useAppState } from '../state/index.js';
+import { displayNameForKind, sectionApplies, useAppState } from '../state/index.js';
 import { useWriteFlow, WriteFlow } from '../write/index.js';
 import {
   effectiveRows,
@@ -49,8 +49,6 @@ import { parseSettings } from './settings/model.js';
 import { ScopePanel, type LoadStatus } from './settings/ScopePanel.js';
 import { StoragePanel } from './settings/StoragePanel.js';
 import './settings.css';
-
-const bootToken = typeof window !== 'undefined' ? bootstrapToken() : undefined;
 
 interface PanelState {
   status: LoadStatus;
@@ -197,8 +195,7 @@ export function Settings() {
 }
 
 function SettingsBody() {
-  const { currentInstance, getFile } = useAppState();
-  const client = useMemo(() => (bootToken ? new ApiClient(bootToken) : undefined), []);
+  const { currentInstance, getFile, agentScopeKind, client } = useAppState();
   const flow = useWriteFlow();
   const toast = useToast();
   const instanceId = currentInstance?.id;
@@ -316,6 +313,32 @@ function SettingsBody() {
       }),
     [globalScope, shared, local],
   );
+
+  // Claude-only surface (bead a6y): .claude/settings*.json is read by Claude
+  // Code alone, so any other active agent gets an honest not-applicable state.
+  // Placed AFTER every hook call so the hook order never changes.
+  const notApplicable = agentScopeKind !== undefined && !sectionApplies('settings', agentScopeKind);
+  if (notApplicable) {
+    return (
+      <main className="layout-main page">
+        <div className="page-head">
+          <div>
+            <h1>Settings</h1>
+            <p className="page-sub">
+              Every key across scopes, with the winning value highlighted. Precedence: local
+              overrides project overrides global.
+              {currentInstance ? ` Instance: ${currentInstance.name}.` : ''}
+            </p>
+          </div>
+        </div>
+        <Notice tone="info">
+          <strong>Not applicable to {displayNameForKind(agentScopeKind)}.</strong>{' '}
+          .claude/settings.json is a Claude Code surface — switch the Agent picker to Claude Code to
+          view or edit it.
+        </Notice>
+      </main>
+    );
+  }
 
   return (
     <main className="layout-main page">

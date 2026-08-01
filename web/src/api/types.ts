@@ -545,6 +545,49 @@ export type InstallPluginResponse =
   | { available: true; installed: boolean; name: string; message: string }
   | { available: false; reason: string };
 
+/** Normalized read-only provider inventory (src/server/extensions.ts). */
+export type ExtensionProviderState =
+  'supported' | 'detected' | 'unavailable' | 'unsupported' | 'error';
+
+export type ExtensionKind = 'native' | 'config' | 'rules' | 'none';
+
+export interface ExtensionCapabilities {
+  list: boolean;
+  detail: boolean;
+  install: boolean;
+  remove: boolean;
+  update: boolean;
+  enable: boolean;
+  disable: boolean;
+}
+
+export interface ExtensionProvider {
+  id: string;
+  displayName: string;
+  kind: ExtensionKind;
+  state: ExtensionProviderState;
+  scopes: string[];
+  capabilities: ExtensionCapabilities;
+  reason?: string;
+}
+
+export interface Extension {
+  providerId: string;
+  id: string;
+  name: string;
+  version: string;
+  scope: string;
+  source: string;
+  enabled: boolean;
+  kind?: ExtensionKind;
+  path?: string;
+}
+
+export interface ExtensionInventoryResponse {
+  providers: ExtensionProvider[];
+  extensions: Extension[];
+}
+
 /**
  * GIT PANEL (bead ngs.1). These MIRROR src/server/git.ts. Every string —
  * branch/file/upstream names, commit subjects + authors — is UNTRUSTED git

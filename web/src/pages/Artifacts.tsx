@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ApiError, type FileContent, type RedactionSpan } from '../api/index.js';
+import { Fragment, useEffect, useMemo, useState } from 'react';
+import type { FileContent } from '../api/index.js';
 import {
   EmptyState,
   FileChip,
@@ -8,7 +8,9 @@ import {
   SourceBadge,
   type SourceScope,
 } from '../components/core/index.js';
+import { errorText } from '../lib/errors.js';
 import { homeRel } from '../lib/format.js';
+import { renderRedacted } from '../lib/redacted.js';
 import { useAppState, useGlobalConfig } from '../state/index.js';
 import { globalFileGroups } from './artifacts/logic.js';
 import './artifacts.css';
@@ -40,39 +42,6 @@ function badgeScope(pathScope: string): SourceScope | undefined {
   return pathScope === 'project' || pathScope === 'global' || pathScope === 'local'
     ? pathScope
     : undefined;
-}
-
-/** Turn redacted `content` + its mark `spans` into React nodes: verbatim text
- *  interleaved with styled `[REDACTED:*]` marks. Everything is a TEXT node —
- *  never markup — and the marks are already redacted server-side, so no secret
- *  is present to leak. Spans are trusted to be sorted and non-overlapping (the
- *  server contract); a defensive skip guards a malformed span anyway. */
-function renderRedacted(content: string, spans: readonly RedactionSpan[]): ReactNode[] {
-  const nodes: ReactNode[] = [];
-  let cursor = 0;
-  spans.forEach((span, i) => {
-    if (span.start < cursor || span.end > content.length) return;
-    if (span.start > cursor) nodes.push(content.slice(cursor, span.start));
-    nodes.push(
-      <mark key={i} className="artifact__redact" title={`redacted: ${span.id}`}>
-        {content.slice(span.start, span.end)}
-      </mark>,
-    );
-    cursor = span.end;
-  });
-  if (cursor < content.length) nodes.push(content.slice(cursor));
-  return nodes;
-}
-
-/** Honest one-line error voice per API failure kind. */
-function errorText(err: unknown): string {
-  if (err instanceof ApiError) {
-    if (err.kind === 'notfound') return 'file not found';
-    if (err.kind === 'forbidden') return 'file out of scope';
-    if (err.kind === 'unauthorized') return 'session expired — reopen from the CLI';
-    if (err.kind === 'network') return 'cannot reach the local server';
-  }
-  return 'could not load file';
 }
 
 /** Artifacts — the file browser (Console page, E13.5). Left: the instance's
@@ -139,7 +108,10 @@ export function Artifacts() {
     }
   }, [file, selected]);
 
-  const sourceNodes = useMemo(() => (file ? renderRedacted(file.content, file.spans) : []), [file]);
+  const sourceNodes = useMemo(
+    () => (file ? renderRedacted(file.content, file.spans, 'artifact__redact') : []),
+    [file],
+  );
   const scope = file ? badgeScope(file.pathScope) : undefined;
 
   return (

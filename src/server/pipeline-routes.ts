@@ -57,8 +57,9 @@ import { validatePipeline } from '../core/pipeline/index.js';
 import type { Pipeline, PipelineEdge, PipelineNode } from '../core/pipeline/index.js';
 import { redact } from '../core/redact/index.js';
 import type { RedactionSpan } from '../core/redact/index.js';
-import { runPipeline } from './pipeline/index.js';
+import { defaultRuntimes, runBashDisabled, runPipeline } from './pipeline/index.js';
 import type { NodeEvent, NodeStatus, RuntimeContext, RuntimeMap } from './pipeline/index.js';
+import { jsonError, isPlainObject, resolveInstanceFromQuery } from './http.js';
 import { defaultStateDir } from './stats-routes.js';
 import { ScheduleStore, computeNextRun, parseCron } from './schedule/index.js';
 import type { Schedule } from './schedule/index.js';
@@ -108,10 +109,6 @@ export function isValidPipelineId(id: unknown): id is string {
 /** True for a server-generated, traversal-safe run id (see {@link RUN_ID_PATTERN}). */
 export function isValidRunId(id: unknown): id is string {
   return typeof id === 'string' && RUN_ID_PATTERN.test(id);
-}
-
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
 
 /** Defensive node shape check: object with string id/name and an ALLOWLISTED
@@ -376,15 +373,23 @@ export interface PipelineRoutesConfig {
   stateDir?: string;
   /** Injectable runtime table (tests); defaults to the real committed runtimes. */
   runtimes?: RuntimeMap;
+  /**
+   * CODE-EXECUTION GATE (np7): true only when the server was launched
+   * INTERACTIVELY (mirrors AppConfig.interactive / the PTY gate). The bash node
+   * is arbitrary execution, so when this is false the real bash runtime is
+   * replaced with {@link runBashDisabled} — a headless daemon does not expose
+   * arbitrary execution unless it explicitly opts in via {@link allowBashNode}.
+   * Ignored when `runtimes` is injected (tests supply their own safe map).
+   */
+  interactive?: boolean;
+  /**
+   * DAEMON OPT-IN (np7): explicit escape hatch so a headless scheduler that
+   * legitimately runs bash pipelines can re-enable the bash node without an
+   * interactive launch. Defaults to undefined (off) — fail-closed.
+   */
+  allowBashNode?: boolean;
   /** Clock for run timestamps; defaults to Date.now. */
   now?: () => number;
-}
-
-function jsonError(status: 400 | 404, message: string): Response {
-  return new Response(JSON.stringify({ error: message }), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
 }
 
 /** A 400 that also carries the structured validation `errors` (the pipeline is
@@ -499,7 +504,16 @@ export function registerPipelineRoutes(app: Hono, config: PipelineRoutesConfig):
   const stateDir = config.stateDir ?? defaultStateDir();
   const store = new PipelineStore(stateDir);
   const scheduleStore = new ScheduleStore(stateDir);
-  const runtimes = config.runtimes;
+  // CODE-EXECUTION GATE (np7): with an injected map (tests) use it verbatim —
+  // those runtimes are fake/safe. On the real default path, the bash node runs
+  // ONLY when launched interactively or a daemon explicitly opts in; otherwise
+  // it is swapped for the refusing stand-in so a headless server never runs
+  // author-supplied shell (the PTY is gated the same way). Non-bash nodes
+  // (http/git/file/…) stay available headless, so scheduled pipelines keep working.
+  const allowBash = config.interactive === true || config.allowBashNode === true;
+  const runtimes: RuntimeMap =
+    config.runtimes ??
+    (allowBash ? defaultRuntimes : { ...defaultRuntimes, bash: runBashDisabled });
   const now = config.now ?? (() => Date.now());
 
   /** Compute the next fire time (epoch ms) for a schedule, or null when disabled/invalid. */
@@ -613,7 +627,7 @@ export function registerPipelineRoutes(app: Hono, config: PipelineRoutesConfig):
     if (!validation.ok) return invalidPipeline(validation.errors);
 
     // Pin bash/git cwd + the file-node scope to a REGISTERED instance's root.
-    const instance = registry.resolve(new URL(c.req.url).searchParams.get('instance') ?? undefined);
+    const instance = resolveInstanceFromQuery(c, registry);
     if (!instance) return jsonError(404, 'unknown instance');
 
     let body: unknown;
@@ -651,7 +665,7 @@ export function registerPipelineRoutes(app: Hono, config: PipelineRoutesConfig):
 
     // Fire-and-forget: the executor updates `record` live via `emit`; the client
     // polls GET /runs/:runId. The committed executor's guards are NOT bypassed.
-    void runPipeline(pipeline, input, ctx, runtimes ? { runtimes } : {}).then(
+    void runPipeline(pipeline, input, ctx, { runtimes }).then(
       (result) => {
         record.status = result.status;
         record.finishedAt = now();
@@ -691,7 +705,7 @@ export function registerPipelineRoutes(app: Hono, config: PipelineRoutesConfig):
     if (!pipeline) return jsonError(404, 'unknown pipeline');
 
     // Bind to a REGISTERED instance root (unknown → 404), like the run route.
-    const instance = registry.resolve(new URL(c.req.url).searchParams.get('instance') ?? undefined);
+    const instance = resolveInstanceFromQuery(c, registry);
     if (!instance) return jsonError(404, 'unknown instance');
 
     let body: unknown;

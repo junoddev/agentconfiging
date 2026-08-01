@@ -6,14 +6,10 @@ import {
   collectGlobalRules,
   collectRules,
   groupGlobalRulesByRoot,
-  hasRedactionMarks,
-  isRedacted,
-  joinGlobalPath,
   parseBool,
   parseGlobs,
   parseRule,
   splitGlobScalar,
-  tokenizeMarkdown,
 } from './logic.js';
 
 function report(agents: Partial<DetectedAgent>[]): Report {
@@ -81,17 +77,6 @@ describe('collectRules', () => {
 
   it('returns empty for an undefined report', () => {
     expect(collectRules(undefined)).toEqual([]);
-  });
-});
-
-describe('joinGlobalPath', () => {
-  it('joins a root and a root-relative path, normalizing stray slashes', () => {
-    expect(joinGlobalPath('/Users/x/.claude', 'rules/style.md')).toBe(
-      '/Users/x/.claude/rules/style.md',
-    );
-    expect(joinGlobalPath('/Users/x/.cursor/', '/rules/ts.mdc')).toBe(
-      '/Users/x/.cursor/rules/ts.mdc',
-    );
   });
 });
 
@@ -245,38 +230,5 @@ describe('parseRule', () => {
     const p = parseRule(content);
     expect(p.hasFrontmatter).toBe(false);
     expect(p.body).toBe(content);
-  });
-});
-
-describe('redaction guard (spans OR marks — belt-and-braces)', () => {
-  it('detects a [REDACTED:*] mark in text', () => {
-    expect(hasRedactionMarks('token = [REDACTED:github]')).toBe(true);
-    expect(hasRedactionMarks('no secrets here')).toBe(false);
-  });
-
-  it('isRedacted fires on spans alone', () => {
-    expect(isRedacted([{ start: 0, end: 1, id: 'x' }], 'clean text')).toBe(true);
-  });
-
-  it('isRedacted fires on a mark even with zero spans', () => {
-    expect(isRedacted([], 'key: [REDACTED:aws]')).toBe(true);
-  });
-
-  it('isRedacted is false when neither signal is present', () => {
-    expect(isRedacted([], 'ordinary rule content')).toBe(false);
-  });
-});
-
-describe('tokenizeMarkdown', () => {
-  it('produces heading, list, and code blocks over text only', () => {
-    const blocks = tokenizeMarkdown('# Title\n\n- a\n- b\n\n```\ncode\n```');
-    expect(blocks[0]).toEqual({ kind: 'heading', level: 1, text: 'Title' });
-    expect(blocks[1]).toEqual({ kind: 'list', ordered: false, items: ['a', 'b'] });
-    expect(blocks[2]).toEqual({ kind: 'code', text: 'code' });
-  });
-
-  it('captures adversarial html verbatim as text (no markup interpretation)', () => {
-    const blocks = tokenizeMarkdown('<script>alert(1)</script>');
-    expect(blocks).toEqual([{ kind: 'para', text: '<script>alert(1)</script>' }]);
   });
 });

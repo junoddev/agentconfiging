@@ -10,7 +10,8 @@
  */
 
 import { useMemo, type ReactNode } from 'react';
-import { parseRule, tokenizeMarkdown, type MarkdownBlock } from './logic.js';
+import { tokenizeMarkdown, type MarkdownBlock } from '../../lib/markdown.js';
+import { parseRule } from './logic.js';
 
 /** Path-filter chips: the globs a rule is scoped to, or an "always" note. */
 export function PathFilters({

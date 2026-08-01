@@ -16,7 +16,9 @@
  */
 
 import type { Report } from '../../api/types.js';
-import { asList, asScalar, getField, type FmEntry } from './frontmatter.js';
+import { collectFiles, collectGlobalFiles } from '../../lib/collect.js';
+import { asList, asScalar, getField, type FmEntry } from '../../lib/frontmatter.js';
+import { joinGlobalPath } from '../../lib/paths.js';
 
 /** A discovered config file: a skill (SKILL.md) or an agent (.md). */
 export type EntryKind = 'skill' | 'agent';
@@ -43,20 +45,17 @@ export function classifyFile(path: string): SkillEntry | null {
   return null;
 }
 
+/** Deterministic entry order: kind, then name, then path. */
+function byKindNameThenPath(a: SkillEntry, b: SkillEntry): number {
+  return (
+    a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name) || a.path.localeCompare(b.path)
+  );
+}
+
 /** All skill + agent files referenced by any detected agent, de-duplicated by
  *  path and deterministically ordered (kind, then name, then path). */
 export function collectEntries(report: Report | undefined): SkillEntry[] {
-  const byPath = new Map<string, SkillEntry>();
-  for (const agent of report?.agents ?? []) {
-    for (const file of agent.files) {
-      const entry = classifyFile(file);
-      if (entry && !byPath.has(entry.path)) byPath.set(entry.path, entry);
-    }
-  }
-  return [...byPath.values()].sort(
-    (a, b) =>
-      a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name) || a.path.localeCompare(b.path),
-  );
+  return collectFiles(report?.agents ?? [], classifyFile, byKindNameThenPath);
 }
 
 // ── Inherited global skills & agents (bead 71h.5) ──────────────────────────
@@ -77,31 +76,20 @@ export interface GlobalSkillEntry extends SkillEntry {
   root: string;
 }
 
-/** Join a global root and a root-relative path into one absolute path. */
-export function joinGlobalPath(root: string, rel: string): string {
-  return `${root.replace(/\/+$/, '')}/${rel.replace(/^\/+/, '')}`;
-}
-
 /** Inherited skills/agents from the machine-global `~/.claude` entry (the one
  *  runtime whose home layout carries `skills/` + `agents/` md files), classified
  *  with the same patterns as the project list, absolute-joined, de-duped, and
  *  deterministically ordered. No matching entries ⇒ [] (page renders as before). */
 export function collectGlobalEntries(entries: readonly GlobalSkillSource[]): GlobalSkillEntry[] {
-  const byPath = new Map<string, GlobalSkillEntry>();
-  for (const entry of entries) {
-    if (entry.dir !== '.claude') continue;
-    for (const agent of entry.agents) {
-      for (const rel of agent.files) {
-        const classified = classifyFile(rel);
-        if (!classified) continue;
-        const path = joinGlobalPath(entry.root, rel);
-        if (!byPath.has(path)) byPath.set(path, { ...classified, path, root: entry.root });
-      }
-    }
-  }
-  return [...byPath.values()].sort(
-    (a, b) =>
-      a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name) || a.path.localeCompare(b.path),
+  return collectGlobalFiles(
+    entries,
+    (entry, rel) => {
+      if (entry.dir !== '.claude') return null;
+      const classified = classifyFile(rel);
+      if (!classified) return null;
+      return { ...classified, path: joinGlobalPath(entry.root, rel), root: entry.root };
+    },
+    byKindNameThenPath,
   );
 }
 

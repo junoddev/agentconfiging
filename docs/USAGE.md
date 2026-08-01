@@ -91,6 +91,39 @@ seed ships in the package so the catalog works offline on first run. Installs ar
 checksum-verified, diff-previewed, and stamped with provenance frontmatter
 (`installed-by agentconfig from <source>@<version>`).
 
+### Extensions
+
+Open **Extensions** to see the normalized installed-extension inventory grouped by
+provider and scope. This page reports provider capability and availability rather
+than flattening every runtime into a pretend plugin system.
+
+- **Claude Code** is the native plugin provider. The Extensions page lists the
+  installed inventory by delegating to `claude plugin list --json`; the separate
+  **Marketplace** page handles Claude marketplace browsing and install. If the
+  `claude` CLI is missing, times out, or returns unreadable output, the provider
+  is shown as unavailable.
+- **Codex** is read-only. Existing project/global `AGENTS.md`, `.codex/config.toml`,
+  `~/.codex/config.toml`, and bounded `.codex/rules/*.rules` files appear as
+  configuration/rules artifacts with local paths. They are not Codex plugins, and
+  no `codex` CLI is required. The Extensions page does not install, remove, update,
+  enable, or disable them.
+- Other detected runtimes can still be inspected through their normal config and
+  artifact surfaces. They are not provider-managed extension adapters yet.
+
+Terminology follows the runtime where possible: Claude **plugins**, Gemini
+**extensions**, and Codex **configuration artifacts**. “Extension” is the
+normalized inventory label only. The Agentconfig Catalog is separate: its
+skills, agents, commands, MCP servers, and hooks are Agentconfig-managed files,
+with checksum, diff, and provenance safeguards; they do not become provider-owned
+plugins.
+
+The current rollout is read-only inventory first, with Claude's existing delegated
+marketplace install preserved. Gemini CLI is the next planned lifecycle adapter;
+it will be added only behind fixed-argument CLI delegation, bounded output,
+defensive parsing, and provider-owned uninstall. Cursor, Continue, Copilot, Aider,
+and opencode remain observe-only candidates until their provider contracts and
+trust boundaries are stable enough for safe lifecycle support.
+
 ### Sessions & analytics
 
 - **Dashboard** — activity computed from real session history: counts, streaks, an

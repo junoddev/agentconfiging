@@ -345,6 +345,100 @@ describe('catalogue upgrades (np8.11)', () => {
   });
 });
 
+describe('catalogue upgrades (np6 coverage gaps)', () => {
+  it('redacts Google API keys (AIza + 35), near-miss too short is untouched', () => {
+    const FAKE = 'AIza' + 'B'.repeat(35);
+    const r = redact(`use ${FAKE} rest`);
+    expect(r.text).toBe(`use ${markFor('google_api_key')} rest`);
+    expect(r.spans.map((s) => s.id)).toEqual(['google_api_key']);
+    expectSpansCoverMarks(redact(FAKE));
+    // Near-miss: one char short of the exact 35-char body.
+    const SHORT = 'AIza' + 'B'.repeat(34);
+    expect(redact(`x ${SHORT} y`)).toEqual({ text: `x ${SHORT} y`, spans: [] });
+  });
+
+  it('redacts Stripe live/restricted keys, near-miss short body is untouched', () => {
+    for (const FAKE of [
+      'sk_live_' + 'a'.repeat(24),
+      'rk_live_' + 'B'.repeat(30),
+      'sk_test_' + 'c'.repeat(24),
+    ]) {
+      const r = redact(`stripe ${FAKE}\n`);
+      expect(r.text, FAKE).toBe(`stripe ${markFor('stripe')}\n`);
+      expect(
+        r.spans.map((s) => s.id),
+        FAKE,
+      ).toEqual(['stripe']);
+    }
+    // Near-miss: body below the 10-char run bound.
+    expect(redact('sk_live_short').spans).toEqual([]);
+  });
+
+  it('redacts npm tokens (npm_ + 36), near-miss too short is untouched', () => {
+    const FAKE = 'npm_' + 'a'.repeat(36);
+    const r = redact(`grab ${FAKE} here`);
+    expect(r.text).toBe(`grab ${markFor('npm_token')} here`);
+    expect(r.spans.map((s) => s.id)).toEqual(['npm_token']);
+    expect(redact('npm_' + 'a'.repeat(20)).spans).toEqual([]);
+  });
+
+  it('redacts Google OAuth ya29. tokens, near-miss short run is untouched', () => {
+    const FAKE = 'ya29.' + 'A0bC-_'.repeat(8);
+    const r = redact(`token: ${FAKE}`);
+    expect(r.text).toBe(`token: "${markFor('kv_secret')}"`); // kv wins (secret-named key)
+    // Standalone (non-secret key) so the provider pattern is what fires.
+    const bare = redact(`grab ${FAKE} now`);
+    expect(bare.text).toBe(`grab ${markFor('google_oauth')} now`);
+    expect(bare.spans.map((s) => s.id)).toEqual(['google_oauth']);
+    expect(redact('ya29.short').spans).toEqual([]);
+  });
+
+  it('redacts a PEM private-key block, near-miss BEGIN without END is untouched', () => {
+    const FAKE =
+      '-----BEGIN RSA PRIVATE KEY-----\n' +
+      'MIIEowIBAAKCAQEA' +
+      'a'.repeat(200) +
+      '\n-----END RSA PRIVATE KEY-----';
+    const r = redact(`pem:\n${FAKE}\ndone`);
+    expect(r.text).toBe(`pem:\n${markFor('private_key')}\ndone`);
+    expect(r.spans.map((s) => s.id)).toEqual(['private_key']);
+    // OpenSSH variant.
+    const ossh =
+      '-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXk\n-----END OPENSSH PRIVATE KEY-----';
+    expect(redact(ossh).spans.map((s) => s.id)).toEqual(['private_key']);
+    // Near-miss: an opening header with no matching END is not a block.
+    const unterminated = '-----BEGIN RSA PRIVATE KEY-----\n' + 'a'.repeat(64);
+    expect(redact(unterminated).spans).toEqual([]);
+  });
+
+  it('redacts Slack webhook URLs (token in the path), near-miss is untouched', () => {
+    const FAKE = 'https://hooks.slack.com/services/T00000000/B11111111/' + 'a'.repeat(24);
+    const r = redact(`post to ${FAKE}`);
+    expect(r.text).toBe(`post to ${markFor('slack_webhook')}`);
+    expect(r.spans.map((s) => s.id)).toEqual(['slack_webhook']);
+    // Near-miss: a hooks.slack.com URL that is not a /services/ webhook.
+    const other = 'https://hooks.slack.com/other/thing';
+    expect(redact(other)).toEqual({ text: other, spans: [] });
+  });
+
+  it('bearer widening: a JWT-valued bearer no longer leaks its tail', () => {
+    const JWT = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36';
+    const r = redact(`Authorization: Bearer ${JWT}`);
+    // The whole token is consumed (dots included) — no `.payload.sig` printed.
+    expect(r.text).toBe(`Authorization: Bearer ${markFor('bearer')}`);
+    expect(r.text).not.toContain('payload');
+    expect(r.text).not.toContain('SflK');
+    expect(r.spans.map((s) => s.id)).toEqual(['bearer']);
+  });
+
+  it('bearer widening: a standard-base64 bearer (+/=) is fully consumed', () => {
+    const B64 = 'abcd+efgh/ijkl+mnop/qrst=='; // 26 chars, has + / =
+    const r = redact(`Bearer ${B64} trailing`);
+    expect(r.text).toBe(`Bearer ${markFor('bearer')} trailing`);
+    expect(r.text).not.toContain('mnop');
+  });
+});
+
 describe('pathological input timing (regression guards, generous CI margins)', () => {
   const elapsed = (fn: () => void): number => {
     const t0 = performance.now();
@@ -377,6 +471,13 @@ describe('pathological input timing (regression guards, generous CI margins)', (
       'xoxb-'.repeat(Math.ceil(n / 5)), // slack prefix spam
       'PASSWORD=' + '!'.repeat(n), // widened unquoted kv value long run
       'key: ' + 'a+'.repeat(n / 2), // chord-shape check on a huge bare-`key` value
+      // np6 shapes: bounded-lazy PEM body + prefix spam for the new providers.
+      '-----BEGIN RSA PRIVATE KEY-----' + 'a'.repeat(n), // unterminated PEM (bounded scan)
+      '-----BEGIN RSA PRIVATE KEY-----'.repeat(Math.ceil(n / 31)), // PEM header spam
+      'AIza' + 'a'.repeat(n), // google key prefix + long run
+      'ya29.' + 'a'.repeat(n), // google oauth prefix + long run
+      'Bearer ' + '+/='.repeat(n / 3), // widened bearer class long run
+      'https://hooks.slack.com/services/' + 'a'.repeat(n), // slack webhook long path
     ];
     for (const input of cases) {
       expect(

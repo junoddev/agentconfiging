@@ -65,16 +65,20 @@ import { registerStorageRoutes } from './storage.js';
 import { registerSyncRoute } from './sync.js';
 import { registerCatalogRoutes, type CatalogSource } from './catalog.js';
 import { registerMarketplaceRoutes, type ClaudeExec } from './marketplace.js';
+import { registerExtensionRoutes, type ExtensionProviderAdapter } from './extensions.js';
+import { createBuiltInExtensionAdapters } from './extension-adapters.js';
 import { registerGitRoutes } from './git-routes.js';
 import type { GitExec } from './git.js';
 import { registerStatsRoutes } from './stats-routes.js';
 import { registerKnownProjectsRoute } from './known-projects.js';
 import { registerSearchRoutes } from './search-routes.js';
+import type { SqliteLoader } from './search.js';
 import { registerPtyRoutes } from './pty-routes.js';
 import { registerPipelineRoutes } from './pipeline-routes.js';
 import type { RuntimeMap } from './pipeline/index.js';
 import { PtyManager } from './pty.js';
 import type { WriteScope } from './pathguard.js';
+import { jsonError } from './http.js';
 
 export interface AppConfig {
   /** SHA-256 digest of the session bearer token — the app never sees the raw token. */
@@ -125,6 +129,8 @@ export interface AppConfig {
    * with no real CLI present.
    */
   marketplaceExec?: ClaudeExec;
+  /** Normalized read-only provider adapters (agentconfig-4hm.5). */
+  extensionAdapters?: readonly ExtensionProviderAdapter[];
   /**
    * GIT PANEL (bead ngs.1): how the git-panel routes reach `git`. Defaults to the
    * real subprocess (execFile, fixed command `git`, arg array, no shell, cwd
@@ -161,6 +167,13 @@ export interface AppConfig {
    * real side effects while still going through the committed executor.
    */
   pipelineRuntimes?: RuntimeMap;
+  /**
+   * SESSION SEARCH (7yb.4): the optional better-sqlite3 loader. Defaults to the
+   * real lazy loader (present ⇒ FTS5 search, absent ⇒ graceful degradation).
+   * Injectable so tests pin the module present/absent deterministically instead
+   * of depending on whether the optional native module is built in the env.
+   */
+  searchLoader?: SqliteLoader;
 }
 
 const MIME: Record<string, string> = {
@@ -182,13 +195,6 @@ const MIME: Record<string, string> = {
   '.txt': 'text/plain; charset=utf-8',
   '.webmanifest': 'application/manifest+json',
 };
-
-function jsonError(status: 400 | 401 | 403 | 404 | 500, message: string): Response {
-  return new Response(JSON.stringify({ error: message }), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
-}
 
 /** Constant-time token check: hash the presented value, timingSafeEqual on digests. */
 function tokenMatches(presented: string | undefined, tokenHash: Buffer): boolean {
@@ -266,6 +272,12 @@ function serveStatic(distDir: string, pathname: string): Response {
 
 export function createApp(config: AppConfig): Hono {
   const app = new Hono();
+  const extensionAdapters =
+    config.extensionAdapters ??
+    createBuiltInExtensionAdapters({
+      exec: config.marketplaceExec,
+      projectRoot: config.registry.resolve(undefined)?.root,
+    });
 
   const allowedHosts = () => {
     const port = config.port();
@@ -503,6 +515,12 @@ export function createApp(config: AppConfig): Hono {
   // UNTRUSTED output defensively. See src/server/marketplace.ts.
   registerMarketplaceRoutes(app, { exec: config.marketplaceExec });
 
+  // EXTENSION INVENTORY (agentconfig-4hm.5): provider-neutral, read-only
+  // inventory. Provider adapters are injectable and must translate their own
+  // raw state before it reaches this route. Claude marketplace compatibility
+  // remains on /api/marketplace and is intentionally not migrated here.
+  registerExtensionRoutes(app, { adapters: extensionAdapters });
+
   // GIT PANEL (ngs.1): GET /api/git/status|log|branches|diff + POST
   // /api/git/stage|unstage|commit|checkout|push|pull — the launched-repo git
   // panel. Also under /api (inherits the token + Origin/CSRF gates; the POSTs are
@@ -543,7 +561,10 @@ export function createApp(config: AppConfig): Hono {
   // native module. Result snippets are REDACTED server-side; the query is
   // sanitized + bound as a parameter (no FTS5 injection). Semantic/embeddings mode
   // is behind an opt-in flag (a documented stub in v1).
-  registerSearchRoutes(app);
+  registerSearchRoutes(
+    app,
+    config.searchLoader !== undefined ? { loader: config.searchLoader } : {},
+  );
 
   // EMBEDDED TERMINAL (ngs.2): GET /api/pty/status — the capability probe for the
   // PTY surface. Also under /api (inherits the token + Origin/CSRF gates). The
@@ -568,6 +589,10 @@ export function createApp(config: AppConfig): Hono {
   // polls. See src/server/pipeline-routes.ts.
   registerPipelineRoutes(app, {
     registry,
+    // np7 code-execution gate: the bash node runs only when the server was
+    // launched interactively (mirrors the PTY gate); a headless daemon leaves
+    // this false and gets the disabled bash runtime.
+    interactive: config.interactive ?? false,
     ...(config.pipelineStateDir !== undefined ? { stateDir: config.pipelineStateDir } : {}),
     ...(config.pipelineRuntimes !== undefined ? { runtimes: config.pipelineRuntimes } : {}),
   });

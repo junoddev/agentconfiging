@@ -45,6 +45,7 @@ export const RAIL_ORDER: RouteName[] = [
   ...EDITOR_ROUTES,
   // LIBRARY
   'catalog',
+  'extensions',
   'marketplace',
   // RUNTIME
   'dashboard',
@@ -80,10 +81,16 @@ export function railShortcutHash(digit: number): string | undefined {
 /**
  * The full command list, given the current theme (so the theme command can name
  * its target). Nav commands first (rail order, then the gallery), then the
- * theme toggle and the refetch action.
+ * theme toggle and the refetch action. `hiddenRoutes` (bead a6y) drops nav
+ * commands for Configure sections the active agent has no concept of — the
+ * palette mirrors the sidebar's adaptive rail. Cmd+1..9 stays on the full
+ * RAIL_ORDER so the shortcuts don't renumber per agent.
  */
-export function buildCommands(theme: 'light' | 'dark'): Command[] {
-  const nav: Command[] = RAIL_ORDER.map((name) => ({
+export function buildCommands(
+  theme: 'light' | 'dark',
+  hiddenRoutes?: ReadonlySet<RouteName>,
+): Command[] {
+  const nav: Command[] = RAIL_ORDER.filter((name) => !hiddenRoutes?.has(name)).map((name) => ({
     id: `nav:${name}`,
     label: railLabel(name),
     hint: navHash(name),

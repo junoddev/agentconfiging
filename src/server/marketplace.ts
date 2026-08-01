@@ -40,6 +40,7 @@
 
 import { execFile } from 'node:child_process';
 import type { Hono } from 'hono';
+import { asObject } from './http.js';
 
 /** How the routes reach the `claude` CLI. Injectable so tests fire a FAKE exec
  *  (a valid listing, a hostile payload, an ENOENT, a timeout) at the real parse
@@ -116,13 +117,6 @@ export interface InstalledPlugin {
 function str(obj: Record<string, unknown>, key: string): string {
   const v = obj[key];
   return typeof v === 'string' ? v : '';
-}
-
-/** A plain JSON object, or undefined for anything else (null, array, scalar). */
-function asObject(v: unknown): Record<string, unknown> | undefined {
-  return v !== null && typeof v === 'object' && !Array.isArray(v)
-    ? (v as Record<string, unknown>)
-    : undefined;
 }
 
 /**

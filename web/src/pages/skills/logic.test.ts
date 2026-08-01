@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { DetectedAgent, Report } from '../../api/types.js';
-import { parseFrontmatter } from './frontmatter.js';
+import { parseFrontmatter } from '../../lib/frontmatter.js';
 import {
   classifyFile,
   collectEntries,
   collectGlobalEntries,
   deriveGraph,
   extractMcpServers,
-  joinGlobalPath,
   toCard,
   type SkillEntry,
 } from './logic.js';
@@ -74,15 +73,6 @@ describe('collectEntries', () => {
 
   it('returns empty for an undefined report', () => {
     expect(collectEntries(undefined)).toEqual([]);
-  });
-});
-
-describe('joinGlobalPath', () => {
-  it('joins a root and a root-relative path, normalizing stray slashes', () => {
-    expect(joinGlobalPath('/Users/x/.claude', 'agents/r.md')).toBe('/Users/x/.claude/agents/r.md');
-    expect(joinGlobalPath('/Users/x/.claude/', '/agents/r.md')).toBe(
-      '/Users/x/.claude/agents/r.md',
-    );
   });
 });
 

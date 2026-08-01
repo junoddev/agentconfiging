@@ -10,8 +10,6 @@
  *   2. Parse a rule into its PATH FILTERS (globs → badges), description, and
  *      always-apply flag, coping with Cursor's bare comma-separated globs form
  *      which is NOT strict YAML, plus brace expansion like `*.{ts,tsx}`.
- *   3. REDACTION-save guard (spans OR `[REDACTED:*]` marks — belt-and-braces).
- *   4. A minimal, SAFE Markdown block tokenizer for the preview pane.
  *
  * All input (report paths, frontmatter, glob strings) is UNTRUSTED config data:
  * values only ever become plain strings, and the page renders them as TEXT
@@ -19,6 +17,7 @@
  */
 
 import type { Report } from '../../api/types.js';
+import { collectFiles, collectGlobalFiles, groupByRoot } from '../../lib/collect.js';
 import {
   asScalar,
   getField,
@@ -26,7 +25,8 @@ import {
   splitFrontmatter,
   unquote,
   type FmValue,
-} from './frontmatter.js';
+} from '../../lib/frontmatter.js';
+import { joinGlobalPath } from '../../lib/paths.js';
 
 // ── Discovery ──────────────────────────────────────────────────────────────
 
@@ -57,22 +57,18 @@ export function classifyRule(path: string): RuleEntry | null {
   return null;
 }
 
+/** Deterministic rule order: source, then name, then path. Shared by the
+ *  project and global collectors so both lists sort identically. */
+function byRuleOrder(a: RuleEntry, b: RuleEntry): number {
+  return (
+    a.source.localeCompare(b.source) || a.name.localeCompare(b.name) || a.path.localeCompare(b.path)
+  );
+}
+
 /** Every rule file referenced by any detected agent, de-duplicated by path and
  *  deterministically ordered (source, then name, then path). */
 export function collectRules(report: Report | undefined): RuleEntry[] {
-  const byPath = new Map<string, RuleEntry>();
-  for (const agent of report?.agents ?? []) {
-    for (const file of agent.files) {
-      const entry = classifyRule(file);
-      if (entry && !byPath.has(entry.path)) byPath.set(entry.path, entry);
-    }
-  }
-  return [...byPath.values()].sort(
-    (a, b) =>
-      a.source.localeCompare(b.source) ||
-      a.name.localeCompare(b.name) ||
-      a.path.localeCompare(b.path),
-  );
+  return collectFiles(report?.agents ?? [], classifyRule, byRuleOrder);
 }
 
 // ── Inherited global rules (bead 71h.5) ─────────────────────────────────────
@@ -91,11 +87,6 @@ export interface GlobalRuleSource {
 export interface GlobalRuleEntry extends RuleEntry {
   /** The global config dir the file came from. */
   root: string;
-}
-
-/** Join a global root and a root-relative path into one absolute path. */
-export function joinGlobalPath(root: string, rel: string): string {
-  return `${root.replace(/\/+$/, '')}/${rel.replace(/^\/+/, '')}`;
 }
 
 // Global paths are RELATIVE TO THE CONFIG DIR (no `.claude/` prefix): a rule
@@ -124,22 +115,14 @@ export function classifyGlobalRule(
 /** Inherited rules from the global `.claude`/`.cursor` entries, absolute-joined,
  *  de-duped, and ordered like collectRules. No matches ⇒ [] (page unchanged). */
 export function collectGlobalRules(entries: readonly GlobalRuleSource[]): GlobalRuleEntry[] {
-  const byPath = new Map<string, GlobalRuleEntry>();
-  for (const entry of entries) {
-    for (const agent of entry.agents) {
-      for (const rel of agent.files) {
-        const classified = classifyGlobalRule(entry.dir, rel);
-        if (!classified) continue;
-        const path = joinGlobalPath(entry.root, rel);
-        if (!byPath.has(path)) byPath.set(path, { ...classified, path, root: entry.root });
-      }
-    }
-  }
-  return [...byPath.values()].sort(
-    (a, b) =>
-      a.source.localeCompare(b.source) ||
-      a.name.localeCompare(b.name) ||
-      a.path.localeCompare(b.path),
+  return collectGlobalFiles(
+    entries,
+    (entry, rel) => {
+      const classified = classifyGlobalRule(entry.dir, rel);
+      if (!classified) return null;
+      return { ...classified, path: joinGlobalPath(entry.root, rel), root: entry.root };
+    },
+    byRuleOrder,
   );
 }
 
@@ -152,13 +135,7 @@ export interface GlobalRuleGroup {
 /** Group inherited rules by their global root, preserving the collector's
  *  order. Empty input ⇒ no groups (never an empty GLOBAL heading). */
 export function groupGlobalRulesByRoot(rules: readonly GlobalRuleEntry[]): GlobalRuleGroup[] {
-  const groups = new Map<string, GlobalRuleGroup>();
-  for (const rule of rules) {
-    const group = groups.get(rule.root) ?? { root: rule.root, rules: [] };
-    group.rules.push(rule);
-    groups.set(rule.root, group);
-  }
-  return [...groups.values()];
+  return groupByRoot(rules).map((group) => ({ root: group.root, rules: group.items }));
 }
 
 // ── Path-filter (glob) parsing ─────────────────────────────────────────────
@@ -248,129 +225,4 @@ export function parseRule(content: string): ParsedRule {
     hasFrontmatter: true,
     body,
   };
-}
-
-// ── Redaction guard (belt-and-braces) ───────────────────────────────────────
-
-/** Matches a server-inserted `[REDACTED:*]` placeholder mark. */
-const REDACTION_RE = /\[REDACTED:[^\]]*\]/;
-
-/** True when text carries a `[REDACTED:*]` mark. */
-export function hasRedactionMarks(content: string): boolean {
-  return REDACTION_RE.test(content);
-}
-
-/**
- * True when a loaded file must be READ-ONLY: the server flagged redaction spans
- * OR the served text carries a `[REDACTED:*]` mark. Committing such text would
- * overwrite the real on-disk secret with the placeholder — so both signals are
- * checked (rules rarely hold secrets, but the guard is cheap and load-bearing).
- */
-export function isRedacted(spans: readonly unknown[], content: string): boolean {
-  return spans.length > 0 || hasRedactionMarks(content);
-}
-
-// ── Minimal safe Markdown tokenizer (preview pane) ──────────────────────────
-
-/** A preview block. The React side renders each as a TEXT node in an
- *  appropriate element — no inline HTML, no `dangerouslySetInnerHTML`. */
-export type MarkdownBlock =
-  | { kind: 'heading'; level: number; text: string }
-  | { kind: 'code'; text: string }
-  | { kind: 'list'; ordered: boolean; items: string[] }
-  | { kind: 'quote'; text: string }
-  | { kind: 'para'; text: string };
-
-const FENCE_RE = /^\s*(?:```|~~~)/;
-const HEADING_RE = /^(#{1,6})\s+(.*)$/;
-const LIST_RE = /^\s*(?:[-*+]|\d+\.)\s+(.*)$/;
-const ORDERED_RE = /^\s*\d+\.\s+/;
-const QUOTE_RE = /^\s*>\s?(.*)$/;
-
-/**
- * Tokenize Markdown into safe preview blocks. Fenced code is captured verbatim
- * (never scanned for structure); consecutive list items and paragraph lines are
- * grouped. Unterminated fences flush at end of input.
- */
-export function tokenizeMarkdown(content: string): MarkdownBlock[] {
-  const blocks: MarkdownBlock[] = [];
-  const lines = content.split('\n');
-
-  let para: string[] = [];
-  let list: { ordered: boolean; items: string[] } | undefined;
-  let code: string[] | undefined;
-
-  const flushPara = () => {
-    if (para.length > 0) {
-      blocks.push({ kind: 'para', text: para.join('\n') });
-      para = [];
-    }
-  };
-  const flushList = () => {
-    if (list) {
-      blocks.push({ kind: 'list', ordered: list.ordered, items: list.items });
-      list = undefined;
-    }
-  };
-  const flushOpen = () => {
-    flushPara();
-    flushList();
-  };
-
-  for (const line of lines) {
-    if (code !== undefined) {
-      if (FENCE_RE.test(line)) {
-        blocks.push({ kind: 'code', text: code.join('\n') });
-        code = undefined;
-      } else {
-        code.push(line);
-      }
-      continue;
-    }
-
-    if (FENCE_RE.test(line)) {
-      flushOpen();
-      code = [];
-      continue;
-    }
-
-    const heading = HEADING_RE.exec(line);
-    if (heading) {
-      flushOpen();
-      blocks.push({ kind: 'heading', level: heading[1]?.length ?? 1, text: heading[2] ?? '' });
-      continue;
-    }
-
-    const quote = QUOTE_RE.exec(line);
-    if (quote) {
-      flushOpen();
-      blocks.push({ kind: 'quote', text: quote[1] ?? '' });
-      continue;
-    }
-
-    const item = LIST_RE.exec(line);
-    if (item) {
-      flushPara();
-      const ordered = ORDERED_RE.test(line);
-      if (!list || list.ordered !== ordered) {
-        flushList();
-        list = { ordered, items: [] };
-      }
-      list.items.push(item[1] ?? '');
-      continue;
-    }
-
-    if (line.trim() === '') {
-      flushOpen();
-      continue;
-    }
-
-    flushList();
-    para.push(line);
-  }
-
-  if (code !== undefined) blocks.push({ kind: 'code', text: code.join('\n') });
-  flushOpen();
-
-  return blocks;
 }
