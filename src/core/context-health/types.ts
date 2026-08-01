@@ -59,3 +59,34 @@ export interface ContextHealth {
   /** Honest, size-derived optimization suggestions (empty when compact). */
   suggestions: ContextSuggestion[];
 }
+
+/** One token-estimated file in an agent's initial context. */
+export interface ContextCostFile {
+  path: string;
+  tokens: number;
+  category: ContextCategory;
+}
+
+/** Token total for one context category inside a detected agent. */
+export interface ContextCostCategory {
+  category: ContextCategory;
+  tokens: number;
+  files: number;
+}
+
+/** Per-agent initial context token budget breakdown. */
+export interface AgentContextCost {
+  kind: string;
+  totalTokens: number;
+  budgetTokens: number;
+  budgetRatio: number;
+  status: BudgetStatus;
+  byCategory: ContextCostCategory[];
+  files: ContextCostFile[];
+}
+
+/** The complete per-agent context-cost result for an instance. */
+export interface ContextCost {
+  budgetTokens: number;
+  agents: AgentContextCost[];
+}

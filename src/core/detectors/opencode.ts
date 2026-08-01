@@ -72,6 +72,7 @@ export const opencodeDetector: Detector = {
   extract(m: Manifest): DetectedAgent {
     const prefix = dirPrefix(m, DIR);
     const hasConfig = findFile(m, CONFIG) !== undefined;
+    const hasAgentsMd = findFile(m, 'AGENTS.md') !== undefined;
     const dirFiles = filesUnder(m, prefix).map((f) => f.path);
     const config = decodeConfig(m);
 
@@ -83,7 +84,11 @@ export const opencodeDetector: Detector = {
     return {
       kind: 'opencode',
       confidence: 'medium',
-      files: uniq([...(hasConfig ? [CONFIG] : []), ...dirFiles]),
+      files: uniq([
+        ...(hasConfig ? [CONFIG] : []),
+        ...(hasAgentsMd ? ['AGENTS.md'] : []),
+        ...dirFiles,
+      ]),
       extras,
     };
   },

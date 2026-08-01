@@ -17,20 +17,36 @@ export interface EstimateTokensOptions {
   runtimeFudgeFactor?: number;
 }
 
-/**
- * Estimate tokens from text using Unicode code points, not bytes or UTF-16
- * code units. Empty text is always 0. Non-empty estimates are rounded up so
- * tiny snippets still register as context cost.
- */
-export function estimateTokens(text: string, options: EstimateTokensOptions = {}): number {
+function resolveRuntimeFudgeFactor(options: EstimateTokensOptions): number {
   const runtimeFudgeFactor = options.runtimeFudgeFactor ?? 1;
 
   if (!Number.isFinite(runtimeFudgeFactor) || runtimeFudgeFactor <= 0) {
     throw new RangeError('runtimeFudgeFactor must be a finite number greater than 0');
   }
 
-  if (text.length === 0) return 0;
+  return runtimeFudgeFactor;
+}
 
-  const codePoints = Array.from(text).length;
-  return Math.ceil((codePoints / DEFAULT_TOKEN_ESTIMATE_CHARS_PER_TOKEN) * runtimeFudgeFactor);
+function estimateTokensFromCount(count: number, options: EstimateTokensOptions): number {
+  const runtimeFudgeFactor = resolveRuntimeFudgeFactor(options);
+  if (count <= 0) return 0;
+  return Math.ceil((count / DEFAULT_TOKEN_ESTIMATE_CHARS_PER_TOKEN) * runtimeFudgeFactor);
+}
+
+/**
+ * Estimate tokens from text using Unicode code points, not bytes or UTF-16
+ * code units. Empty text is always 0. Non-empty estimates are rounded up so
+ * tiny snippets still register as context cost.
+ */
+export function estimateTokens(text: string, options: EstimateTokensOptions = {}): number {
+  return estimateTokensFromCount(Array.from(text).length, options);
+}
+
+/** Estimate tokens from retained byte size when manifest content is withheld. */
+export function estimateTokensFromSizeBytes(
+  sizeBytes: number,
+  options: EstimateTokensOptions = {},
+): number {
+  if (!Number.isFinite(sizeBytes) || sizeBytes <= 0) return estimateTokens('', options);
+  return estimateTokensFromCount(Math.ceil(sizeBytes), options);
 }

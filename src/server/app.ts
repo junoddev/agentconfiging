@@ -460,6 +460,22 @@ export function createApp(config: AppConfig): Hono {
     }
   });
 
+  // CONTEXT COST (ub3.2): GET /api/context-cost?instance= — per detected agent
+  // launch-time initial-context token estimates. Same auth/error/instance
+  // handling as context-health; same cached scan/detect lifecycle.
+  app.get('/api/context-cost', (c) => {
+    const url = new URL(c.req.url);
+    const fresh = url.searchParams.get('fresh') === '1';
+    const instance = registry.resolve(url.searchParams.get('instance') ?? undefined);
+    if (!instance) return jsonError(404, 'unknown instance');
+    try {
+      return c.json(registry.contextCost(instance, { fresh }));
+    } catch (err) {
+      console.error(`agentconfiging server: context-cost failed: ${String(err)}`);
+      return jsonError(500, 'context-cost failed');
+    }
+  });
+
   // WRITE API (gxo.3): POST /api/write, POST /api/delete, GET /api/file. These
   // register under /api, so they inherit the token + Origin/CSRF gates above.
   registerWriteRoutes(app, { scopes: config.scopes ?? [], trashDir: config.trashDir ?? '' });

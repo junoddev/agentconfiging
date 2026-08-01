@@ -7,10 +7,19 @@
  */
 
 export { computeContextHealth, CONTEXT_BUDGET_BYTES } from './context-health.js';
+export {
+  computeContextCost,
+  CONTEXT_COST_BUDGET_TOKENS,
+  type ContextCostOptions,
+} from './context-cost.js';
 export type {
+  AgentContextCost,
   BudgetStatus,
   CategoryTotal,
   ContextCategory,
+  ContextCost,
+  ContextCostCategory,
+  ContextCostFile,
   ContextFile,
   ContextHealth,
   ContextSuggestion,

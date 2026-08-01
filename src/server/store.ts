@@ -18,11 +18,14 @@
 import {
   buildGlobalEntries,
   buildReport,
+  computeContextCost,
   computeContextHealth,
   detect,
   scanProject,
   toReportFinding,
+  type ContextCost,
   type ContextHealth,
+  type ContextCostOptions,
   type DetectedAgent,
   type Fix,
   type GlobalEntry,
@@ -60,6 +63,8 @@ export class ReportStore {
    * populated in the single `#build` pass, so it costs no extra scan.
    */
   readonly #contextHealth = new Map<ReportScope, ContextHealth>();
+  /** Per-scope CONTEXT-COST view (agentconfig-ub3.2), cached with report data. */
+  readonly #contextCost = new Map<ReportScope, ContextCost>();
   /**
    * Per-scope map of finding id → fix payload. SERVER-INTERNAL by design: it
    * holds the `fix.edits[].patch` (complete replacement file content, possibly
@@ -120,23 +125,42 @@ export class ReportStore {
     return this.#contextHealth.get(scope) as ContextHealth;
   }
 
+  /**
+   * The per-agent initial-context token-cost view for `scope`, computed on
+   * first access or when `fresh` is set (mirrors {@link get}). Reuses the same
+   * scan/detect pass as the report and context-health caches.
+   */
+  contextCost(
+    scope: ReportScope,
+    opts: { fresh?: boolean } & ContextCostOptions = {},
+  ): ContextCost {
+    if (!opts.fresh) {
+      const hit = this.#contextCost.get(scope);
+      if (hit) return hit;
+    }
+    this.#build(scope, opts);
+    return this.#contextCost.get(scope) as ContextCost;
+  }
+
   /** Drop cached reports + fixes (one scope, or all). Watcher-bead hook. */
   invalidate(scope?: ReportScope): void {
     if (scope) {
       this.#cache.delete(scope);
       this.#fixes.delete(scope);
       this.#contextHealth.delete(scope);
+      this.#contextCost.delete(scope);
     } else {
       this.#cache.clear();
       this.#fixes.clear();
       this.#contextHealth.clear();
+      this.#contextCost.clear();
     }
   }
 
   /** Scan + analyze once, populating BOTH the served-report cache and the
    *  (server-internal) fix cache from the single computation, then return the
    *  served report. */
-  #build(scope: ReportScope): ServedReport {
+  #build(scope: ReportScope, contextCostOptions: ContextCostOptions = {}): ServedReport {
     const manifest = scanProject(this.#root, this.#scanOptions);
     const agents = detect(manifest);
     const { findings } = buildReport(manifest, agents);
@@ -155,6 +179,7 @@ export class ReportStore {
     this.#cache.set(scope, report);
     this.#fixes.set(scope, fixes);
     this.#contextHealth.set(scope, computeContextHealth(manifest));
+    this.#contextCost.set(scope, computeContextCost(manifest, agents, contextCostOptions));
     return report;
   }
 }

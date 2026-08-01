@@ -48,14 +48,43 @@ describe('detect() fixture matrix', () => {
   it('claude-rich: claude-code, high (all 5 signals), full .claude/ tree in files', () => {
     const agent = only(detectFixture('claude-rich'), 'claude-code');
     expect(agent.confidence).toBe('high');
-    expect(agent.files).toHaveLength(18); // CLAUDE.md + 17 files under .claude/
+    expect(agent.files).toHaveLength(19); // CLAUDE.md + .mcp.json + 17 files under .claude/
     expect(agent.files).toContain('CLAUDE.md');
+    expect(agent.files).toContain('.mcp.json');
     expect(agent.files).toContain('.claude/settings.local.json');
     expect(agent.files).toContain('.claude/skills/release-notes/SKILL.md');
-    // Not claude signals: root .mcp.json and docs/ are outside the signal set.
-    expect(agent.files).not.toContain('.mcp.json');
+    // Not a claude signal: docs/ is outside the signal set.
     expect(agent.files).not.toContain('docs/ARCHITECTURE.md');
     expect(agent.extras).toMatchObject({ agentsCount: 2, skillsCount: 3, hasLocalSettings: true });
+  });
+
+  it('claude-code includes root .mcp.json without using it as a detection signal', () => {
+    const raw = {
+      root: '/tmp/proj',
+      cwdBasename: 'proj',
+      files: [
+        { path: '.mcp.json', size: 2, sha256: 'a'.repeat(64), content: '{}' },
+        { path: 'README.md', size: 1, sha256: 'b'.repeat(64), content: 'x' },
+      ],
+      stats: { fileCount: 2, totalBytes: 3 },
+    };
+
+    expect(detect(parseManifest(raw))).toEqual([]);
+
+    const agent = only(
+      detect(
+        parseManifest({
+          ...raw,
+          files: [
+            ...raw.files,
+            { path: 'CLAUDE.md', size: 1, sha256: 'c'.repeat(64), content: 'x' },
+          ],
+          stats: { fileCount: 3, totalBytes: 4 },
+        }),
+      ),
+      'claude-code',
+    );
+    expect(agent.files).toContain('.mcp.json');
   });
 
   it('cursor-basic: cursor, high (.cursorrules + rules dir)', () => {
@@ -128,6 +157,35 @@ describe('detect() fixture matrix', () => {
     ]);
     expect(agent.extras['providers']).toEqual([]);
     expect(agent.extras['model']).toBe('anthropic/claude-sonnet-4-5');
+  });
+
+  it('opencode includes shared root AGENTS.md without using it as a detection signal', () => {
+    const raw = {
+      root: '/tmp/proj',
+      cwdBasename: 'proj',
+      files: [
+        { path: 'AGENTS.md', size: 1, sha256: 'a'.repeat(64), content: 'x' },
+        { path: 'README.md', size: 1, sha256: 'b'.repeat(64), content: 'x' },
+      ],
+      stats: { fileCount: 2, totalBytes: 2 },
+    };
+
+    expect(detect(parseManifest(raw)).map((a) => a.kind)).toEqual(['codex']);
+
+    const agent = only(
+      detect(
+        parseManifest({
+          ...raw,
+          files: [
+            ...raw.files,
+            { path: 'opencode.json', size: 2, sha256: 'c'.repeat(64), content: '{}' },
+          ],
+          stats: { fileCount: 3, totalBytes: 4 },
+        }),
+      ).filter((a) => a.kind === 'opencode'),
+      'opencode',
+    );
+    expect(agent.files).toContain('AGENTS.md');
   });
 
   it('opencode providers: reports only provider name strings, never provider config objects', () => {
