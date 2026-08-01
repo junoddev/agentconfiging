@@ -13,6 +13,7 @@
 import type {
   ApplyFixResponse,
   CatalogInstallResponse,
+  ContextCost,
   ContextHealth,
   ExtensionInventoryResponse,
   CatalogRemoveResponse,
@@ -276,6 +277,16 @@ export class ApiClient {
   getContextHealth(instance?: string): Promise<ContextHealth> {
     const qs = instance ? `?instance=${encodeURIComponent(instance)}` : '';
     return this.#get<ContextHealth>(`/api/context-health${qs}`);
+  }
+
+  /**
+   * CONTEXT COST (agentconfig-ub3.5) — per-agent initial-context token usage
+   * from the ub3.2 core/server pass. Kept separate from the byte-oriented
+   * aggregate context-health endpoint so existing health behavior is unchanged.
+   */
+  getContextCost(instance?: string): Promise<ContextCost> {
+    const qs = instance ? `?instance=${encodeURIComponent(instance)}` : '';
+    return this.#get<ContextCost>(`/api/context-cost${qs}`);
   }
 
   /** GET the embedded-terminal capability probe (ngs.2) for an instance. */

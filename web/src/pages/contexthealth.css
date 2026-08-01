@@ -11,6 +11,10 @@
   grid-template-columns: repeat(3, 1fr);
 }
 
+.tile-row.ctx-agent-tiles {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
 @media (max-width: 560px) {
   .tile-row.ctx-tiles {
     grid-template-columns: 1fr;

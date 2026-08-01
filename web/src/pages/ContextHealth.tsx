@@ -2,12 +2,15 @@
  * ContextHealth (route `#/context`) — the CONTEXT HEALTH + STORAGE MAINTENANCE
  * view (SPEC §5 row 16 / E7, bead agentconfig-7yb.6).
  *
- * Two content-free surfaces for the current instance:
+ * Three content-free surfaces for the current instance:
  *  - CONTEXT HEALTH: how much of the agent config FOOTPRINT loads into an
  *    agent's context window — total size vs a budget (a plain meter bar), the
  *    largest contributors, per-category totals, and honest, size-derived
  *    optimization suggestions. Served by GET /api/context-health (sizes + paths
  *    only).
+ *  - INITIAL CONTEXT: per detected agent, estimated launch-time token cost vs
+ *    budget from GET /api/context-cost (agentconfig-ub3.5). Launch-lite only:
+ *    no per-section links until ub3.6.
  *  - STORAGE MAINTENANCE: the disk-usage breakdown + recoverable, allowlisted
  *    cleanup — REUSED from the Settings storage panel (the committed StoragePanel
  *    component + GET /api/storage / POST /api/storage/cleanup). No new delete
@@ -16,19 +19,17 @@
  * All values are numbers or filesystem paths; every path is rendered as a TEXT
  * node only, never HTML.
  *
- * CLIENT SEAM: like Settings/Dashboard, the shell keeps its ApiClient private,
- * so this page captures the launch token at module load and builds its own
- * client for getContextHealth / getStorage / cleanupStorage.
+ * CLIENT SEAM: uses the AppStateProvider's token-bearing ApiClient so tests can
+ * inject endpoint behavior and production still shares the launch token.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ApiClient,
   ApiError,
+  type ContextCost,
   type ContextHealth as ContextHealthData,
   type StorageReport,
 } from '../api/index.js';
-import { bootstrapToken } from '../api/token.js';
 import {
   EmptyState,
   FileChip,
@@ -42,15 +43,16 @@ import { useAppState } from '../state/index.js';
 import { StoragePanel } from './settings/StoragePanel.js';
 import {
   budgetPercent,
+  agentCostCaption,
   categoryLabel,
+  formatTokenCount,
   hasNoConfig,
+  hasNoContextCost,
   meterLevel,
   statusLabel,
 } from './contexthealth/logic.js';
 import './contexthealth.css';
 import './settings.css';
-
-const bootToken = typeof window !== 'undefined' ? bootstrapToken() : undefined;
 
 type LoadStatus = 'loading' | 'ok' | 'error';
 
@@ -63,6 +65,15 @@ function loadError(err: unknown): string {
   return 'could not load context health';
 }
 
+function contextCostError(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.kind === 'notfound') return 'unknown instance';
+    if (err.kind === 'unauthorized') return 'session expired — reopen from the CLI';
+    if (err.kind === 'network') return 'cannot reach the local server';
+  }
+  return 'could not load initial context';
+}
+
 function storageError(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.kind === 'notfound') return 'unknown instance';
@@ -73,8 +84,7 @@ function storageError(err: unknown): string {
 }
 
 function ContextHealthPanel() {
-  const { currentInstance } = useAppState();
-  const client = useMemo(() => (bootToken ? new ApiClient(bootToken) : undefined), []);
+  const { currentInstance, client } = useAppState();
   const instanceId = currentInstance?.id;
   const toast = useToast();
 
@@ -84,6 +94,10 @@ function ContextHealthPanel() {
   const [health, setHealth] = useState<ContextHealthData | undefined>();
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [errMsg, setErrMsg] = useState('');
+
+  const [cost, setCost] = useState<ContextCost | undefined>();
+  const [costStatus, setCostStatus] = useState<LoadStatus>('loading');
+  const [costErr, setCostErr] = useState('');
 
   const [storage, setStorage] = useState<StorageReport | undefined>();
   const [storageStatus, setStorageStatus] = useState<LoadStatus>('loading');
@@ -96,12 +110,28 @@ function ContextHealthPanel() {
     if (!client) {
       setStatus('error');
       setErrMsg('session token missing');
+      setCostStatus('error');
+      setCostErr('session token missing');
       setStorageStatus('error');
       setStorageErr('session token missing');
       return;
     }
     setStatus('loading');
+    setCostStatus('loading');
     setStorageStatus('loading');
+
+    void (async () => {
+      try {
+        const res = await client.getContextCost(instanceId);
+        if (cancelled) return;
+        setCost(res);
+        setCostStatus('ok');
+      } catch (err) {
+        if (cancelled) return;
+        setCostErr(contextCostError(err));
+        setCostStatus('error');
+      }
+    })();
 
     void (async () => {
       try {
@@ -114,7 +144,9 @@ function ContextHealthPanel() {
         setErrMsg(loadError(err));
         setStatus('error');
       }
+    })();
 
+    void (async () => {
       try {
         const rep = await client.getStorage(instanceId);
         if (cancelled) return;
@@ -181,6 +213,36 @@ function ContextHealthPanel() {
           <EmptyState title="Context health unavailable" instruction={errMsg} />
         </section>
       )}
+
+      <section className="page__section">
+        <h2 className="ctx-heading">Initial context</h2>
+
+        {costStatus === 'loading' && <p className="meta">measuring initial context…</p>}
+
+        {costStatus === 'error' && (
+          <EmptyState title="Initial context unavailable" instruction={costErr} />
+        )}
+
+        {costStatus === 'ok' && cost && hasNoContextCost(cost) && (
+          <EmptyState
+            title="No detected agents"
+            instruction="no initial context token costs were reported for this instance"
+          />
+        )}
+
+        {costStatus === 'ok' && cost && !hasNoContextCost(cost) && (
+          <div className="tile-row ctx-agent-tiles">
+            {cost.agents.map((agent) => (
+              <StatBlock
+                key={agent.kind}
+                value={formatTokenCount(agent.totalTokens)}
+                label={`${agent.kind} initial tokens`}
+                caption={agentCostCaption(agent)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
 
       {status === 'ok' && health && hasNoConfig(health) && (
         <section className="page__section">

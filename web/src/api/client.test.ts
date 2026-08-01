@@ -43,6 +43,23 @@ describe('ApiClient URL + header construction', () => {
     expect(url).toBe('/api/report');
   });
 
+  it('builds the context-cost URL with an encoded instance selector', async () => {
+    const fetchImpl = stubFetch({ budgetTokens: 100000, agents: [] });
+    const client = new ApiClient('tok', { fetchImpl });
+    await client.getContextCost('a/b');
+    const [url, init] = firstCall(fetchImpl);
+    expect(url).toBe('/api/context-cost?instance=a%2Fb');
+    expect(init.headers).toEqual({ Authorization: 'Bearer tok' });
+  });
+
+  it('omits the context-cost selector when no instance is given', async () => {
+    const fetchImpl = stubFetch({ budgetTokens: 100000, agents: [] });
+    const client = new ApiClient('tok', { fetchImpl });
+    await client.getContextCost();
+    const [url] = firstCall(fetchImpl);
+    expect(url).toBe('/api/context-cost');
+  });
+
   it('encodes the file path', async () => {
     const fetchImpl = stubFetch({ path: 'x', content: '', pathScope: 'project' });
     const client = new ApiClient('tok', { fetchImpl });

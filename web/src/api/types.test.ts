@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { isGlobalEntryError, type GlobalEntry, type GlobalEntryError } from './types.js';
+import {
+  isGlobalEntryError,
+  type ContextCost,
+  type GlobalEntry,
+  type GlobalEntryError,
+} from './types.js';
 
 const ENTRY: GlobalEntry = {
   root: '/home/u/.claude',
@@ -22,5 +27,27 @@ describe('isGlobalEntryError', () => {
 
   it('rejects a successful entry', () => {
     expect(isGlobalEntryError(ENTRY)).toBe(false);
+  });
+});
+
+describe('ContextCost wire type', () => {
+  it('accepts the expected ub3.2 per-agent initial-context shape', () => {
+    const cost = {
+      budgetTokens: 100000,
+      agents: [
+        {
+          kind: 'claude-code',
+          totalTokens: 1200,
+          budgetTokens: 100000,
+          budgetRatio: 0.012,
+          status: 'ok',
+          byCategory: [{ category: 'instructions', tokens: 950, files: 2 }],
+          files: [{ path: 'CLAUDE.md', tokens: 950, category: 'instructions' }],
+        },
+      ],
+    } satisfies ContextCost;
+
+    expect(cost.agents[0]?.kind).toBe('claude-code');
+    expect(cost.agents[0]?.byCategory?.[0]?.tokens).toBe(950);
   });
 });

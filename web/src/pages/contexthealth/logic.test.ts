@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import type { ContextHealth } from '../../api/index.js';
-import { budgetPercent, categoryLabel, hasNoConfig, meterLevel, statusLabel } from './logic.js';
+import type { AgentContextCost, ContextCost, ContextHealth } from '../../api/index.js';
+import {
+  agentCostCaption,
+  budgetPercent,
+  categoryLabel,
+  formatTokenCount,
+  hasNoConfig,
+  hasNoContextCost,
+  meterLevel,
+  statusLabel,
+  tokenPercent,
+} from './logic.js';
 
 function health(over: Partial<ContextHealth> = {}): ContextHealth {
   return {
@@ -12,6 +22,25 @@ function health(over: Partial<ContextHealth> = {}): ContextHealth {
     byCategory: [],
     largest: [],
     suggestions: [],
+    ...over,
+  };
+}
+
+function agentCost(over: Partial<AgentContextCost> = {}): AgentContextCost {
+  return {
+    kind: 'claude-code',
+    totalTokens: 1200,
+    budgetTokens: 100000,
+    budgetRatio: 0.012,
+    status: 'ok',
+    ...over,
+  };
+}
+
+function cost(over: Partial<ContextCost> = {}): ContextCost {
+  return {
+    budgetTokens: 100000,
+    agents: [agentCost()],
     ...over,
   };
 }
@@ -40,8 +69,21 @@ describe('contexthealth logic', () => {
     expect(budgetPercent(health({ budgetRatio: 1.2 }))).toBe('120%');
   });
 
+  it('renders token counts and per-agent budget usage', () => {
+    expect(formatTokenCount(1200.4)).toBe('1,200');
+    expect(tokenPercent(agentCost({ budgetRatio: 0.164 }))).toBe('16%');
+    expect(agentCostCaption(agentCost({ budgetRatio: 0.164, status: 'warn' }))).toBe(
+      '100,000 budget · 16% · nearing budget',
+    );
+  });
+
   it('detects an empty config', () => {
     expect(hasNoConfig(health({ fileCount: 0 }))).toBe(true);
     expect(hasNoConfig(health({ fileCount: 3 }))).toBe(false);
+  });
+
+  it('detects an empty per-agent context-cost result', () => {
+    expect(hasNoContextCost(cost({ agents: [] }))).toBe(true);
+    expect(hasNoContextCost(cost())).toBe(false);
   });
 });

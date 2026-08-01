@@ -3,7 +3,13 @@
  * content-free context-health view to display strings + meter levels.
  */
 
-import type { BudgetStatus, ContextCategory, ContextHealth } from '../../api/index.js';
+import type {
+  AgentContextCost,
+  BudgetStatus,
+  ContextCategory,
+  ContextCost,
+  ContextHealth,
+} from '../../api/index.js';
 
 /** Human label for a category (mono micro-label copy). */
 export function categoryLabel(category: ContextCategory): string {
@@ -49,7 +55,29 @@ export function budgetPercent(health: ContextHealth): string {
   return `${Math.round(health.budgetRatio * 100)}%`;
 }
 
+/** Token count display for compact stat tiles. */
+export function formatTokenCount(tokens: number): string {
+  return Math.round(tokens).toLocaleString('en-US');
+}
+
+/** Token budget usage as a whole-percent string, e.g. "16%". */
+export function tokenPercent(agent: AgentContextCost): string {
+  return `${Math.round(agent.budgetRatio * 100)}%`;
+}
+
+/** Compact caption for a per-agent initial-context tile. */
+export function agentCostCaption(agent: AgentContextCost): string {
+  return `${formatTokenCount(agent.budgetTokens)} budget · ${tokenPercent(agent)} · ${statusLabel(
+    agent.status,
+  )}`;
+}
+
 /** True when the instance carries no context-loaded config at all. */
 export function hasNoConfig(health: ContextHealth): boolean {
   return health.fileCount === 0;
+}
+
+/** True when no detected agent has an initial-context token breakdown. */
+export function hasNoContextCost(cost: ContextCost): boolean {
+  return cost.agents.length === 0;
 }

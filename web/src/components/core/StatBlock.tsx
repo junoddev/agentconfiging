@@ -6,6 +6,8 @@ export interface StatBlockProps {
   value: number | string;
   /** 12px muted label under the number, e.g. "Rules". */
   label: string;
+  /** Optional second line for compact context, e.g. "48K budget · ok". */
+  caption?: string;
   /** Optional mono delta beside the label, e.g. +3 since last scan. */
   delta?: number;
   /** Makes the tile a button — clickable wayfinding into the section. */
@@ -14,7 +16,7 @@ export interface StatBlockProps {
 
 /** Stat tile (DESIGN.md §5 `.tile`): 22px mono number + 12px muted label;
  *  hover raises the border to `--muted`. Wayfinding, not marketing stats. */
-export function StatBlock({ value, label, delta, onClick }: StatBlockProps) {
+export function StatBlock({ value, label, caption, delta, onClick }: StatBlockProps) {
   const body = (
     <>
       <div className="t-num">{value}</div>
@@ -24,6 +26,7 @@ export function StatBlock({ value, label, delta, onClick }: StatBlockProps) {
           <span className={`t-delta t-delta--${deltaTone(delta)}`}> {formatDelta(delta)}</span>
         )}
       </div>
+      {caption !== undefined && <div className="t-caption">{caption}</div>}
     </>
   );
   if (onClick) {

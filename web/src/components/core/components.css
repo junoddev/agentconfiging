@@ -315,6 +315,14 @@ button.tile:active {
   margin-top: 2px;
 }
 
+.tile .t-caption {
+  margin-top: 6px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Optional mono delta beside the label (StatBlock). Growth may wear accent
    (a winning value); loss is danger; flat stays muted. */
 .tile .t-delta {

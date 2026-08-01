@@ -365,6 +365,44 @@ export interface ContextHealth {
   suggestions: ContextSuggestion[];
 }
 
+/**
+ * CONTEXT COST (agentconfig-ub3.5, GET /api/context-cost). Mirrors the expected
+ * ub3.2 server contract: one launch-time initial-context token breakdown per
+ * detected agent. Token counts are estimates from the canonical core pass; the
+ * web app only renders numbers, categories, and paths.
+ */
+
+/** One token-estimated file in an agent's initial context. */
+export interface ContextCostFile {
+  path: string;
+  tokens: number;
+  category: ContextCategory;
+}
+
+/** Token total for one context category inside a detected agent. */
+export interface ContextCostCategory {
+  category: ContextCategory;
+  tokens: number;
+  files: number;
+}
+
+/** Per-agent initial context token budget breakdown. */
+export interface AgentContextCost {
+  kind: string;
+  totalTokens: number;
+  budgetTokens: number;
+  budgetRatio: number;
+  status: BudgetStatus;
+  byCategory?: ContextCostCategory[];
+  files?: ContextCostFile[];
+}
+
+/** GET /api/context-cost payload. */
+export interface ContextCost {
+  budgetTokens: number;
+  agents: AgentContextCost[];
+}
+
 /** POST /api/storage/cleanup payload (src/server/storage.ts). */
 export interface StorageCleanupResponse {
   cleaned: true;
