@@ -57,6 +57,31 @@ export interface ManifestStats {
   skipped?: number;
 }
 
+export type QualityComponentId =
+  'token-efficiency' | 'position-risk' | 'clarity' | 'contradictions';
+
+export interface QualityComponentScore {
+  id: QualityComponentId;
+  score: number;
+  penalty: number;
+}
+
+export interface QualityMetrics {
+  totalTokens: number;
+  guideCount: number;
+  directiveCount: number;
+  criticalRuleCount: number;
+  buriedCriticalRuleCount: number;
+  contradictionCount: number;
+}
+
+/** Content-free 0-100 agent-config quality/bloat score (src/core/quality.ts). */
+export interface AgentConfigQuality {
+  score: number;
+  components: QualityComponentScore[];
+  metrics: QualityMetrics;
+}
+
 /** GET /api/report payload (src/server/store.ts, `ServedReport`). */
 export interface Report {
   version: string;
@@ -65,6 +90,7 @@ export interface Report {
   scope: 'project' | 'global';
   localOnly: boolean;
   agents: DetectedAgent[];
+  quality?: AgentConfigQuality;
   findings: ReportFinding[];
   stats: ManifestStats;
 }
@@ -85,6 +111,7 @@ export interface GlobalEntry {
   /** Well-known dir name under home (e.g. '.claude'). */
   dir: string;
   agents: DetectedAgent[];
+  quality?: AgentConfigQuality;
   findings: ReportFinding[];
   stats: ManifestStats;
 }

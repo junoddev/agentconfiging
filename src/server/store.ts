@@ -26,6 +26,7 @@ import {
   type ContextCost,
   type ContextHealth,
   type ContextCostOptions,
+  type AgentConfigQuality,
   type DetectedAgent,
   type Fix,
   type GlobalEntry,
@@ -47,6 +48,7 @@ export interface ServedReport {
   scope: 'project' | 'global';
   localOnly: boolean;
   agents: DetectedAgent[];
+  quality: AgentConfigQuality;
   findings: ReportFinding[];
   stats: ManifestStats;
 }
@@ -163,7 +165,7 @@ export class ReportStore {
   #build(scope: ReportScope, contextCostOptions: ContextCostOptions = {}): ServedReport {
     const manifest = scanProject(this.#root, this.#scanOptions);
     const agents = detect(manifest);
-    const { findings } = buildReport(manifest, agents);
+    const { findings, quality } = buildReport(manifest, agents);
     const report: ServedReport = {
       version: this.#version,
       generatedAt: new Date().toISOString(),
@@ -171,6 +173,7 @@ export class ReportStore {
       scope: manifest.scope ?? 'project',
       localOnly: manifest.localOnly ?? false,
       agents,
+      quality,
       findings: findings.map(toReportFinding),
       stats: manifest.stats,
     };

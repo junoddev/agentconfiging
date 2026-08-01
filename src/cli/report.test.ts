@@ -137,11 +137,16 @@ describe('output shape', () => {
       'findings',
       'generatedAt',
       'localOnly',
+      'quality',
       'root',
       'scope',
       'stats',
       'version',
     ]);
+    expect(json['quality']).toMatchObject({
+      score: expect.any(Number),
+      metrics: expect.objectContaining({ totalTokens: expect.any(Number) }),
+    });
     // No content-bearing key anywhere in the output graph.
     expect(bannedKeys(json)).toEqual([]);
     // The tree's CLAUDE.md body must not leak into the report.

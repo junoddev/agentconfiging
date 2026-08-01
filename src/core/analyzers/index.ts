@@ -32,6 +32,7 @@ import './mcp-command-not-on-path.js';
 import './missing-project-guide.js';
 import './no-agents-no-skills.js';
 import './permissive-permissions.js';
+import './quality-bloat.js';
 import './rules-drift.js';
 import './settings-local-committed.js';
 import './stale-model-ref.js';

@@ -10,6 +10,18 @@ const ENTRY: GlobalEntry = {
   root: '/home/u/.claude',
   dir: '.claude',
   agents: [],
+  quality: {
+    score: 100,
+    components: [],
+    metrics: {
+      totalTokens: 0,
+      guideCount: 0,
+      directiveCount: 0,
+      criticalRuleCount: 0,
+      buriedCriticalRuleCount: 0,
+      contradictionCount: 0,
+    },
+  },
   findings: [],
   stats: { fileCount: 0, totalBytes: 0 },
 };

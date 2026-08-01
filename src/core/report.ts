@@ -22,6 +22,7 @@ import { dirPrefix, filesUnder, findFile } from './detectors/shared.js';
 import { sortFindings, type Finding, type Fix } from './findings.js';
 import type { Manifest } from './manifest.js';
 import { allAnalyzers } from './analyzers/index.js';
+import { computeQualityScore, type AgentConfigQuality } from './quality.js';
 import {
   parseClaudeCommand,
   parseClaudeMd,
@@ -69,7 +70,7 @@ export interface ParsedArtifacts {
   /** .mcp.json */
   mcp?: ParsedFile<McpConfig>;
   cursorRules: ParsedFile<CursorRule>[];
-  /** Root instruction guides: CLAUDE.md, AGENTS.md, GEMINI.md, .cursorrules, Copilot instructions. */
+  /** Root and path-scoped instruction guides. */
   guides: ParsedFile<Guide>[];
 }
 
@@ -97,6 +98,7 @@ export interface Report {
   manifest: Manifest;
   agents: DetectedAgent[];
   parsed?: ParsedArtifacts;
+  quality: AgentConfigQuality;
   findings: Finding[];
 }
 
@@ -108,6 +110,8 @@ const GUIDE_PATHS: readonly string[] = [
   '.cursorrules',
   '.github/copilot-instructions.md',
 ];
+const COPILOT_SCOPED_INSTRUCTIONS_PREFIX = '.github/instructions/';
+const COPILOT_SCOPED_INSTRUCTIONS_SUFFIX = '.instructions.md';
 
 function parseAt<T>(
   manifest: Manifest,
@@ -158,9 +162,17 @@ export function buildAnalyzerInput(
     commands: parseUnder(manifest, `${prefix}commands/`, isMd, parseClaudeCommand),
     rules: parseUnder(manifest, `${prefix}rules/`, isMd, parseClaudeRule),
     cursorRules: parseUnder(manifest, '.cursor/rules/', (p) => p.endsWith('.mdc'), parseCursorRule),
-    guides: GUIDE_PATHS.map((p) => parseAt(manifest, p, parseGuide)).filter(
-      (g): g is ParsedFile<Guide> => g !== undefined,
-    ),
+    guides: [
+      ...GUIDE_PATHS.map((p) => parseAt(manifest, p, parseGuide)).filter(
+        (g): g is ParsedFile<Guide> => g !== undefined,
+      ),
+      ...parseUnder(
+        manifest,
+        COPILOT_SCOPED_INSTRUCTIONS_PREFIX,
+        (p) => p.endsWith(COPILOT_SCOPED_INSTRUCTIONS_SUFFIX),
+        parseGuide,
+      ),
+    ],
   };
 
   const claudeMd = parseAt(manifest, 'CLAUDE.md', parseClaudeMd);
@@ -221,5 +233,11 @@ export function buildReport(
   env?: AnalyzerEnv,
 ): Report {
   const input = buildAnalyzerInput(manifest, agents, env);
-  return { manifest, agents, parsed: input.parsed, findings: runAnalyzers(input) };
+  return {
+    manifest,
+    agents,
+    parsed: input.parsed,
+    quality: computeQualityScore(input),
+    findings: runAnalyzers(input),
+  };
 }

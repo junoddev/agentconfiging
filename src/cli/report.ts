@@ -31,6 +31,7 @@ import {
   scanProject,
   toReportFinding,
   type AnalyzerEnv,
+  type AgentConfigQuality,
   type DetectedAgent,
   type Manifest,
   type ManifestStats,
@@ -101,6 +102,7 @@ interface ScopeReport {
   /** True for global scope: data must never leave the machine. */
   localOnly: boolean;
   agents: DetectedAgent[];
+  quality: AgentConfigQuality;
   findings: ReportFinding[];
   stats: ManifestStats;
 }
@@ -153,12 +155,13 @@ function serializeError(err: unknown): SerializedError {
 
 function scopeReport(manifest: Manifest, env: AnalyzerEnv | undefined): ScopeReport {
   const agents = detect(manifest);
-  const { findings } = buildReport(manifest, agents, env);
+  const { findings, quality } = buildReport(manifest, agents, env);
   return {
     root: manifest.root,
     scope: manifest.scope ?? 'project',
     localOnly: manifest.localOnly ?? false,
     agents,
+    quality,
     findings: findings.map(toReportFinding),
     stats: manifest.stats,
   };
@@ -188,6 +191,7 @@ function scanGlobalEntries(
       scope: 'global',
       localOnly: true,
       agents: entry.agents,
+      quality: entry.quality,
       findings: entry.findings,
       stats: entry.stats,
     };
