@@ -12,6 +12,7 @@ export * from './manifest.js';
 export * from './scanner.js';
 export * from './global.js';
 export * from './report.js';
+export * from './token-estimate.js';
 export * from './context-health/index.js';
 export * from './detectors/index.js';
 export * from './analyzers/index.js';
