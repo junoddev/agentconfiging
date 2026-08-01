@@ -11,7 +11,7 @@ import {
 } from '../components/core/index.js';
 import { homeRel } from '../lib/format.js';
 import { routeHash } from '../routes.js';
-import { useGlobalConfig, useReport } from '../state/index.js';
+import { useAppState, useGlobalConfig } from '../state/index.js';
 import { WriteFlow, useWriteFlow } from '../write/index.js';
 import {
   SEVERITY_ORDER,
@@ -20,6 +20,8 @@ import {
   filterFindings,
   globalFindingRows,
   globalTallyLine,
+  scopeFindings,
+  scopeGlobalFindingRows,
   severityCountLabel,
   severityPillTone,
 } from './findings/logic.js';
@@ -57,15 +59,20 @@ export function Findings() {
 }
 
 function FindingsBody() {
-  const { report, loading, error } = useReport();
+  const { report, loading, error, agentScopeKind } = useAppState();
   const flow = useWriteFlow();
   const toast = useToast();
+  const agentKind = agentScopeKind;
   // Inherited (machine-global) findings (E12), rendered in a GLOBAL list-card
   // with per-row provenance badges. APPLY is NEVER offered for them (see
   // `canApply` — /api/fix cannot reach the global store by design). Absent or
   // failed global data ⇒ zero rows ⇒ the page renders exactly as before.
   const { entries } = useGlobalConfig();
-  const globalRows = useMemo(() => globalFindingRows(entries), [entries]);
+  const allGlobalRows = useMemo(() => globalFindingRows(entries), [entries]);
+  const globalRows = useMemo(
+    () => scopeGlobalFindingRows(allGlobalRows, agentKind),
+    [allGlobalRows, agentKind],
+  );
 
   // Which severity bands are visible. All on by default; a chip toggles its band.
   const [active, setActive] = useState<Set<Severity>>(() => new Set(SEVERITY_ORDER));
@@ -73,7 +80,10 @@ function FindingsBody() {
   // write flow is shared; opening a different finding supersedes the previous.
   const [openId, setOpenId] = useState<string | null>(null);
 
-  const findings = report?.findings ?? [];
+  const findings = useMemo(
+    () => scopeFindings(report?.findings ?? [], agentKind),
+    [report?.findings, agentKind],
+  );
 
   // Every mutating action confirms via toast (§5): a committed fix announces
   // itself even as the refetched report drops the finding (and its panel).

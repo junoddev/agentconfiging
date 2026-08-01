@@ -7,6 +7,8 @@ import {
   globalFindingRows,
   globalTallyLine,
   hasApplicableFix,
+  scopeFindings,
+  scopeGlobalFindingRows,
   severityCountLabel,
   severityPillTone,
 } from './logic.js';
@@ -92,6 +94,17 @@ describe('filterFindings', () => {
   });
 });
 
+describe('scopeFindings', () => {
+  it('keeps only findings for the active agent kind', () => {
+    const scoped = scopeFindings(SAMPLE, 'codex');
+    expect(scoped.map((f) => f.id)).toEqual(['e2', 'i1']);
+  });
+
+  it('passes all findings through when the active kind is unresolved', () => {
+    expect(scopeFindings(SAMPLE, undefined).map((f) => f.id)).toEqual(['e1', 'e2', 'w1', 'i1']);
+  });
+});
+
 function globalEntry(over: Partial<GlobalEntry> = {}): GlobalEntry {
   return {
     root: '/Users/x/.claude',
@@ -131,6 +144,25 @@ describe('globalFindingRows', () => {
   it('is empty for no entries or finding-free entries — page renders unchanged', () => {
     expect(globalFindingRows([])).toEqual([]);
     expect(globalFindingRows([globalEntry()])).toEqual([]);
+  });
+});
+
+describe('scopeGlobalFindingRows', () => {
+  it('filters global rows by finding agent and preserves provenance', () => {
+    const rows = globalFindingRows([
+      globalEntry({ root: '/u/.claude', findings: [SAMPLE[0]!, SAMPLE[2]!] }),
+      globalEntry({ root: '/u/.codex', dir: '.codex', findings: [SAMPLE[1]!, SAMPLE[3]!] }),
+    ]);
+
+    expect(scopeGlobalFindingRows(rows, 'codex')).toEqual([
+      { root: '/u/.codex', finding: SAMPLE[1]! },
+      { root: '/u/.codex', finding: SAMPLE[3]! },
+    ]);
+  });
+
+  it('passes all global rows through when the active kind is unresolved', () => {
+    const rows = globalFindingRows([globalEntry({ findings: [SAMPLE[0]!, SAMPLE[1]!] })]);
+    expect(scopeGlobalFindingRows(rows, undefined)).toEqual(rows);
   });
 });
 
