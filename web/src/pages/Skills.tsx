@@ -23,8 +23,9 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { ApiError, type FileContent } from '../api/index.js';
+import { type FileContent } from '../api/index.js';
 import {
+  AlsoAgents,
   Button,
   EmptyState,
   Field,
@@ -36,13 +37,22 @@ import {
   useToast,
   type SourceScope,
 } from '../components/core/index.js';
-import { fileReadOnly } from '../lib/editable.js';
 import { homeRel } from '../lib/format.js';
-import { useAppState, useGlobalConfig } from '../state/index.js';
+import { parseFrontmatter, splitFrontmatter } from '../lib/frontmatter.js';
+import { useCommitToast } from '../lib/useCommitToast.js';
+import { useFileEditor } from '../lib/useFileEditor.js';
+import {
+  displayNameForKind,
+  otherAgentKinds,
+  scopedAgents,
+  scopeReport,
+  sectionApplies,
+  useAppState,
+  useGlobalConfig,
+} from '../state/index.js';
 import { WriteFlow, useWriteFlow } from '../write/index.js';
 import { ConnectionsGraph } from './skills/ConnectionsGraph.js';
 import { FrontmatterCards } from './skills/FrontmatterCards.js';
-import { parseFrontmatter, splitFrontmatter } from './skills/frontmatter.js';
 import {
   collectEntries,
   collectGlobalEntries,
@@ -63,17 +73,6 @@ const EDITOR_VIEWS: readonly EditorView[] = ['cards', 'raw'];
 type Selection =
   { kind: 'file'; entry: SkillEntry } | { kind: 'template'; template: StarterTemplate } | undefined;
 
-/** Honest one-line error voice per API failure kind (matches Artifacts). */
-function errorText(err: unknown): string {
-  if (err instanceof ApiError) {
-    if (err.kind === 'notfound') return 'file not found';
-    if (err.kind === 'forbidden') return 'file out of scope';
-    if (err.kind === 'unauthorized') return 'session expired — reopen from the CLI';
-    if (err.kind === 'network') return 'cannot reach the local server';
-  }
-  return 'could not load file';
-}
-
 /** Map the server's free-form pathScope onto a badge scope; anything unknown
  *  falls back to plain mono text (never a wrong badge). */
 function badgeScope(pathScope: string): SourceScope | undefined {
@@ -90,12 +89,18 @@ function cardFor(content: string, name: string) {
 }
 
 function SkillsBody() {
-  const { report, getFile } = useAppState();
+  const { report, getFile, activeAgent } = useAppState();
   const { entries: globalDirs } = useGlobalConfig();
   const flow = useWriteFlow();
   const toast = useToast();
+  const agentKind = activeAgent?.kind;
 
-  const entries = useMemo(() => collectEntries(report), [report]);
+  // Scoped to the ACTIVE agent (bead a6y); each chip notes the other detected
+  // agents that read the same file via the AlsoAgents badge.
+  const entries = useMemo(
+    () => collectEntries(report ? scopeReport(report, agentKind) : undefined),
+    [report, agentKind],
+  );
   const entriesKey = entries.map((e) => e.path).join('|');
   const skills = entries.filter((e) => e.kind === 'skill');
   const agents = entries.filter((e) => e.kind === 'agent');
@@ -105,7 +110,11 @@ function SkillsBody() {
   // write flow, gated by its global-scope warning. They stay EXCLUDED from the
   // connections graph (the graph maps THIS instance's config; the bulk loader
   // stays project-only). Absent global data ⇒ [] and the page is unchanged.
-  const globalEntries = useMemo(() => collectGlobalEntries(globalDirs), [globalDirs]);
+  const scopedGlobalDirs = useMemo(
+    () => globalDirs.map((e) => ({ ...e, agents: scopedAgents(e.agents, agentKind) })),
+    [globalDirs, agentKind],
+  );
+  const globalEntries = useMemo(() => collectGlobalEntries(scopedGlobalDirs), [scopedGlobalDirs]);
   const globalByPath = useMemo(
     () => new Map(globalEntries.map((e) => [e.path, e])),
     [globalEntries],
@@ -115,14 +124,25 @@ function SkillsBody() {
   const [selection, setSelection] = useState<Selection>(undefined);
   const [editorView, setEditorView] = useState<EditorView>('cards');
 
-  // Loaded existing-file state (template mode has no server file).
-  const [loaded, setLoaded] = useState<FileContent | undefined>();
-  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
-  const [errMsg, setErrMsg] = useState('');
-
-  // The editable draft + (template mode only) the new file's path.
-  const [draft, setDraft] = useState('');
+  // (Template mode only) the new file's path.
   const [newPath, setNewPath] = useState('');
+
+  // Single-file load/redaction lifecycle (shared hook). Template mode passes
+  // `path: undefined` and owns the draft itself (set in the selection effect).
+  const editorPath = selection?.kind === 'file' ? selection.entry.path : undefined;
+  // Inherited global file: kept for provenance (badge/notice), but since bead
+  // 71h.10 it is EDITABLE — the save goes through the same /api/write flow and
+  // the WriteFlow global-scope warning. Only redaction forces read-only.
+  const inherited = editorPath !== undefined && globalByPath.has(editorPath);
+  const {
+    file: loaded,
+    draft,
+    setDraft,
+    status,
+    errMsg,
+    redacted,
+    readOnly,
+  } = useFileEditor({ path: editorPath, getFile, inherited });
 
   const selKey =
     selection?.kind === 'file'
@@ -131,48 +151,22 @@ function SkillsBody() {
         ? `tpl:${selection.template.id}`
         : 'none';
 
-  // Load / initialize the editor whenever the selection changes.
+  // Reset the write flow + editor view on every selection change; in template
+  // mode also seed the draft/path. File mode's load is owned by useFileEditor.
   useEffect(() => {
     flow.cancel();
     setEditorView('cards');
     if (selection === undefined) {
-      setLoaded(undefined);
-      setStatus('idle');
       setDraft('');
-      return;
-    }
-    if (selection.kind === 'template') {
-      setLoaded(undefined);
-      setStatus('idle');
+    } else if (selection.kind === 'template') {
       setDraft(selection.template.content);
       setNewPath(selection.template.defaultPath);
-      return;
     }
-    let cancelled = false;
-    setStatus('loading');
-    setLoaded(undefined);
-    getFile(selection.entry.path)
-      .then((file) => {
-        if (cancelled) return;
-        setLoaded(file);
-        setDraft(file.content);
-        setStatus('idle');
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setErrMsg(errorText(err));
-        setStatus('error');
-      });
-    return () => {
-      cancelled = true;
-    };
     // selKey captures the meaningful selection identity; flow.cancel is stable.
-  }, [selKey, getFile]);
+  }, [selKey]);
 
   // §5: every mutating action confirms via Toast — a committed save toasts.
-  useEffect(() => {
-    if (flow.phase === 'done') toast('Saved');
-  }, [flow.phase, toast]);
+  useCommitToast(flow, toast, { message: () => 'Saved', cancelOnDone: false });
 
   // ── Connections graph: bulk-load every entry's file, then derive. ─────────
   const [graphFiles, setGraphFiles] = useState<Map<string, FileContent>>(new Map());
@@ -212,17 +206,9 @@ function SkillsBody() {
   }, [entries, graphFiles]);
 
   // ── Editor derived state ──────────────────────────────────────────────────
-  // Spans OR literal [REDACTED:*] marks — belt-and-braces parity with the
+  // `redacted` / `readOnly` are derived by useFileEditor (server spans OR a
+  // literal [REDACTED:*] mark ⇒ read-only) — belt-and-braces parity with the
   // sibling editors, load-bearing since the 71h.10 global unlock.
-  const redacted =
-    selection?.kind === 'file' &&
-    loaded !== undefined &&
-    (loaded.spans.length > 0 || loaded.content.includes('[REDACTED:'));
-  // Inherited global file: kept for provenance (badge/notice), but since bead
-  // 71h.10 it is EDITABLE — the save goes through the same /api/write flow and
-  // the WriteFlow global-scope warning. Only redaction forces read-only.
-  const inherited = selection?.kind === 'file' && globalByPath.has(selection.entry.path);
-  const readOnly = fileReadOnly({ redacted, inherited });
   const savePath = selection?.kind === 'template' ? newPath.trim() : selection?.entry.path;
   const draftCard = useMemo(
     () => cardFor(draft, selection?.kind === 'file' ? selection.entry.name : 'new'),
@@ -242,6 +228,29 @@ function SkillsBody() {
     if (!canSave || savePath === undefined) return;
     flow.begin({ kind: 'file', path: savePath, content: draft, label: savePath });
   };
+
+  // The sidebar hides SKILLS for agents without the concept (bead a6y); this
+  // covers deep links with an honest not-applicable state. After all hooks.
+  const notApplicable = activeAgent !== undefined && !sectionApplies('skills', activeAgent.kind);
+  if (notApplicable) {
+    return (
+      <main className="layout-main page">
+        <div className="page-head">
+          <div>
+            <h1>Skills &amp; agents</h1>
+            <p className="page-sub">
+              edit SKILL.md and agent files, or map what each one references
+            </p>
+          </div>
+        </div>
+        <Notice tone="info">
+          <strong>Not applicable to {displayNameForKind(activeAgent.kind)}.</strong> Skills and
+          subagents (skills/*/SKILL.md, agents/*.md) are a Claude Code surface — switch the Agent
+          picker to Claude Code to view or edit them.
+        </Notice>
+      </main>
+    );
+  }
 
   return (
     <main className="layout-main page">
@@ -293,6 +302,9 @@ function SkillsBody() {
                     path={entry.name}
                     onClick={() => setSelection({ kind: 'file', entry })}
                   />
+                  <AlsoAgents
+                    kinds={otherAgentKinds(report?.agents ?? [], entry.path, agentKind)}
+                  />
                 </span>
               ))}
 
@@ -308,6 +320,9 @@ function SkillsBody() {
                   <FileChip
                     path={entry.name}
                     onClick={() => setSelection({ kind: 'file', entry })}
+                  />
+                  <AlsoAgents
+                    kinds={otherAgentKinds(report?.agents ?? [], entry.path, agentKind)}
                   />
                 </span>
               ))}

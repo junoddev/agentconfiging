@@ -1,5 +1,6 @@
 /** Core components — Console §5 contract (opendesign/DESIGN.md). Pure
  *  presentational chassis over the token layer; class names are the contract. */
+export { AlsoAgents, type AlsoAgentsProps } from './AlsoAgents.js';
 export { Button, type ButtonProps, type ButtonVariant } from './Button.js';
 export { Card, type CardProps } from './Card.js';
 export { ChipRow, type ChipOption, type ChipRowProps } from './ChipRow.js';
@@ -8,7 +9,15 @@ export { DiffPanel, type DiffPanelProps } from './DiffPanel.js';
 export { EmptyState, type EmptyStateProps } from './EmptyState.js';
 export { Field, Input, Select, type FieldProps } from './Field.js';
 export { FileChip, type FileChipProps } from './FileChip.js';
-export { ListCard, ListRow, type ListCardProps, type ListRowProps } from './ListCard.js';
+export { Frame, type FrameProps } from './Frame.js';
+export {
+  ListCard,
+  ListRow,
+  EmptyRow,
+  type ListCardProps,
+  type ListRowProps,
+  type EmptyRowProps,
+} from './ListCard.js';
 export { Notice, type NoticeProps } from './Notice.js';
 export { Pager, type PagerProps } from './Pager.js';
 export { Pill, type PillProps, type PillTone } from './Pill.js';

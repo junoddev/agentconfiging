@@ -5,13 +5,10 @@ import {
   extractImports,
   groupByScope,
   groupGlobalByRoot,
-  hasRedactionMarks,
   isInstructionFile,
-  joinGlobalPath,
   resolveImport,
   resolveImports,
   scopeOf,
-  tokenizeMarkdown,
 } from './logic.js';
 
 describe('isInstructionFile', () => {
@@ -66,16 +63,6 @@ describe('collectInstructionFiles', () => {
   it('returns [] when no agents reference instruction files', () => {
     expect(collectInstructionFiles([{ files: ['package.json'] }])).toEqual([]);
     expect(collectInstructionFiles([])).toEqual([]);
-  });
-});
-
-describe('joinGlobalPath', () => {
-  it('joins a root and a root-relative path into one absolute path', () => {
-    expect(joinGlobalPath('/Users/x/.claude', 'CLAUDE.md')).toBe('/Users/x/.claude/CLAUDE.md');
-  });
-
-  it('normalizes stray slashes on either side of the join', () => {
-    expect(joinGlobalPath('/Users/x/.claude/', '/CLAUDE.md')).toBe('/Users/x/.claude/CLAUDE.md');
   });
 });
 
@@ -180,43 +167,5 @@ describe('resolveImports', () => {
   });
 });
 
-describe('hasRedactionMarks', () => {
-  it('detects [REDACTED:*] placeholder marks', () => {
-    expect(hasRedactionMarks('token = [REDACTED:openai]')).toBe(true);
-    expect(hasRedactionMarks('nothing secret here')).toBe(false);
-    expect(hasRedactionMarks('an array literal [0] is not a mark')).toBe(false);
-  });
-});
-
-describe('tokenizeMarkdown', () => {
-  it('splits headings, paragraphs, and grouped list items', () => {
-    const blocks = tokenizeMarkdown('# Title\n\nsome text\n\n- a\n- b');
-    expect(blocks).toEqual([
-      { kind: 'heading', level: 1, text: 'Title' },
-      { kind: 'para', text: 'some text' },
-      { kind: 'list', ordered: false, items: ['a', 'b'] },
-    ]);
-  });
-
-  it('captures fenced code verbatim without reading structure inside it', () => {
-    const blocks = tokenizeMarkdown('```\n# not a heading\n@not-an-import\n```');
-    expect(blocks).toEqual([{ kind: 'code', text: '# not a heading\n@not-an-import' }]);
-  });
-
-  it('flushes an unterminated fence at end of input', () => {
-    const blocks = tokenizeMarkdown('```\nline one\nline two');
-    expect(blocks).toEqual([{ kind: 'code', text: 'line one\nline two' }]);
-  });
-
-  it('separates ordered from unordered lists and reads blockquotes', () => {
-    const blocks = tokenizeMarkdown('> note\n\n1. one\n2. two');
-    expect(blocks).toEqual([
-      { kind: 'quote', text: 'note' },
-      { kind: 'list', ordered: true, items: ['one', 'two'] },
-    ]);
-  });
-
-  it('detects heading level from the number of #', () => {
-    expect(tokenizeMarkdown('### Deep')).toEqual([{ kind: 'heading', level: 3, text: 'Deep' }]);
-  });
-});
+// `hasRedactionMarks` and `tokenizeMarkdown` moved to lib (`lib/redacted`,
+// `lib/markdown`) and are covered by those modules' own tests.

@@ -58,6 +58,7 @@ import type { RegistryEntry, ResolvedFile } from '../core/index.js';
 import { resolveWriteTarget, type ResolvedTarget, type WriteScope } from './pathguard.js';
 import { PROVENANCE_MANIFEST_REL } from './pathguard.js';
 import type { InstanceRegistry } from './registry.js';
+import { jsonError } from './http.js';
 import { commitResolved, previewResolved, statFile } from './write.js';
 import { trashFile } from './trash.js';
 import { readManifest, upsertInstall, removeInstall, type InstallRecord } from './provenance.js';
@@ -82,13 +83,6 @@ export interface CatalogRoutesConfig {
   client: CatalogSource;
   /** Where trashed files go on remove (never hard-unlinked). */
   trashDir: string;
-}
-
-function jsonError(status: 400 | 403 | 404 | 422 | 500, message: string): Response {
-  return new Response(JSON.stringify({ error: message }), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
 }
 
 async function readJsonBody(req: Request): Promise<Record<string, unknown> | undefined> {

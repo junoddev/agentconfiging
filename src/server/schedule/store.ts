@@ -15,6 +15,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { isValidPipelineId } from '../pipeline-routes.js';
+import { isPlainObject } from '../http.js';
 import { isValidCron } from './cron.js';
 
 /**
@@ -30,10 +31,6 @@ export interface Schedule {
   enabled: boolean;
   instanceRoot: string;
   lastRunAt?: number;
-}
-
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
 
 /**

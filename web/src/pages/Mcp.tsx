@@ -30,9 +30,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FileContent } from '../api/types.js';
 import {
+  AlsoAgents,
   Button,
   Dialog,
+  EmptyRow,
   EmptyState,
+  Frame,
   ListCard,
   ListRow,
   Notice,
@@ -40,7 +43,14 @@ import {
   useToast,
 } from '../components/core/index.js';
 import { homeRel } from '../lib/format.js';
-import { useAppState, useGlobalConfig } from '../state/index.js';
+import {
+  displayNameForKind,
+  otherAgentKinds,
+  scopedAgents,
+  sectionApplies,
+  useAppState,
+  useGlobalConfig,
+} from '../state/index.js';
 import { WriteFlow, useWriteFlow } from '../write/index.js';
 import { ServerDetail, ServerRow, serverSummary } from './mcp/ServerCard.js';
 import { ServerForm } from './mcp/ServerForm.js';
@@ -103,10 +113,6 @@ function toMcpFile(loaded: FileContent): McpFile | null {
   };
 }
 
-function Frame({ children }: { children: React.ReactNode }) {
-  return <main className="layout-main">{children}</main>;
-}
-
 /** A global MCP file: parsed like a project one, plus its home-dir root for the
  *  SourceBadge. Rendered read-only always, regardless of redaction. */
 interface GlobalMcpFile extends McpFile {
@@ -119,10 +125,11 @@ export function Mcp() {
 }
 
 function McpPage() {
-  const { report, loading, error, getFile } = useAppState();
+  const { report, loading, error, getFile, activeAgent } = useAppState();
   const { entries: globalEntries } = useGlobalConfig();
   const flow = useWriteFlow();
   const toast = useToast();
+  const agentKind = activeAgent?.kind;
 
   const [files, setFiles] = useState<McpFile[]>([]);
   const [filesLoading, setFilesLoading] = useState(false);
@@ -130,13 +137,24 @@ function McpPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [peek, setPeek] = useState<Peek | null>(null);
 
-  const candidates = useMemo(() => collectMcpCandidates(report?.agents ?? []), [report]);
-  const cloudServers = useMemo(() => collectCloudServers(report?.agents ?? []), [report]);
+  // Scoped to the ACTIVE agent (bead a6y); each file card notes the other
+  // detected agents that read the same file via the AlsoAgents badge.
+  const candidates = useMemo(
+    () => collectMcpCandidates(scopedAgents(report?.agents ?? [], agentKind)),
+    [report, agentKind],
+  );
+  const cloudServers = useMemo(
+    () => collectCloudServers(scopedAgents(report?.agents ?? [], agentKind)),
+    [report, agentKind],
+  );
   const candidateKey = candidates.join(' ');
 
   const globalCandidates = useMemo(
-    () => collectGlobalMcpCandidates(globalEntries),
-    [globalEntries],
+    () =>
+      collectGlobalMcpCandidates(
+        globalEntries.map((e) => ({ ...e, agents: scopedAgents(e.agents, agentKind) })),
+      ),
+    [globalEntries, agentKind],
   );
   const globalKey = globalCandidates.map((c) => c.path).join(' ');
 
@@ -294,6 +312,26 @@ function McpPage() {
     );
   }
 
+  // The sidebar hides MCP for agents without the concept (bead a6y); this
+  // covers deep links with an honest not-applicable state. After all hooks.
+  const notApplicable = activeAgent !== undefined && !sectionApplies('mcp', activeAgent.kind);
+  if (notApplicable) {
+    return (
+      <Frame>
+        <div className="page-head">
+          <div>
+            <h1>MCP servers</h1>
+          </div>
+        </div>
+        <Notice tone="info">
+          <strong>Not applicable to {displayNameForKind(activeAgent.kind)}.</strong> The MCP server
+          files this page edits (.mcp.json, .claude/settings*.json) are Claude Code surfaces —
+          switch the Agent picker to Claude Code to view or edit them.
+        </Notice>
+      </Frame>
+    );
+  }
+
   const totalServers = files.reduce((n, f) => n + f.servers.length, 0);
   const draftNames = draft
     ? draft.servers.filter((s) => s.name !== draft.editingName).map((s) => s.name)
@@ -344,7 +382,12 @@ function McpPage() {
             </Notice>
           )}
           <ListCard
-            head={<span title={`scope · ${file.scope}`}>{file.path}</span>}
+            head={
+              <span title={`scope · ${file.scope}`}>
+                {file.path}{' '}
+                <AlsoAgents kinds={otherAgentKinds(report.agents, file.path, agentKind)} />
+              </span>
+            }
             headMeta={
               <span className="lc-actions">
                 <span>{file.servers.length}</span>
@@ -355,7 +398,7 @@ function McpPage() {
             }
           >
             {file.servers.length === 0 && !file.parseError && (
-              <div className="list-row muted">No servers in this file.</div>
+              <EmptyRow>No servers in this file.</EmptyRow>
             )}
             {file.servers.map((server) => (
               <ServerRow
@@ -388,11 +431,9 @@ function McpPage() {
               head={homeRel(file.path)}
               headMeta={String(file.servers.length)}
             >
-              {file.parseError && (
-                <div className="list-row muted">Could not parse JSON — shown as a file only.</div>
-              )}
+              {file.parseError && <EmptyRow>Could not parse JSON — shown as a file only.</EmptyRow>}
               {file.servers.length === 0 && !file.parseError && (
-                <div className="list-row muted">No servers in this file.</div>
+                <EmptyRow>No servers in this file.</EmptyRow>
               )}
               {file.servers.map((server) => (
                 <ServerRow

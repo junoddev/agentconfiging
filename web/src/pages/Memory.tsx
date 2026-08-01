@@ -25,9 +25,10 @@
  * TEXT NODES only — never markup, never eval.
  */
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { type FileContent, type RedactionSpan } from '../api/index.js';
+import { useEffect, useMemo, useState } from 'react';
+import { type FileContent } from '../api/index.js';
 import {
+  AlsoAgents,
   Button,
   Dialog,
   EmptyState,
@@ -40,15 +41,23 @@ import {
   SourceBadge,
   useToast,
 } from '../components/core/index.js';
-import { fileReadOnly } from '../lib/editable.js';
 import { homeRel } from '../lib/format.js';
-import { useAppState, useGlobalConfig } from '../state/index.js';
+import { isRedactedFile, renderRedacted } from '../lib/redacted.js';
+import { useCommitToast } from '../lib/useCommitToast.js';
+import {
+  displayNameForKind,
+  otherAgentKinds,
+  scopedAgents,
+  scopeReport,
+  sectionApplies,
+  useAppState,
+  useGlobalConfig,
+} from '../state/index.js';
 import { WriteFlow, useWriteFlow } from '../write/index.js';
 import {
   buildCard,
   collectGlobalMemoryFiles,
   collectMemoryFiles,
-  isRedacted,
   MEMORY_TYPES,
   parseMemory,
   serializeMemory,
@@ -57,26 +66,6 @@ import {
   type MemoryFields,
 } from './memory/logic.js';
 import './memory.css';
-
-/** Redacted `content` + mark `spans` → text nodes with styled `[REDACTED:*]`
- *  marks. Everything is a TEXT node — never markup; marks are already redacted
- *  server-side so no secret is present to leak. */
-function renderRedacted(content: string, spans: readonly RedactionSpan[]): ReactNode[] {
-  const nodes: ReactNode[] = [];
-  let cursor = 0;
-  spans.forEach((span, i) => {
-    if (span.start < cursor || span.end > content.length) return;
-    if (span.start > cursor) nodes.push(content.slice(cursor, span.start));
-    nodes.push(
-      <mark key={i} className="redact-mark" title={`redacted: ${span.id}`}>
-        {content.slice(span.start, span.end)}
-      </mark>,
-    );
-    cursor = span.end;
-  });
-  if (cursor < content.length) nodes.push(content.slice(cursor));
-  return nodes;
-}
 
 /** What the editor is pointed at. */
 type Mode = { kind: 'browse' } | { kind: 'edit'; path: string } | { kind: 'create' };
@@ -95,18 +84,28 @@ export function Memory() {
 }
 
 function MemoryPage() {
-  const { report, getFile } = useAppState();
+  const { report, getFile, activeAgent } = useAppState();
   const { entries: globalDirs } = useGlobalConfig();
   const flow = useWriteFlow();
   const toast = useToast();
+  const agentKind = activeAgent?.kind;
 
-  const memoryPaths = useMemo(() => collectMemoryFiles(report), [report]);
+  // Scoped to the ACTIVE agent (bead a6y); each row notes the other detected
+  // agents that read the same file via the AlsoAgents badge.
+  const memoryPaths = useMemo(
+    () => collectMemoryFiles(report ? scopeReport(report, agentKind) : undefined),
+    [report, agentKind],
+  );
   // Inherited GLOBAL memory files (bead 71h.5): absolute root-joined paths.
   // Since 71h.10 they are editable when served unredacted — saves take the
   // same write flow, gated by its global-scope warning. A failed global load
   // only drops those rows (the bulk loader already tolerates per-file
   // failures); absent global data ⇒ empty list and the page is unchanged.
-  const globalFiles = useMemo(() => collectGlobalMemoryFiles(globalDirs), [globalDirs]);
+  const scopedGlobalDirs = useMemo(
+    () => globalDirs.map((e) => ({ ...e, agents: scopedAgents(e.agents, agentKind) })),
+    [globalDirs, agentKind],
+  );
+  const globalFiles = useMemo(() => collectGlobalMemoryFiles(scopedGlobalDirs), [scopedGlobalDirs]);
   const globalByPath = useMemo(
     () => new Map(globalFiles.map((f) => [f.path, f.root])),
     [globalFiles],
@@ -166,12 +165,12 @@ function MemoryPage() {
   const [pathTouched, setPathTouched] = useState(false);
 
   const activeFile = mode.kind === 'edit' ? files.get(mode.path) : undefined;
-  const redacted = activeFile ? isRedacted(activeFile) : false;
+  const redacted = activeFile ? isRedactedFile(activeFile) : false;
   // Inherited global file: kept for provenance (badge), but since bead 71h.10
   // it is EDITABLE — the save goes through the same /api/write flow and the
   // WriteFlow global-scope warning. Only redaction forces read-only.
   const inherited = mode.kind === 'edit' && globalByPath.has(mode.path);
-  const readOnly = fileReadOnly({ redacted, inherited });
+  const readOnly = redacted;
 
   function openEdit(path: string) {
     const f = files.get(path);
@@ -225,16 +224,30 @@ function MemoryPage() {
 
   // Every committed mutation confirms via Toast (§5); the dialog closes and
   // the stamp-keyed reload above refreshes the rows.
-  useEffect(() => {
-    if (flow.phase !== 'done') return;
-    const label = flow.request?.label;
-    toast(label !== undefined ? `Applied — ${label}` : 'Change applied');
-    setMode({ kind: 'browse' });
-    flow.cancel();
-    // flow.phase is the trigger; toast + flow.cancel are stable.
-  }, [flow.phase]);
+  useCommitToast(flow, toast, { onDone: () => setMode({ kind: 'browse' }) });
 
   const editorOpen = mode.kind === 'edit' || mode.kind === 'create';
+
+  // The sidebar hides MEMORY for agents without the concept (bead a6y); this
+  // covers deep links with an honest not-applicable state. After all hooks.
+  const notApplicable = activeAgent !== undefined && !sectionApplies('memory', activeAgent.kind);
+  if (notApplicable) {
+    return (
+      <main className="layout-main">
+        <div className="page-head">
+          <div>
+            <h1>Memory</h1>
+            <p className="page-sub">Persistent facts the agent carries between sessions.</p>
+          </div>
+        </div>
+        <Notice tone="info">
+          <strong>Not applicable to {displayNameForKind(activeAgent.kind)}.</strong> Memory files
+          (.claude/memory/*.md) are a Claude Code surface — switch the Agent picker to Claude Code
+          to view or edit them.
+        </Notice>
+      </main>
+    );
+  }
 
   return (
     <main className="layout-main">
@@ -242,7 +255,8 @@ function MemoryPage() {
         <div>
           <h1>Memory</h1>
           <p className="page-sub">
-            Persistent facts the agent carries between sessions — {allPaths.length} file
+            Persistent facts {agentKind ? displayNameForKind(agentKind) : 'the agent'} carries
+            between sessions — {allPaths.length} file
             {allPaths.length === 1 ? '' : 's'}, frontmatter-typed, provenance on every row.
           </p>
         </div>
@@ -274,7 +288,12 @@ function MemoryPage() {
                   globalRoot !== undefined ? (
                     <SourceBadge scope="global" detail={homeRel(globalRoot)} />
                   ) : (
-                    <SourceBadge scope="project" />
+                    <>
+                      <SourceBadge scope="project" />
+                      <AlsoAgents
+                        kinds={otherAgentKinds(report?.agents ?? [], card.path, agentKind)}
+                      />
+                    </>
                   )
                 }
                 sub={card.description !== '' ? card.description : card.preview}

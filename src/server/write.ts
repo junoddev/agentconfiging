@@ -39,6 +39,7 @@ import type { Hono } from 'hono';
 import { CAPS, redact, type Fix } from '../core/index.js';
 import { unifiedDiff } from './diff.js';
 import { resolveWriteTarget, type ResolvedTarget, type WriteScope } from './pathguard.js';
+import { jsonError } from './http.js';
 import type { InstanceRegistry } from './registry.js';
 import { trashFile } from './trash.js';
 
@@ -53,13 +54,6 @@ export interface WriteRoutesConfig {
 export interface ApplyFixRoutesConfig {
   scopes: WriteScope[];
   registry: InstanceRegistry;
-}
-
-function jsonError(status: 400 | 403 | 404 | 409 | 413 | 500, message: string): Response {
-  return new Response(JSON.stringify({ error: message }), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
 }
 
 // O_NOFOLLOW makes the OS refuse to open a symlinked FINAL component (ELOOP),

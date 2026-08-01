@@ -70,11 +70,13 @@ import type { GitExec } from './git.js';
 import { registerStatsRoutes } from './stats-routes.js';
 import { registerKnownProjectsRoute } from './known-projects.js';
 import { registerSearchRoutes } from './search-routes.js';
+import type { SqliteLoader } from './search.js';
 import { registerPtyRoutes } from './pty-routes.js';
 import { registerPipelineRoutes } from './pipeline-routes.js';
 import type { RuntimeMap } from './pipeline/index.js';
 import { PtyManager } from './pty.js';
 import type { WriteScope } from './pathguard.js';
+import { jsonError } from './http.js';
 
 export interface AppConfig {
   /** SHA-256 digest of the session bearer token — the app never sees the raw token. */
@@ -161,6 +163,13 @@ export interface AppConfig {
    * real side effects while still going through the committed executor.
    */
   pipelineRuntimes?: RuntimeMap;
+  /**
+   * SESSION SEARCH (7yb.4): the optional better-sqlite3 loader. Defaults to the
+   * real lazy loader (present ⇒ FTS5 search, absent ⇒ graceful degradation).
+   * Injectable so tests pin the module present/absent deterministically instead
+   * of depending on whether the optional native module is built in the env.
+   */
+  searchLoader?: SqliteLoader;
 }
 
 const MIME: Record<string, string> = {
@@ -182,13 +191,6 @@ const MIME: Record<string, string> = {
   '.txt': 'text/plain; charset=utf-8',
   '.webmanifest': 'application/manifest+json',
 };
-
-function jsonError(status: 400 | 401 | 403 | 404 | 500, message: string): Response {
-  return new Response(JSON.stringify({ error: message }), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
-}
 
 /** Constant-time token check: hash the presented value, timingSafeEqual on digests. */
 function tokenMatches(presented: string | undefined, tokenHash: Buffer): boolean {
@@ -543,7 +545,10 @@ export function createApp(config: AppConfig): Hono {
   // native module. Result snippets are REDACTED server-side; the query is
   // sanitized + bound as a parameter (no FTS5 injection). Semantic/embeddings mode
   // is behind an opt-in flag (a documented stub in v1).
-  registerSearchRoutes(app);
+  registerSearchRoutes(
+    app,
+    config.searchLoader !== undefined ? { loader: config.searchLoader } : {},
+  );
 
   // EMBEDDED TERMINAL (ngs.2): GET /api/pty/status — the capability probe for the
   // PTY surface. Also under /api (inherits the token + Origin/CSRF gates). The
@@ -568,6 +573,10 @@ export function createApp(config: AppConfig): Hono {
   // polls. See src/server/pipeline-routes.ts.
   registerPipelineRoutes(app, {
     registry,
+    // np7 code-execution gate: the bash node runs only when the server was
+    // launched interactively (mirrors the PTY gate); a headless daemon leaves
+    // this false and gets the disabled bash runtime.
+    interactive: config.interactive ?? false,
     ...(config.pipelineStateDir !== undefined ? { stateDir: config.pipelineStateDir } : {}),
     ...(config.pipelineRuntimes !== undefined ? { runtimes: config.pipelineRuntimes } : {}),
   });

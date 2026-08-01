@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { classifyFile, toCard } from './logic.js';
-import { parseFrontmatter, splitFrontmatter } from './frontmatter.js';
+import { parseFrontmatter, splitFrontmatter } from '../../lib/frontmatter.js';
 import { STARTER_TEMPLATES } from './templates.js';
 
 describe('STARTER_TEMPLATES', () => {

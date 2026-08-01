@@ -14,6 +14,9 @@
  * ever interpreted as markup.
  */
 
+import { collectFiles, collectGlobalFiles, groupByRoot } from '../../lib/collect.js';
+import { joinGlobalPath } from '../../lib/paths.js';
+
 /** Basenames we treat as agent instruction files (SPEC §5 row 4, multi-runtime). */
 const INSTRUCTION_BASENAMES: ReadonlySet<string> = new Set([
   'CLAUDE.md',
@@ -44,13 +47,9 @@ export function scopeOf(path: string): InstructionScope {
 
 /** The union of every agent's referenced INSTRUCTION files, de-duped and sorted. */
 export function collectInstructionFiles(agents: readonly { files: string[] }[]): string[] {
-  const set = new Set<string>();
-  for (const agent of agents) {
-    for (const file of agent.files) {
-      if (isInstructionFile(file)) set.add(file);
-    }
-  }
-  return [...set].sort((a, b) => a.localeCompare(b));
+  return collectFiles(agents, (path) => (isInstructionFile(path) ? { path } : null)).map(
+    (item) => item.path,
+  );
 }
 
 /** One scope's files, for the grouped left-hand list. */
@@ -100,28 +99,18 @@ export interface GlobalInstructionFile {
   root: string;
 }
 
-/** Join a global root and a root-relative path into one absolute path. */
-export function joinGlobalPath(root: string, rel: string): string {
-  return `${root.replace(/\/+$/, '')}/${rel.replace(/^\/+/, '')}`;
-}
-
 /** Every global entry's INSTRUCTION files (same basename filter as the project
  *  list), as absolute root-joined paths — de-duped, sorted by root then rel.
  *  No global entries ⇒ [] (the page renders exactly as before). */
 export function collectGlobalInstructionFiles(
   entries: readonly GlobalInstructionSource[],
 ): GlobalInstructionFile[] {
-  const byPath = new Map<string, GlobalInstructionFile>();
-  for (const entry of entries) {
-    for (const agent of entry.agents) {
-      for (const rel of agent.files) {
-        if (!isInstructionFile(rel)) continue;
-        const path = joinGlobalPath(entry.root, rel);
-        if (!byPath.has(path)) byPath.set(path, { path, rel, root: entry.root });
-      }
-    }
-  }
-  return [...byPath.values()].sort(
+  return collectGlobalFiles(
+    entries,
+    (entry, rel) =>
+      isInstructionFile(rel)
+        ? { path: joinGlobalPath(entry.root, rel), rel, root: entry.root }
+        : null,
     (a, b) => a.root.localeCompare(b.root) || a.rel.localeCompare(b.rel),
   );
 }
@@ -137,13 +126,7 @@ export interface GlobalInstructionGroup {
 export function groupGlobalByRoot(
   files: readonly GlobalInstructionFile[],
 ): GlobalInstructionGroup[] {
-  const groups = new Map<string, GlobalInstructionGroup>();
-  for (const file of files) {
-    const group = groups.get(file.root) ?? { root: file.root, files: [] };
-    group.files.push(file);
-    groups.set(file.root, group);
-  }
-  return [...groups.values()];
+  return groupByRoot(files).map((group) => ({ root: group.root, files: group.items }));
 }
 
 // ── @import references ─────────────────────────────────────────────────────
@@ -259,123 +242,6 @@ export function resolveImports(
   });
 }
 
-// ── Redaction guard ────────────────────────────────────────────────────────
-
-/** Matches a server-inserted `[REDACTED:*]` placeholder mark. */
-const REDACTION_RE = /\[REDACTED:[^\]]*\]/;
-
-/**
- * True when text carries a `[REDACTED:*]` mark. Saving such text would overwrite
- * the real secret on disk with the placeholder, so the editor goes read-only
- * whenever this (or the server's `spans`) says a file is redacted.
- */
-export function hasRedactionMarks(content: string): boolean {
-  return REDACTION_RE.test(content);
-}
-
-// ── Minimal safe Markdown tokenizer (PREVIEW pane) ──────────────────────────
-
-/**
- * A preview block. The React side renders each as a TEXT node in an appropriate
- * element — there is no inline HTML and no `dangerouslySetInnerHTML`; the goal is
- * light structure (headings, code, lists, quotes, paragraphs), not fidelity.
- */
-export type MarkdownBlock =
-  | { kind: 'heading'; level: number; text: string }
-  | { kind: 'code'; text: string }
-  | { kind: 'list'; ordered: boolean; items: string[] }
-  | { kind: 'quote'; text: string }
-  | { kind: 'para'; text: string };
-
-const HEADING_RE = /^(#{1,6})\s+(.*)$/;
-const LIST_RE = /^\s*(?:[-*+]|\d+\.)\s+(.*)$/;
-const ORDERED_RE = /^\s*\d+\.\s+/;
-const QUOTE_RE = /^\s*>\s?(.*)$/;
-
-/**
- * Tokenize Markdown into safe preview blocks. Fenced code is captured verbatim
- * (never scanned for structure); consecutive list items and paragraph lines are
- * grouped. Unterminated fences flush at end of input.
- */
-export function tokenizeMarkdown(content: string): MarkdownBlock[] {
-  const blocks: MarkdownBlock[] = [];
-  const lines = content.split('\n');
-
-  let para: string[] = [];
-  let list: { ordered: boolean; items: string[] } | undefined;
-  let code: string[] | undefined;
-
-  const flushPara = () => {
-    if (para.length > 0) {
-      blocks.push({ kind: 'para', text: para.join('\n') });
-      para = [];
-    }
-  };
-  const flushList = () => {
-    if (list) {
-      blocks.push({ kind: 'list', ordered: list.ordered, items: list.items });
-      list = undefined;
-    }
-  };
-  const flushOpen = () => {
-    flushPara();
-    flushList();
-  };
-
-  for (const line of lines) {
-    if (code !== undefined) {
-      if (FENCE_RE.test(line)) {
-        blocks.push({ kind: 'code', text: code.join('\n') });
-        code = undefined;
-      } else {
-        code.push(line);
-      }
-      continue;
-    }
-
-    if (FENCE_RE.test(line)) {
-      flushOpen();
-      code = [];
-      continue;
-    }
-
-    const heading = HEADING_RE.exec(line);
-    if (heading) {
-      flushOpen();
-      blocks.push({ kind: 'heading', level: heading[1]?.length ?? 1, text: heading[2] ?? '' });
-      continue;
-    }
-
-    const quote = QUOTE_RE.exec(line);
-    if (quote) {
-      flushOpen();
-      blocks.push({ kind: 'quote', text: quote[1] ?? '' });
-      continue;
-    }
-
-    const item = LIST_RE.exec(line);
-    if (item) {
-      flushPara();
-      const ordered = ORDERED_RE.test(line);
-      if (!list || list.ordered !== ordered) {
-        flushList();
-        list = { ordered, items: [] };
-      }
-      list.items.push(item[1] ?? '');
-      continue;
-    }
-
-    if (line.trim() === '') {
-      flushOpen();
-      continue;
-    }
-
-    flushList();
-    para.push(line);
-  }
-
-  if (code !== undefined) blocks.push({ kind: 'code', text: code.join('\n') });
-  flushOpen();
-
-  return blocks;
-}
+// The redaction guard (`hasRedactionMarks`) and the safe Markdown tokenizer
+// (`tokenizeMarkdown` / `MarkdownBlock`) moved to lib (`lib/redacted`,
+// `lib/markdown`); Instructions.tsx imports them from there directly.

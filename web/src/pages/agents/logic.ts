@@ -14,6 +14,7 @@ import type {
   ReportFinding,
 } from '../../api/types.js';
 import type { PillTone } from '../../components/core/index.js';
+import { joinGlobalPath } from '../../lib/paths.js';
 
 /** Find the detected agent for a route `kind`, or undefined when unknown. */
 export function findAgent(report: Report | undefined, kind: string): DetectedAgent | undefined {
@@ -65,12 +66,6 @@ export interface GlobalKindGroup {
   /** Real path of the global config dir (filesystem data — text nodes only). */
   root: string;
   files: GlobalKindFile[];
-}
-
-/** Join a global entry root and an entry-relative file into an absolute path.
- *  Roots are realpaths (no trailing slash), but normalize defensively. */
-function joinGlobalPath(root: string, rel: string): string {
-  return `${root.replace(/\/+$/, '')}/${rel}`;
 }
 
 /** Per-global-dir file groups for one agent kind (E12, AgentDetail FILES
