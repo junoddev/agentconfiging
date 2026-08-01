@@ -1,0 +1,16 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "anthropic/claude-sonnet-4-5",
+  "provider": {
+    "anthropic": {
+      "options": {
+        "apiKey": "sk-ant-opencodeCanary6dt6DDDDDDDDDDDD"
+      }
+    },
+    "openai": {
+      "options": {
+        "token": "sk-opencodecanary6dt6EEEEEEEEEEEEEEEE"
+      }
+    }
+  }
+}

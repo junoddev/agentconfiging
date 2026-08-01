@@ -35,6 +35,7 @@ import {
   type ReportFinding,
   type ScanOptions,
 } from '../core/index.js';
+import { redactJsonValue } from './http.js';
 
 /** Scopes a per-instance ReportStore serves — project-only by design; the
  *  machine-global report lives in the server-owned {@link GlobalStore}. */
@@ -166,7 +167,7 @@ export class ReportStore {
     const manifest = scanProject(this.#root, this.#scanOptions);
     const agents = detect(manifest);
     const { findings, quality } = buildReport(manifest, agents);
-    const report: ServedReport = {
+    const report = redactJsonValue<ServedReport>({
       version: this.#version,
       generatedAt: new Date().toISOString(),
       root: manifest.root,
@@ -176,7 +177,7 @@ export class ReportStore {
       quality,
       findings: findings.map(toReportFinding),
       stats: manifest.stats,
-    };
+    });
     const fixes = new Map<string, Fix>();
     for (const finding of findings) if (finding.fix) fixes.set(finding.id, finding.fix);
     this.#cache.set(scope, report);
@@ -233,13 +234,13 @@ export class GlobalStore {
    */
   get(opts: { fresh?: boolean } = {}): ServedGlobalReport {
     if (!opts.fresh && this.#cache) return this.#cache;
-    this.#cache = {
+    this.#cache = redactJsonValue<ServedGlobalReport>({
       version: this.#version,
       generatedAt: new Date().toISOString(),
       scope: 'global',
       localOnly: true,
       entries: buildGlobalEntries(this.#homeDir),
-    };
+    });
     return this.#cache;
   }
 }

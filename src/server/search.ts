@@ -44,7 +44,7 @@
 
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import type { RedactionSpan, Session } from '../core/index.js';
+import type { RedactionSpan, RedactResult, Session } from '../core/index.js';
 import { redact } from '../core/index.js';
 import { sessionIdOf, type LoadedHistory } from './stats-routes.js';
 
@@ -237,12 +237,54 @@ interface RawHit {
   messageIndex: number;
   role: string;
   snip: string;
+  rawText?: string;
   timestamp: string;
 }
 
-/** Redact one raw hit's snippet server-side; a raw secret never crosses the wire. */
-function redactHit(row: RawHit): SearchHit {
-  const { text, spans } = redact(row.snip ?? '');
+function queryTokens(raw: string): string[] {
+  return raw.match(/[\p{L}\p{N}_]+/gu) ?? [];
+}
+
+function sliceRedacted(result: RedactResult, query: string): RedactResult {
+  const tokens = queryTokens(query).map((t) => t.toLowerCase());
+  const lower = result.text.toLowerCase();
+  const firstHit = tokens
+    .map((token) => lower.indexOf(token))
+    .filter((idx) => idx >= 0)
+    .sort((a, b) => a - b)[0];
+  const center = firstHit ?? 0;
+  const radius = 160;
+  const rawStart = Math.max(0, center - radius);
+  const rawEnd = Math.min(result.text.length, center + radius);
+  const start = rawStart > 0 ? Math.max(0, result.text.lastIndexOf(' ', rawStart)) : 0;
+  const nextSpace = result.text.indexOf(' ', rawEnd);
+  const end = rawEnd < result.text.length && nextSpace >= 0 ? nextSpace : rawEnd;
+  const prefix = start > 0 ? '…' : '';
+  const suffix = end < result.text.length ? '…' : '';
+  return {
+    text: `${prefix}${result.text.slice(start, end)}${suffix}`,
+    spans: result.spans
+      .filter((span) => span.end > start && span.start < end)
+      .map((span) => ({
+        start: Math.max(span.start, start) - start + prefix.length,
+        end: Math.min(span.end, end) - start + prefix.length,
+        id: span.id,
+      })),
+  };
+}
+
+/**
+ * Redact one raw hit server-side. Prefer the full indexed row text, then slice
+ * the already-redacted result into a preview. Redacting SQLite's snippet output
+ * alone is unsafe: snippet() can return only a boundary fragment of a secret,
+ * without the key/full token context the catalogue needs.
+ */
+function redactHit(row: RawHit, rawQuery: string): SearchHit {
+  const redacted =
+    typeof row.rawText === 'string'
+      ? sliceRedacted(redact(row.rawText), rawQuery)
+      : redact(row.snip);
+  const { text, spans } = redacted;
   const hit: SearchHit = {
     sessionId: String(row.sessionId ?? ''),
     messageIndex: Number(row.messageIndex ?? 0),
@@ -443,12 +485,12 @@ export class SearchIndex {
       const rows = db
         .prepare(
           'SELECT session_id AS sessionId, message_index AS messageIndex, role, ' +
-            "snippet(turns, 3, '', '', '…', 12) AS snip, timestamp " +
+            "snippet(turns, 3, '', '', '…', 12) AS snip, text AS rawText, timestamp " +
             'FROM turns WHERE turns MATCH ? ORDER BY rank LIMIT ?',
         )
         .all(match, cap + 1) as RawHit[];
       const truncated = rows.length > cap;
-      const results = rows.slice(0, cap).map(redactHit);
+      const results = rows.slice(0, cap).map((row) => redactHit(row, query));
       return { available: true, mode: 'fts', query, results, truncated };
     } finally {
       db.close();

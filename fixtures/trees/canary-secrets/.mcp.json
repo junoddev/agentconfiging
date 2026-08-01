@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "canary": {
+      "command": "node",
+      "args": ["server.js"],
+      "env": {
+        "CANARY_PASSWORD": "npm_CANARY6DT6CANARY6DT6CANARY6DT6"
+      }
+    }
+  }
+}
