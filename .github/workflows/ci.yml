@@ -9,8 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # jsdom 30 / undici 8 require Node 22.19+.
-        node-version: [22.x]
+        node-version: [24.x]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
