@@ -127,6 +127,16 @@
   text-transform: none;
 }
 
+/* "also · Codex · Cursor" — cross-agent applicability next to a SourceBadge.
+   Dashed neutral (informational, not a scope); runtime display names keep
+   their case. */
+.scope.also-agents {
+  border: 1px dashed var(--border);
+  color: var(--muted);
+  background: transparent;
+  text-transform: none;
+}
+
 /* ── Status pills (.pill.p-*) ──────────────────────────────────────────── */
 
 .pill {

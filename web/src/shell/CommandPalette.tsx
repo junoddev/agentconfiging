@@ -21,6 +21,8 @@ import {
   moveSelection,
   type CommandAction,
 } from '../command/commands.js';
+import { EDITOR_ROUTES, type RouteName } from '../routes.js';
+import { sectionApplies, useAppState } from '../state/index.js';
 import type { Theme } from './theme.js';
 import '../command/command.css';
 
@@ -36,8 +38,16 @@ export function CommandPalette({ open, theme, onClose, onRun }: CommandPalettePr
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { activeAgent } = useAppState();
 
-  const commands = useMemo(() => buildCommands(theme), [theme]);
+  // Mirror the sidebar's adaptive rail (bead a6y): no nav commands for
+  // Configure sections the active agent has no concept of.
+  const hiddenRoutes = useMemo(() => {
+    const kind = activeAgent?.kind;
+    return new Set<RouteName>(EDITOR_ROUTES.filter((name) => !sectionApplies(name, kind)));
+  }, [activeAgent]);
+
+  const commands = useMemo(() => buildCommands(theme, hiddenRoutes), [theme, hiddenRoutes]);
   const results = useMemo(() => filterCommands(commands, query), [commands, query]);
 
   // Reset + focus each time it opens (after the Dialog's showModal, which

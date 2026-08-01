@@ -9,6 +9,7 @@ export {
   type AppStateValue,
 } from './AppStateContext.js';
 export {
+  activeAgent,
   appReducer,
   currentInstance,
   initialAppState,
@@ -17,3 +18,14 @@ export {
   type AppErrorKind,
   type AppState,
 } from './appState.js';
+export {
+  agentKindsForFile,
+  displayNameForKind,
+  isClaudeKind,
+  otherAgentKinds,
+  resolveActiveAgent,
+  scopeReport,
+  scopedAgents,
+  sectionApplies,
+  type ConfigSection,
+} from './agentScope.js';

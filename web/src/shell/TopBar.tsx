@@ -3,16 +3,16 @@
  * Left = brand block (mono accent sigil + "agentconfig" + version from
  * GET /api/health — a dashless nothing until the probe resolves). Center = the
  * dual-side context chooser (`.chooser`): FOLDER = current instance/workspace,
- * AGENT = detected-runtime jump. Right = cost widget slot + theme toggle +
- * about, as `.icon-btn`s. A `.nav-toggle` icon-btn appears ≤860px where the
- * sidebar hides.
+ * AGENT = the ACTIVE agent (bead a6y) — picking one scopes every Configure
+ * page to that runtime (persisted; no combined all-agents edit view). Right =
+ * cost widget slot + theme toggle + about, as `.icon-btn`s. A `.nav-toggle`
+ * icon-btn appears ≤860px where the sidebar hides.
  */
 
 import { useEffect, useRef, useState } from 'react';
 import { ApiClient } from '../api/index.js';
 import { bootstrapToken } from '../api/token.js';
-import { routeHash, type Route } from '../routes.js';
-import { useAppState } from '../state/index.js';
+import { displayNameForKind, useAppState } from '../state/index.js';
 import type { Theme as ConsoleTheme } from './theme.js';
 
 // Like the about dialog: the shell keeps its ApiClient private,
@@ -26,14 +26,13 @@ export interface TopBarProps {
   onAbout: () => void;
   /** ≤860px: show/hide the overlaid sidebar. */
   onToggleNav: () => void;
-  /** Current route — drives the AGENT side's active state. */
-  route: Route;
 }
 
 type MenuId = 'folder' | 'agent';
 
-export function TopBar({ theme, onToggleTheme, onAbout, onToggleNav, route }: TopBarProps) {
-  const { instances, currentInstance, selectInstance, report } = useAppState();
+export function TopBar({ theme, onToggleTheme, onAbout, onToggleNav }: TopBarProps) {
+  const { instances, currentInstance, selectInstance, report, activeAgent, selectAgent } =
+    useAppState();
   const [version, setVersion] = useState<string | undefined>();
   const [menu, setMenu] = useState<MenuId | null>(null);
   const chooserRef = useRef<HTMLDivElement>(null);
@@ -76,16 +75,15 @@ export function TopBar({ theme, onToggleTheme, onAbout, onToggleNav, route }: To
   const toggleMenu = (id: MenuId) => setMenu((m) => (m === id ? null : id));
 
   const agents = report?.agents ?? [];
-  const activeAgentKind = route.name === 'agent' ? route.kind : undefined;
 
   const pickFolder = (id: string) => {
     setMenu(null);
     selectInstance(id);
   };
 
-  const pickAgent = (hash: string) => {
+  const pickAgent = (kind: string) => {
     setMenu(null);
-    window.location.hash = hash;
+    selectAgent(kind);
   };
 
   return (
@@ -131,7 +129,9 @@ export function TopBar({ theme, onToggleTheme, onAbout, onToggleNav, route }: To
           onClick={() => toggleMenu('agent')}
         >
           <span className="ch-label">Agent</span>
-          <span className="ch-value">{activeAgentKind ?? 'All agents'}</span>
+          <span className="ch-value">
+            {activeAgent !== undefined ? displayNameForKind(activeAgent.kind) : '—'}
+          </span>
           <span className="ch-caret" aria-hidden="true">
             ▾
           </span>
@@ -160,27 +160,24 @@ export function TopBar({ theme, onToggleTheme, onAbout, onToggleNav, route }: To
         )}
         {menu === 'agent' && (
           <div className="ch-menu ch-right open" role="menu" aria-label="Agent runtimes">
-            <button
-              type="button"
-              role="menuitem"
-              className={`ch-item${activeAgentKind === undefined ? ' active' : ''}`}
-              onClick={() => pickAgent(routeHash({ name: 'agents' }))}
-            >
-              All agents
-              <span className="meta">{agents.length}</span>
-            </button>
-            {agents.map((agent) => (
-              <button
-                key={agent.kind}
-                type="button"
-                role="menuitem"
-                className={`ch-item${agent.kind === activeAgentKind ? ' active' : ''}`}
-                onClick={() => pickAgent(routeHash({ name: 'agent', kind: agent.kind }))}
-              >
-                <span className="mono">{agent.kind}</span>
-                <span className="meta">{agent.confidence}</span>
-              </button>
-            ))}
+            {agents.length === 0 ? (
+              <div className="ch-item" aria-disabled="true">
+                <span className="muted">No agents detected</span>
+              </div>
+            ) : (
+              agents.map((agent) => (
+                <button
+                  key={agent.kind}
+                  type="button"
+                  role="menuitem"
+                  className={`ch-item${agent.kind === activeAgent?.kind ? ' active' : ''}`}
+                  onClick={() => pickAgent(agent.kind)}
+                >
+                  <span className="mono">{agent.kind}</span>
+                  <span className="meta">{agent.confidence}</span>
+                </button>
+              ))
+            )}
           </div>
         )}
       </div>
