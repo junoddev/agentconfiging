@@ -12,7 +12,12 @@
  */
 
 import { EDITOR_ROUTES, ROUTE_LABELS, routeHash, type Route, type RouteName } from '../routes.js';
-import { targetForRoute, type NavigationTarget } from '../navigation.js';
+import {
+  navigationMode,
+  normalizeNavigationTarget,
+  targetForRoute,
+  type NavigationTarget,
+} from '../navigation.js';
 import { fuzzyMatch } from './fuzzy.js';
 
 /** What running a command asks the shell to do. Discriminated so the effectful
@@ -65,9 +70,46 @@ export function railLabel(name: RouteName): string {
   return ROUTE_LABELS[name];
 }
 
+export interface CommandTargetContext {
+  contextTarget?: NavigationTarget;
+  operateTarget?: NavigationTarget;
+}
+
+/**
+ * Pick the targets a command list may carry from the current route. Configure
+ * and Library consume chooser context. Workspace and Runtime can retain an
+ * explicit parsed target in memory for a later Configure/Library hop. Operate
+ * targets are only preserved when the current route is already explicitly
+ * targeted Operate.
+ */
+export function commandTargetContext(
+  sourceRoute: Route | undefined,
+  chooserTarget?: NavigationTarget,
+): CommandTargetContext {
+  const chooser = normalizeNavigationTarget(chooserTarget);
+  if (sourceRoute === undefined) return { contextTarget: chooser };
+
+  const explicitTarget = normalizeNavigationTarget(sourceRoute.target);
+  switch (navigationMode(sourceRoute)) {
+    case 'workspace':
+    case 'runtime':
+      return { contextTarget: explicitTarget ?? chooser };
+    case 'operate':
+      return { contextTarget: chooser, operateTarget: explicitTarget };
+    case 'configure':
+    case 'library':
+      return { contextTarget: chooser };
+  }
+}
+
 /** Canonical hash for a simple (no-param) route name. */
-function navHash(name: RouteName, target?: NavigationTarget): string {
+function navHash(
+  name: RouteName,
+  contextTarget?: NavigationTarget,
+  operateTarget?: NavigationTarget,
+): string {
   const route = { name } as Route;
+  const target = navigationMode(route) === 'operate' ? operateTarget : contextTarget;
   return routeHash({ ...route, target: targetForRoute(route, target) });
 }
 
@@ -91,21 +133,22 @@ export function railShortcutHash(digit: number): string | undefined {
 export function buildCommands(
   theme: 'light' | 'dark',
   hiddenRoutes?: ReadonlySet<RouteName>,
-  target?: NavigationTarget,
+  contextTarget?: NavigationTarget,
+  operateTarget?: NavigationTarget,
 ): Command[] {
   const nav: Command[] = RAIL_ORDER.filter((name) => !hiddenRoutes?.has(name)).map((name) => ({
     id: `nav:${name}`,
     label: railLabel(name),
-    hint: navHash(name, target),
-    action: { type: 'navigate', hash: navHash(name, target) },
+    hint: navHash(name, contextTarget, operateTarget),
+    action: { type: 'navigate', hash: navHash(name, contextTarget, operateTarget) },
   }));
   // The internal gallery is de-emphasized (sidebar bottom) — navigable, but
   // outside Cmd+1..9.
   nav.push({
     id: 'nav:gallery',
     label: railLabel('gallery'),
-    hint: navHash('gallery', target),
-    action: { type: 'navigate', hash: navHash('gallery', target) },
+    hint: navHash('gallery', contextTarget, operateTarget),
+    action: { type: 'navigate', hash: navHash('gallery', contextTarget, operateTarget) },
   });
 
   const actions: Command[] = [

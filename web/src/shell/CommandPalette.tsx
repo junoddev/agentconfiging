@@ -17,6 +17,7 @@ import {
 import { Dialog, formatIndex } from '../components/core/index.js';
 import {
   buildCommands,
+  commandTargetContext,
   filterCommands,
   moveSelection,
   type CommandAction,
@@ -51,16 +52,16 @@ export function CommandPalette({ open, theme, route, onClose, onRun }: CommandPa
     );
   }, [agentScopeKind]);
 
-  const target = useMemo(() => {
-    if (route?.target !== undefined) return route.target;
+  const contextTarget = useMemo(() => {
     return {
       ...(currentInstance?.id !== undefined ? { instanceId: currentInstance.id } : {}),
       ...(agentScopeKind !== undefined ? { agentKind: agentScopeKind } : {}),
     };
-  }, [agentScopeKind, currentInstance?.id, route?.target]);
+  }, [agentScopeKind, currentInstance?.id]);
+  const targets = useMemo(() => commandTargetContext(route, contextTarget), [contextTarget, route]);
   const commands = useMemo(
-    () => buildCommands(theme, hiddenRoutes, target),
-    [theme, hiddenRoutes, target],
+    () => buildCommands(theme, hiddenRoutes, targets.contextTarget, targets.operateTarget),
+    [theme, hiddenRoutes, targets],
   );
   const results = useMemo(() => filterCommands(commands, query), [commands, query]);
 

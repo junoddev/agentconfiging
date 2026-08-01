@@ -157,6 +157,35 @@
   font-weight: 600;
 }
 
+/* Non-chooser center slot for aggregate / page-targeted modes. */
+.mode-context {
+  margin-inline: auto;
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  min-width: 0;
+  padding: 6px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--muted);
+}
+
+.mode-context__label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mode-context__value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--fg);
+}
+
 /* Square utility button (theme toggle, about, nav toggle). */
 .icon-btn {
   width: 30px;

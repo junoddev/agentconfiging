@@ -11,7 +11,7 @@
 
 import { sourceBadgeText } from '../components/core/index.js';
 import { ROUTE_LABELS, routeHash, type Route, type RouteName } from '../routes.js';
-import { targetForRoute } from '../navigation.js';
+import { navigationMode, targetForRoute, type NavigationTarget } from '../navigation.js';
 import { isGlobalEntryError } from '../api/types.js';
 import { sectionApplies, useAppState, type ConfigSection } from '../state/index.js';
 import { useConfigureCounts, type ConfigureCountKey } from './useConfigureCounts.js';
@@ -96,6 +96,24 @@ function activeSection(route: Route): RouteName {
   return route.name;
 }
 
+function destinationTarget(
+  destination: Route,
+  contextTarget: NavigationTarget | undefined,
+  operateTarget: NavigationTarget | undefined,
+): NavigationTarget | undefined {
+  const mode = navigationMode(destination);
+  switch (mode) {
+    case 'configure':
+    case 'library':
+      return contextTarget;
+    case 'operate':
+      return operateTarget;
+    case 'workspace':
+    case 'runtime':
+      return undefined;
+  }
+}
+
 export function Sidebar({ route }: { route: Route }) {
   const { report, instances, globalReport, currentInstance, agentScopeKind } = useAppState();
   const active = activeSection(route);
@@ -117,18 +135,23 @@ export function Sidebar({ route }: { route: Route }) {
   const navItem = ({ name, glyph, count }: NavItem) => {
     const isActive = name === active;
     const n = count === undefined ? undefined : counts[count];
-    const currentTarget =
-      route.target ??
-      ({
-        ...(currentInstance?.id !== undefined ? { instanceId: currentInstance.id } : {}),
-        ...(agentScopeKind !== undefined ? { agentKind: agentScopeKind } : {}),
-      } as const);
+    const chooserTarget = {
+      ...(currentInstance?.id !== undefined ? { instanceId: currentInstance.id } : {}),
+      ...(agentScopeKind !== undefined ? { agentKind: agentScopeKind } : {}),
+    } as const;
+    const sourceMode = navigationMode(route);
+    const contextTarget =
+      sourceMode === 'workspace' || sourceMode === 'runtime'
+        ? (route.target ?? chooserTarget)
+        : chooserTarget;
+    const operateTarget = sourceMode === 'operate' ? route.target : undefined;
     const destination = { name } as Route;
+    const target = destinationTarget(destination, contextTarget, operateTarget);
     return (
       <a
         key={name}
         className={`nav-item${isActive ? ' active' : ''}`}
-        href={routeHash({ ...destination, target: targetForRoute(destination, currentTarget) })}
+        href={routeHash({ ...destination, target: targetForRoute(destination, target) })}
         aria-current={isActive ? 'page' : undefined}
       >
         <span className="glyph" aria-hidden="true">

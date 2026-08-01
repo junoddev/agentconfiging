@@ -3,6 +3,7 @@ import { parseRoute } from '../routes.js';
 import {
   RAIL_ORDER,
   buildCommands,
+  commandTargetContext,
   filterCommands,
   moveSelection,
   parseGlobalKey,
@@ -81,7 +82,7 @@ describe('buildCommands', () => {
     expect(railLabel('mcp')).toBe('MCP');
   });
 
-  it('carries explicit targets only to context-aware command destinations', () => {
+  it('carries chooser context only to Configure and Library command destinations', () => {
     const target = { instanceId: 'inst-1', agentKind: 'claude-code' };
     const commands = buildCommands('light', undefined, target);
     const hash = (id: string) =>
@@ -89,9 +90,51 @@ describe('buildCommands', () => {
         ? (commands.find((command) => command.id === id)?.action as { hash: string }).hash
         : undefined;
     expect(hash('nav:settings')).toBe('#/settings?instance=inst-1&agent=claude-code');
-    expect(hash('nav:git')).toBe('#/git?instance=inst-1&agent=claude-code');
+    expect(hash('nav:catalog')).toBe('#/catalog?instance=inst-1&agent=claude-code');
     expect(hash('nav:findings')).toBe('#/findings');
     expect(hash('nav:dashboard')).toBe('#/dashboard');
+    expect(hash('nav:git')).toBe('#/git');
+  });
+
+  it('carries explicit Operate targets separately from chooser context', () => {
+    const contextTarget = { instanceId: 'config', agentKind: 'claude-code' };
+    const operateTarget = { instanceId: 'runtime' };
+    const commands = buildCommands('light', undefined, contextTarget, operateTarget);
+    const hash = (id: string) =>
+      commands.find((command) => command.id === id)?.action.type === 'navigate'
+        ? (commands.find((command) => command.id === id)?.action as { hash: string }).hash
+        : undefined;
+
+    expect(hash('nav:settings')).toBe('#/settings?instance=config&agent=claude-code');
+    expect(hash('nav:terminal')).toBe('#/terminal?instance=runtime');
+  });
+
+  it('preserves explicit aggregate route targets for Configure and Library commands', () => {
+    const chooserTarget = { instanceId: 'chooser', agentKind: 'claude-code' };
+    const explicitTarget = { instanceId: 'deep', agentKind: 'codex' };
+
+    for (const route of [
+      { name: 'findings' as const, target: explicitTarget },
+      { name: 'dashboard' as const, target: explicitTarget },
+    ]) {
+      const targets = commandTargetContext(route, chooserTarget);
+      const commands = buildCommands(
+        'light',
+        undefined,
+        targets.contextTarget,
+        targets.operateTarget,
+      );
+      const hash = (id: string) =>
+        commands.find((command) => command.id === id)?.action.type === 'navigate'
+          ? (commands.find((command) => command.id === id)?.action as { hash: string }).hash
+          : undefined;
+
+      expect(hash('nav:settings')).toBe('#/settings?instance=deep&agent=codex');
+      expect(hash('nav:catalog')).toBe('#/catalog?instance=deep&agent=codex');
+      expect(hash('nav:findings')).toBe('#/findings');
+      expect(hash('nav:dashboard')).toBe('#/dashboard');
+      expect(hash('nav:git')).toBe('#/git');
+    }
   });
 });
 
