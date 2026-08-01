@@ -66,6 +66,7 @@ const GROUPS: NavGroup[] = [
     group: 'Library',
     items: [
       { name: 'catalog', glyph: '▦' },
+      { name: 'extensions', glyph: '⊕' },
       { name: 'marketplace', glyph: '◫' },
     ],
   },
@@ -95,7 +96,7 @@ function activeSection(route: Route): RouteName {
 }
 
 export function Sidebar({ route }: { route: Route }) {
-  const { report, instances, globalReport, currentInstance, activeAgent } = useAppState();
+  const { report, instances, globalReport, currentInstance, agentScopeKind } = useAppState();
   const active = activeSection(route);
   const configureCounts = useConfigureCounts();
 
@@ -138,7 +139,7 @@ export function Sidebar({ route }: { route: Route }) {
         // has no concept of (e.g. Hooks for Codex) are removed, not zeroed.
         const visible =
           group === 'Configure'
-            ? items.filter((i) => sectionApplies(i.name as ConfigSection, activeAgent?.kind))
+            ? items.filter((i) => sectionApplies(i.name as ConfigSection, agentScopeKind))
             : items;
         return (
           <div key={group} className="side-group">

@@ -18,6 +18,7 @@ import { Keybindings } from './pages/Keybindings.js';
 import { Sync } from './pages/Sync.js';
 import { Catalog } from './pages/Catalog.js';
 import { Marketplace } from './pages/Marketplace.js';
+import { Extensions } from './pages/Extensions.js';
 import { Dashboard } from './pages/Dashboard.js';
 import { Sessions } from './pages/Sessions.js';
 import { Search } from './pages/Search.js';
@@ -93,6 +94,8 @@ function renderRoute(route: Route) {
       return <Catalog />;
     case 'marketplace':
       return <Marketplace />;
+    case 'extensions':
+      return <Extensions />;
     case 'dashboard':
       return <Dashboard />;
     case 'sessions':

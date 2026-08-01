@@ -31,7 +31,7 @@ export interface TopBarProps {
 type MenuId = 'folder' | 'agent';
 
 export function TopBar({ theme, onToggleTheme, onAbout, onToggleNav }: TopBarProps) {
-  const { instances, currentInstance, selectInstance, report, activeAgent, selectAgent } =
+  const { instances, currentInstance, selectInstance, availableAgents, activeAgent, selectAgent } =
     useAppState();
   const [version, setVersion] = useState<string | undefined>();
   const [menu, setMenu] = useState<MenuId | null>(null);
@@ -73,8 +73,6 @@ export function TopBar({ theme, onToggleTheme, onAbout, onToggleNav }: TopBarPro
   }, [menu]);
 
   const toggleMenu = (id: MenuId) => setMenu((m) => (m === id ? null : id));
-
-  const agents = report?.agents ?? [];
 
   const pickFolder = (id: string) => {
     setMenu(null);
@@ -160,12 +158,12 @@ export function TopBar({ theme, onToggleTheme, onAbout, onToggleNav }: TopBarPro
         )}
         {menu === 'agent' && (
           <div className="ch-menu ch-right open" role="menu" aria-label="Agent runtimes">
-            {agents.length === 0 ? (
+            {availableAgents.length === 0 ? (
               <div className="ch-item" aria-disabled="true">
                 <span className="muted">No agents detected</span>
               </div>
             ) : (
-              agents.map((agent) => (
+              availableAgents.map((agent) => (
                 <button
                   key={agent.kind}
                   type="button"

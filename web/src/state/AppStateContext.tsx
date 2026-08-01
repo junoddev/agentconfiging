@@ -41,9 +41,13 @@ import type {
   WriteResponse,
 } from '../api/types.js';
 import { WsClient, type WsState } from '../ws/client.js';
-import { readStoredAgentKind, writeStoredAgentKind } from './agentScope.js';
 import {
-  activeAgent as selectActiveAgent,
+  availableAgents as collectAvailableAgents,
+  readStoredAgentKind,
+  resolveActiveAgent,
+  writeStoredAgentKind,
+} from './agentScope.js';
+import {
   appReducer,
   currentInstance as selectCurrentInstance,
   initialAppState,
@@ -61,8 +65,14 @@ export interface AppStateValue extends AppState {
   /** The resolved current-instance summary (or undefined before load). */
   currentInstance?: InstanceSummary;
   /** The EFFECTIVE active agent (bead a6y): the picked kind when this report
-   *  detected it, else the first detection. Every scoped page reads this. */
+   *  detected it, else the first detection. Global detections are included so
+   *  the picker remains usable for folders with no local agent config. */
   activeAgent?: DetectedAgent;
+  /** Project plus machine-global runtime detections, de-duplicated by kind. */
+  availableAgents: DetectedAgent[];
+  /** Runtime scope for page data. Undefined when the selected runtime exists
+   *  only globally, so project config and all global overlays remain visible. */
+  agentScopeKind?: string;
   /** Switch instances; triggers a report fetch for the new instance. */
   selectInstance: (id: string) => void;
   /** Re-fetch the instance list into the shared state so the top-bar FOLDER
@@ -171,6 +181,15 @@ export function AppStateProvider({ children, deps }: AppStateProviderProps) {
   currentIdRef.current = state.currentInstanceId;
 
   const client = resolvedDeps?.client;
+
+  // The picker is a shell-level control, so it must not disappear merely
+  // because the selected folder has no local markers. Global entries are
+  // already loaded independently of the current instance; successful entries
+  // carry supported detector kinds and failed entries simply contribute none.
+  const availableAgents = useMemo(
+    () => collectAvailableAgents(state.report?.agents ?? [], state.globalReport?.entries ?? []),
+    [state.report?.agents, state.globalReport?.entries],
+  );
 
   // Single-flight guard for report fetches: each loadReport bumps this and drops
   // its result if a newer load has since started, so an out-of-order response
@@ -346,7 +365,13 @@ export function AppStateProvider({ children, deps }: AppStateProviderProps) {
       ...state,
       ...(client ? { client } : {}),
       currentInstance: selectCurrentInstance(state),
-      activeAgent: selectActiveAgent(state),
+      availableAgents,
+      agentScopeKind: state.report?.agents.some(
+        (a) => a.kind === resolveActiveAgent(availableAgents, state.activeAgentKind)?.kind,
+      )
+        ? resolveActiveAgent(availableAgents, state.activeAgentKind)?.kind
+        : undefined,
+      activeAgent: resolveActiveAgent(availableAgents, state.activeAgentKind),
       selectInstance,
       refreshInstances,
       selectAgent,
@@ -361,6 +386,7 @@ export function AppStateProvider({ children, deps }: AppStateProviderProps) {
     [
       state,
       client,
+      availableAgents,
       selectInstance,
       refreshInstances,
       selectAgent,

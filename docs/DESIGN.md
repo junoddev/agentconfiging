@@ -183,6 +183,21 @@ Micro only. 0.12–0.15s `ease` on background/color/border; 0.05s translateY pre
 - Labels are nouns, buttons are verbs that say what happens ("Resume", "Add hook", "Save hook").
 - Provenance is always visible: any value that comes from a file shows its scope badge and, where useful, its source path in mono.
 - Adaptive terminology: name things what the underlying tool names them (Hooks / Plugins / Extensions / Notifications; CLAUDE.md / AGENTS.md). When a capability doesn't exist, say so in a notice and show the nearest equivalent — never fake parity.
+- **Extension inventory terminology:** `#/extensions` is a normalized inventory
+  surface, not a universal plugin manager. Use **plugins** for Claude Code,
+  **extensions** for providers that use that term (such as the planned Gemini
+  adapter), and **configuration artifacts** for Codex's `AGENTS.md`, rules, and
+  config. Keep the Agentconfig Catalog distinct from provider-owned packages.
+- **Capability states:** provider cards must distinguish `supported`, `detected`,
+  `unavailable`, `unsupported`, and `error`. A missing provider CLI is an
+  unavailable dependency; a provider without a lifecycle contract is unsupported.
+  Never collapse those states or imply install/remove parity that the adapter does
+  not implement.
+- **Lifecycle safety boundary:** provider-managed install, remove, update, enable,
+  and disable are opt-in capabilities. They are safe to expose only through a
+  fixed-argument provider CLI/API with bounded execution, defensive parsing, and
+  provider-owned uninstall. Read-only adapters must not direct-write provider
+  plugin state or execute plugin code.
 - Empty/no-match states name the filter that caused them.
 
 ## 8. Don'ts

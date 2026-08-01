@@ -16,11 +16,11 @@ import {
 const EXPECTED_NAV = new Set([...RAIL_ORDER, 'gallery']);
 
 describe('RAIL_ORDER', () => {
-  it('covers the 23 sidebar pages, overview first', () => {
-    expect(RAIL_ORDER).toHaveLength(23);
+  it('covers the 24 sidebar pages, overview first', () => {
+    expect(RAIL_ORDER).toHaveLength(24);
     expect(RAIL_ORDER[0]).toBe('overview');
     expect(RAIL_ORDER[RAIL_ORDER.length - 1]).toBe('pipelines');
-    expect(new Set(RAIL_ORDER).size).toBe(23); // no dupes
+    expect(new Set(RAIL_ORDER).size).toBe(24); // no dupes
   });
 
   it('groups WORKSPACE first (instances before artifacts), then CONFIGURE', () => {

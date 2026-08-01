@@ -89,11 +89,11 @@ function cardFor(content: string, name: string) {
 }
 
 function SkillsBody() {
-  const { report, getFile, activeAgent } = useAppState();
+  const { report, getFile, agentScopeKind } = useAppState();
   const { entries: globalDirs } = useGlobalConfig();
   const flow = useWriteFlow();
   const toast = useToast();
-  const agentKind = activeAgent?.kind;
+  const agentKind = agentScopeKind;
 
   // Scoped to the ACTIVE agent (bead a6y); each chip notes the other detected
   // agents that read the same file via the AlsoAgents badge.
@@ -231,7 +231,7 @@ function SkillsBody() {
 
   // The sidebar hides SKILLS for agents without the concept (bead a6y); this
   // covers deep links with an honest not-applicable state. After all hooks.
-  const notApplicable = activeAgent !== undefined && !sectionApplies('skills', activeAgent.kind);
+  const notApplicable = agentScopeKind !== undefined && !sectionApplies('skills', agentScopeKind);
   if (notApplicable) {
     return (
       <main className="layout-main page">
@@ -244,7 +244,7 @@ function SkillsBody() {
           </div>
         </div>
         <Notice tone="info">
-          <strong>Not applicable to {displayNameForKind(activeAgent.kind)}.</strong> Skills and
+          <strong>Not applicable to {displayNameForKind(agentScopeKind)}.</strong> Skills and
           subagents (skills/*/SKILL.md, agents/*.md) are a Claude Code surface — switch the Agent
           picker to Claude Code to view or edit them.
         </Notice>
