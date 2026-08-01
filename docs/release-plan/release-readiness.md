@@ -1,0 +1,226 @@
+# Release Readiness Plan — `agentconfiging`
+
+Status date: 2026-08-01. Branch at assessment: `code-review-fixes` (clean tree).
+This is a planning document; nothing in it has been executed.
+
+---
+
+## 1. Current State Assessment
+
+### Version & publish status
+
+| Fact | Value |
+|---|---|
+| `package.json` version | `0.1.0` |
+| Published to npm? | **No** — `npm view agentconfiging` returns 404 (name currently unclaimed) |
+| Git tags | **None** (`git tag` is empty) |
+| Remote | `https://github.com/junoddev/agentconfiging.git` |
+| License | MIT (root `LICENSE`, Copyright (c) 2026 Aaron Junod; matches `package.json`) |
+| Node support | `engines.node >= 20` |
+| Bin | `agentconfiging` → `dist/cli/index.js` |
+| Files whitelist | `"files": ["dist"]` (plus npm-implicit LICENSE/README/package.json) |
+
+### What PUBLISHING.md already covers (verified accurate)
+
+`/Users/tranqy/projects/agentconfig/PUBLISHING.md` is a real runbook, and its
+claims check out against the repo:
+
+- Pre-flight done: `publishConfig.access: public`, `prepublishOnly` runs a fresh build, tarball verified via `npm pack --dry-run` (21 files, ~693 kB, no src/tests/maps/fixtures).
+- Optional native deps (`better-sqlite3`, `node-pty`) in `optionalDependencies`; core CLI proven to work without them via `npm run e2e` (`scripts/e2e-smoke.mjs`: pack → clean-dir install → `agentconfiging report` → server serves bundled UI).
+- Naming caveat: unscoped `agentconfiging` must be owned by the publishing account; `@capabletooling/agentconfiging` is the scoped fallback (bead `agentconfig-fy8.3`).
+- Recommended path: tag-driven CI publish with provenance via `.github/workflows/publish.yml` (exists; triggers on `v*.*.*`, runs lint/typecheck/test/build/e2e, then `npm publish --provenance --access public` with `NPM_TOKEN`).
+- Manual local publish documented as the no-provenance fallback.
+- Post-publish verification: `npx agentconfiging@latest report` in a scratch repo.
+
+### License posture
+
+`docs/LICENSE-AUDIT.md` (2026-07-27) is thorough and current:
+
+- Project MIT; all runtime + optional deps are MIT/ISC/BSD-3-Clause, zero copyleft.
+- `lightningcss` (MPL-2.0) is build-time-only via Vite devDependency, not shipped — recorded, no action needed.
+- Provenance of ported code is exclusively the team-owned `../markdowning` (sanctioned); clean-room statement for WS server, diff generator, cron parser.
+- No NOTICE file required for this dependency set.
+
+**Posture: license work is done.** Only re-run the audit if dependencies change before tag.
+
+### Gaps found during this assessment
+
+- **`package.json` is missing `repository`, `bugs`, `homepage`, `keywords`, and `author`.** The missing `repository` field is not cosmetic: `npm publish --provenance` **fails** when `repository.url` is absent or does not match the CI repo. As written, the provenance workflow in `publish.yml` will error on first run.
+- No `SECURITY.md`, no `CHANGELOG.md`, no `CONTRIBUTING.md`, no `.github/ISSUE_TEMPLATE/`.
+- CI (`.github/workflows/ci.yml`) runs on `ubuntu-latest` only (Node 20.x/22.x) and does **not** run `npm run e2e` — the packaging smoke gate only runs in the publish workflow.
+- No macOS/Windows CI coverage despite two native optional deps.
+
+---
+
+## 2. Versioning Strategy
+
+**Launch at `0.1.0`** (the current version). Rationale:
+
+- Semver 0.x correctly signals a young public API: the CLI surface (`launch`/`report`/`daemon`), the `report` JSON schema, and the `main`/`exports` core entry are all new and may need breaking adjustments based on early feedback. 0.x lets those land as minor bumps without violating semver.
+- `1.0.0` at launch would promise stability the project hasn't earned in the wild yet (zero external users, zero published releases).
+- Do **not** go below 0.1.0 (e.g. 0.0.x); the e2e-proven package and the audit justify a "usable first release" signal.
+
+Policy after launch (document in README or CONTRIBUTING):
+
+- 0.x: breaking changes bump **minor**, fixes bump **patch**.
+- Treat the `report` command's JSON output and exit-code contract as the de-facto public API for CI users — call out changes to it explicitly in release notes.
+- Promote to `1.0.0` once the report schema and CLI flags have survived a few releases unchanged.
+
+---
+
+## 3. Release Checklist
+
+### 3.1 Quality gates (all must pass at the release commit)
+
+```bash
+npm ci                # from lockfile, clean node_modules
+npm run lint          # eslint + prettier --check
+npm run typecheck     # tsc --noEmit
+npm test              # vitest run
+npm run build         # tsup + vite build web
+npm run e2e           # pack → clean install → report → served UI
+```
+
+- [ ] All six pass locally on the exact commit to be tagged.
+- [ ] CI green on `main` for that commit (Node 20.x and 22.x).
+- [ ] Merge or explicitly defer the `code-review-fixes` branch — do not tag a release while review fixes sit unmerged.
+
+### 3.2 Package contents verification
+
+- [ ] `npm pack --dry-run` and read the file list end-to-end. Expected: `dist/{cli,server,core}` JS, `dist/web` assets, `LICENSE`, `README.md`, `package.json` — roughly the 21 files / ~693 kB recorded in PUBLISHING.md.
+- [ ] Confirm **absent**: `src/`, tests, `*.map`, `fixtures/`, `opendesign/`, `.beads/`, docs, any `.env`-like or local-config files.
+- [ ] Confirm the registry seed snapshot (offline first-run catalog) is inside `dist/` — the README promises a 40-entry seed ships in the package.
+- [ ] `npm pack` (real tarball), then `tar -tzf` as a second pair of eyes; the e2e script already installs from this tarball.
+
+### 3.3 npx cold-start testing (clean machine/directory)
+
+The e2e script covers pack→install→report. Before launch, additionally test the human path:
+
+- [ ] In a scratch directory that is **not** a repo and has no agent config: `npx agentconfiging` — should start, print the tokenized URL, open the browser, and render an empty-but-sane UI (no crash on zero detections).
+- [ ] In a real repo with Claude Code config: full launch, inspector renders, terminal (PTY) works, a write shows a diff preview.
+- [ ] With optional deps failing to build (simulate: `npm install --omit=optional` of the tarball): `launch` and `report` still work; features needing `node-pty`/`better-sqlite3` degrade with a clear message rather than crash.
+- [ ] Cold npx cache: `npx --ignore-existing`-style fresh fetch after publish (`npx agentconfiging@latest report`) — this is the post-publish smoke in PUBLISHING.md; keep it.
+- [ ] Node 20 (minimum) and Node 22/24 (current) at least once each.
+
+### 3.4 Cross-platform notes
+
+- **macOS** — primary dev platform; covered by local testing. Verify browser auto-open uses `open` correctly.
+- **Linux** — CI platform; run one manual `npx` launch on Linux (headless: verify it prints the URL and doesn't hang when no browser can open).
+- **Windows** — **currently untested anywhere.** Risks specific to this codebase:
+  - `node-pty` on Windows needs prebuilds (or windows-build-tools); it's optional, so the terminal must degrade gracefully — verify the degradation path on Windows, not just the absence path on macOS.
+  - Path handling: the static-file traversal guard already handles `\` separators (good sign of intent); verify scanner/global-scope paths (`~/.claude` → `%USERPROFILE%`) resolve on Windows.
+  - `127.0.0.1` binding and browser open (`start` vs `open` vs `xdg-open`).
+  - Recommendation: add `windows-latest` and `macos-latest` to the CI matrix (build + test at minimum, e2e if feasible) **before** launch, or explicitly state Windows support status in the README ("best-effort") if deferring.
+
+---
+
+## 4. npm Publishing Hygiene
+
+- [ ] **Fix `package.json` metadata (launch-blocking for provenance):**
+  - `repository`: `{ "type": "git", "url": "git+https://github.com/junoddev/agentconfiging.git" }` — required for `npm publish --provenance`.
+  - `bugs`: `https://github.com/junoddev/agentconfiging/issues`; `homepage`: repo README URL.
+  - `author`: `Aaron Junod`.
+  - `keywords`: e.g. `["ai", "agents", "claude-code", "cursor", "copilot", "codex", "agent-config", "mcp", "claude", "developer-tools", "cli", "config"]` — this is the primary lever for npm search discoverability.
+- [ ] **Provenance**: publish only via the tag-driven workflow (`publish.yml` already passes `--provenance` and requests `id-token: write`). Never local-publish the launch release — provenance can't be added retroactively.
+- [ ] **2FA**: publishing npm account must have 2FA enabled. Use a **granular automation token** scoped to this package for `NPM_TOKEN` (automation tokens bypass the OTP prompt in CI by design; keep the token's scope minimal). Consider npm **Trusted Publishing (OIDC)** instead of a long-lived token — it pairs naturally with the existing OIDC provenance setup and removes the secret entirely.
+- [ ] **Name claim**: the 404 confirms `agentconfiging` is unclaimed today, but that's not a reservation. Decide the naming question (bead `agentconfig-fy8.3`) and publish promptly once decided; have the `@capabletooling/agentconfiging` fallback ready per PUBLISHING.md.
+- [ ] **Files whitelist**: `"files": ["dist"]` is correct — keep whitelist (not `.npmignore`) as the mechanism; re-verify with the pack dry-run every release since `prepublishOnly` rebuilds.
+- [ ] **README on npm**: root `README.md` ships automatically and becomes the npm landing page. It's strong (165 lines, leads with the npx one-liner). Before launch: verify all image links are **absolute** URLs (`docs/images/` relative links break on npmjs.com), and the first paragraph reads well as the npm description snippet.
+- [ ] **package.json `description`**: current one is good; keep it in sync with the README tagline.
+
+---
+
+## 5. Security Review Before Public Launch
+
+This tool reads config (potentially containing secrets), runs a local HTTP+WS
+server, exposes a real terminal (PTY), and executes pipelines. The recent
+security work is real and verified in-source; the list below records **what
+exists** and **what to double-check** before strangers run it.
+
+### Verified present (with locations)
+
+| Control | Where | Notes |
+|---|---|---|
+| Per-session bearer token, every `/api` request | `src/server/app.ts` | SHA-256 + `timingSafeEqual`; app holds only the hash; token travels in URL fragment then Authorization header; **no** `?token=` fallback |
+| Host allowlist (DNS-rebinding defense) | `src/server/app.ts` | Host must be exactly `127.0.0.1:<port>` / `localhost:<port>`, else 403 |
+| Origin/CSRF gate | `src/server/app.ts` | Origin allowlist on all `/api`; state-changing methods must prove same-origin (Origin or `Sec-Fetch-Site: same-origin`); no CORS headers ever |
+| Security headers | `src/server/app.ts` | `nosniff`, `X-Frame-Options: DENY`, CSP `frame-ancestors 'none'`, `Referrer-Policy: no-referrer` |
+| Static-file hardening | `src/server/app.ts` | Percent-decoded `..` rejection (both separators), realpath canonicalization so symlinks can't escape `distDir` |
+| WS auth | `src/server/ws.ts` | Token via `Sec-WebSocket-Protocol` (fragment never sent to server); no frame written to unauthorized sockets |
+| Secret redaction | `src/core/redact/` (`patterns.ts`, `redact.ts` + tests) | Server-side redaction before content hits the wire (per README); coverage expanded in commit `bf2dc7e` |
+| SSRF denylist | `src/server/pipeline/runtimes.ts` (`isBlockedHttpHost`) | Private-range denylist; redirects followed **manually** and re-gated on every hop, bounded by `HTTP_MAX_REDIRECTS` |
+| Pipeline exec gating | `src/server/pipeline/runtimes.ts` (`runBashDisabled`) | Bash nodes refuse to run unless launched interactively — headless daemon never executes author-supplied shell |
+| Child env hygiene | `src/server/pipeline/runtimes.ts` | Session token never exported to children; denylist of token-shaped env vars stripped (`STRIPPED_ENV_KEYS`) |
+| Git exec hardening | `src/server/pipeline/runtimes.ts` | Enumerated read-only subcommand allowlist, strict arg charset, `..` refused, arg-array exec (no shell) |
+
+### Double-check before launch
+
+- [ ] **Redaction breadth**: run the artifact browser over a fixture containing current-format secrets (Anthropic `sk-ant-`, OpenAI `sk-proj-`, GitHub `ghp_`/`github_pat_`, AWS `AKIA`, Slack `xoxb-`, generic `Bearer`/`.env` pairs, private key PEM blocks) and confirm every one renders redacted. Confirm redaction also applies to the **write/diff preview** and **WS-pushed report diffs**, not just the initial artifact read.
+- [ ] **Token lifecycle**: token is per-session and random — confirm entropy source (`crypto.randomBytes`, ≥128 bits), confirm it's never logged (server logs, Ink status pane, error paths), and that PTY child environments are scrubbed (the module header claims this — test it: `env | grep -i token` inside the served terminal).
+- [ ] **PTY exposure**: the terminal is arbitrary code execution by design. Confirm PTY creation is only reachable through token+Origin-gated routes and only when interactive; confirm the WS gating covers the PTY channel specifically.
+- [ ] **SSRF denylist completeness**: verify `isBlockedHttpHost` covers `0.0.0.0`, `::1`/IPv6 loopback, IPv4-mapped IPv6 (`::ffff:127.0.0.1`), link-local `169.254.0.0/16` (cloud metadata `169.254.169.254`), and decimal/octal IP encodings; confirm DNS resolution happens **once** and the connection uses the checked address (or that per-redirect re-gating closes the rebind window). Also confirm the registry client (`src/core` registry + marketplace fetches) goes through the same gate, not just pipeline HTTP nodes.
+- [ ] **Write API scope**: confirm every write path is confined to the project root / known global config dirs (the `WriteScope` model in runtimes.ts suggests yes) and that symlinked config files can't redirect writes outside scope (`O_NOFOLLOW` is referenced — verify it's applied on the write path).
+- [ ] **Registry/marketplace installs**: checksum verification and provenance stamping are claimed in the README — verify the checksum is enforced (hard fail, not warn) and the 40-entry seed snapshot pins checksums.
+- [ ] **`report` command in CI contexts**: confirm it never includes raw file contents with secrets in its JSON output (it's designed to be piped/uploaded by users).
+- [ ] **Daemon mode**: confirm `daemon` binds the same 127.0.0.1-only listener (or no listener) and inherits the bash-disabled posture (`runBashDisabled`) — this is the mode most likely to run unattended.
+- [ ] **Dependency audit at tag time**: `npm audit --omit=dev` clean (or triaged) on the release commit; lockfile committed.
+- [ ] Consider a quick external eyes pass: run the repo's own `/security-review` skill or an equivalent focused review of `src/server/` before tagging.
+
+---
+
+## 6. CI/CD Recommendations
+
+Already in place and good:
+
+- `ci.yml`: lint/typecheck/test/build on push + PR, Node 20.x/22.x, Ubuntu.
+- `publish.yml`: tag-driven (`v*.*.*`), full gate chain including e2e, OIDC provenance publish, inert until `NPM_TOKEN` exists.
+
+Recommended changes:
+
+1. **Add `npm run e2e` to `ci.yml`** — today the packaging smoke only runs at publish time, which is the worst moment to discover a packaging regression. (Launch-blocking: cheap, high value.)
+2. **Extend the CI matrix to `macos-latest` and `windows-latest`** (build + test; e2e where practical). At minimum do this once manually pre-launch and add to CI post-launch.
+3. **GitHub Release automation**: extend `publish.yml` (or add a job) so a `v*` tag also creates a GitHub Release with generated notes (`gh release create "$TAG" --generate-notes` or `softprops/action-gh-release`). Keeps npm version, git tag, and release notes atomic.
+4. **Changelog discipline**: adopt Keep a Changelog format in `CHANGELOG.md`; the publish workflow can lift the tag's section into the GitHub Release body. Full release-please/changesets automation is overkill for a single-package repo at 0.x — revisit if release cadence grows.
+5. **Pin workflow actions by SHA** (supply-chain hygiene for a security-conscious tool): `actions/checkout@<sha>`, `actions/setup-node@<sha>`.
+6. **Switch `NPM_TOKEN` to npm Trusted Publishing (OIDC)** when convenient — removes the long-lived secret; the workflow already has `id-token: write`.
+7. Optional post-launch: a scheduled weekly CI run to catch upstream/dependency breakage between releases; Dependabot or Renovate for dependency PRs.
+
+---
+
+## 7. Support Readiness
+
+None of these exist yet; all are plain-file additions:
+
+- [ ] **`SECURITY.md`** (root): private reporting channel (GitHub private vulnerability reporting is the low-friction choice — enable it in repo settings), supported-versions statement (latest 0.x only), response-time expectation. For a tool that opens a local server + terminal, a security policy is a credibility requirement, not a nicety.
+- [ ] **Issue templates** (`.github/ISSUE_TEMPLATE/`): `bug_report.yml` (ask for OS, Node version, install method npx/global, whether optional native deps built, and `agentconfiging report` output *with a reminder to check for secrets*), `feature_request.yml`, and `config.yml` pointing security reports to the SECURITY.md channel instead of public issues.
+- [ ] **`CHANGELOG.md`**: Keep a Changelog format; seed it with a `0.1.0` entry summarizing the launch feature set (the README's feature list is a ready-made source).
+- [ ] **Release notes format**: per-release sections — Highlights / Fixes / Security / Breaking (explicit even when empty during 0.x) — mirrored between CHANGELOG.md and the GitHub Release.
+- [ ] **`CONTRIBUTING.md`** (post-launch acceptable): dev setup (`npm run dev`), gate commands, pointer to `docs/ARCHITECTURE.md`, note on the bd/beads tracker if external contributors should see it.
+- [ ] Enable GitHub Discussions or label conventions (`bug`, `question`, `platform:windows`, …) — post-launch.
+
+---
+
+## 8. Prioritized Checklist
+
+### Launch-blocking (do before `git tag v0.1.0`)
+
+1. [ ] **Add `repository` (+ `bugs`, `homepage`, `author`, `keywords`) to `package.json`** — provenance publish fails without `repository`; keywords gate discoverability. (§4)
+2. [ ] **Decide the npm name** (unscoped `agentconfiging` vs `@capabletooling/agentconfiging`, bead `agentconfig-fy8.3`) and set `NPM_TOKEN` (or Trusted Publishing) on the repo. (§4)
+3. [ ] **Merge or resolve `code-review-fixes`**; tag only a commit that is green on `main`. (§3.1)
+4. [ ] **Security double-check pass** (§5): redaction fixture sweep incl. diff/WS paths, token-never-logged + PTY env scrub check, SSRF denylist edge cases (IPv6/mapped/link-local/metadata) and registry-client coverage, checksum enforcement on installs, daemon posture.
+5. [ ] **Add `SECURITY.md`** and enable private vulnerability reporting. (§7)
+6. [ ] **Full gate run + pack verification** on the release commit: lint/typecheck/test/build/e2e, `npm pack --dry-run` contents review. (§3.1–3.2)
+7. [ ] **Manual npx cold-start matrix**: empty dir, real repo, `--omit=optional` degradation, Node 20 + 22; at least one Linux run and one Windows attempt (or an explicit Windows-support statement in README). (§3.3–3.4)
+8. [ ] **Add `npm run e2e` to `ci.yml`.** (§6)
+9. [ ] **Seed `CHANGELOG.md` with the 0.1.0 entry**; fix any relative image links in README for npm rendering. (§4, §7)
+10. [ ] **Publish via the tag → CI → provenance path** (never local for the launch), then post-publish smoke: `npx agentconfiging@latest report` in a scratch repo; create the GitHub Release.
+
+### Post-launch (fast follow, first 2–4 weeks)
+
+- [ ] macOS + Windows CI matrix; pin actions by SHA. (§6)
+- [ ] GitHub Release automation from tags; changelog-to-release-notes wiring. (§6)
+- [ ] Issue templates + config.yml. (§7)
+- [ ] `CONTRIBUTING.md`. (§7)
+- [ ] Trusted Publishing migration off `NPM_TOKEN`; Dependabot/Renovate; scheduled CI. (§6)
+- [ ] Versioning policy write-up (0.x semantics, `report` JSON stability promise). (§2)
+- [ ] Windows first-class support work as issues arrive (node-pty prebuilds, path edge cases). (§3.4)
