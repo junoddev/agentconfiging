@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { DetectedAgent } from '../api/types.js';
 import {
   agentKindsForFile,
+  availableAgents,
   displayNameForKind,
   isClaudeKind,
   otherAgentKinds,
@@ -33,6 +34,33 @@ describe('resolveActiveAgent', () => {
 
   it('returns undefined when nothing is detected', () => {
     expect(resolveActiveAgent([], 'cursor')).toBeUndefined();
+  });
+});
+
+describe('availableAgents', () => {
+  it('keeps global-only runtimes available and de-duplicates shared detections', () => {
+    const globalClaude = agent('claude-code', ['settings.json']);
+    const globalCursor = agent('cursor', ['rules/project.mdc']);
+    const result = availableAgents(
+      [],
+      [
+        { agents: [globalClaude] },
+        { agents: [agent('claude-code', ['keybindings.json']), globalCursor] },
+      ],
+    );
+
+    expect(result.map((a) => a.kind)).toEqual(['claude-code', 'cursor']);
+    expect(result[0]?.files).toEqual(['settings.json', 'keybindings.json']);
+  });
+
+  it('prefers the selected folder detection when the same runtime is global too', () => {
+    const local = agent('claude-code', ['.claude/settings.json']);
+    const result = availableAgents(
+      [local],
+      [{ agents: [agent('claude-code', ['settings.json'])] }],
+    );
+    expect(result[0]?.confidence).toBe(local.confidence);
+    expect(result[0]?.files).toEqual(['.claude/settings.json', 'settings.json']);
   });
 });
 

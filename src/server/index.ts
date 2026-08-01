@@ -63,6 +63,27 @@ export type {
   MarketplacePlugin,
   InstalledPlugin,
 } from './marketplace.js';
+export { registerExtensionRoutes } from './extensions.js';
+export {
+  createBuiltInExtensionAdapters,
+  createClaudeExtensionAdapter,
+  createCodexExtensionAdapter,
+} from './extension-adapters.js';
+export type {
+  Extension,
+  ExtensionCapabilities,
+  ExtensionInventory,
+  ExtensionInventoryResponse,
+  ExtensionKind,
+  ExtensionProvider,
+  ExtensionProviderAdapter,
+  ExtensionProviderState,
+  ExtensionRoutesConfig,
+} from './extensions.js';
+export type {
+  BuiltInExtensionAdaptersOptions,
+  ClaudeExtensionAdapterOptions,
+} from './extension-adapters.js';
 export {
   registerStatsRoutes,
   sessionSummary,

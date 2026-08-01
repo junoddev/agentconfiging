@@ -45,6 +45,7 @@ export const RAIL_ORDER: RouteName[] = [
   ...EDITOR_ROUTES,
   // LIBRARY
   'catalog',
+  'extensions',
   'marketplace',
   // RUNTIME
   'dashboard',

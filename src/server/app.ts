@@ -65,6 +65,8 @@ import { registerStorageRoutes } from './storage.js';
 import { registerSyncRoute } from './sync.js';
 import { registerCatalogRoutes, type CatalogSource } from './catalog.js';
 import { registerMarketplaceRoutes, type ClaudeExec } from './marketplace.js';
+import { registerExtensionRoutes, type ExtensionProviderAdapter } from './extensions.js';
+import { createBuiltInExtensionAdapters } from './extension-adapters.js';
 import { registerGitRoutes } from './git-routes.js';
 import type { GitExec } from './git.js';
 import { registerStatsRoutes } from './stats-routes.js';
@@ -127,6 +129,8 @@ export interface AppConfig {
    * with no real CLI present.
    */
   marketplaceExec?: ClaudeExec;
+  /** Normalized read-only provider adapters (agentconfig-4hm.5). */
+  extensionAdapters?: readonly ExtensionProviderAdapter[];
   /**
    * GIT PANEL (bead ngs.1): how the git-panel routes reach `git`. Defaults to the
    * real subprocess (execFile, fixed command `git`, arg array, no shell, cwd
@@ -268,6 +272,12 @@ function serveStatic(distDir: string, pathname: string): Response {
 
 export function createApp(config: AppConfig): Hono {
   const app = new Hono();
+  const extensionAdapters =
+    config.extensionAdapters ??
+    createBuiltInExtensionAdapters({
+      exec: config.marketplaceExec,
+      projectRoot: config.registry.resolve(undefined)?.root,
+    });
 
   const allowedHosts = () => {
     const port = config.port();
@@ -504,6 +514,12 @@ export function createApp(config: AppConfig): Hono {
   // every spawn, degrades gracefully when the CLI is absent, and parses the CLI's
   // UNTRUSTED output defensively. See src/server/marketplace.ts.
   registerMarketplaceRoutes(app, { exec: config.marketplaceExec });
+
+  // EXTENSION INVENTORY (agentconfig-4hm.5): provider-neutral, read-only
+  // inventory. Provider adapters are injectable and must translate their own
+  // raw state before it reaches this route. Claude marketplace compatibility
+  // remains on /api/marketplace and is intentionally not migrated here.
+  registerExtensionRoutes(app, { adapters: extensionAdapters });
 
   // GIT PANEL (ngs.1): GET /api/git/status|log|branches|diff + POST
   // /api/git/stage|unstage|commit|checkout|push|pull — the launched-repo git

@@ -125,11 +125,11 @@ export function Mcp() {
 }
 
 function McpPage() {
-  const { report, loading, error, getFile, activeAgent } = useAppState();
+  const { report, loading, error, getFile, agentScopeKind } = useAppState();
   const { entries: globalEntries } = useGlobalConfig();
   const flow = useWriteFlow();
   const toast = useToast();
-  const agentKind = activeAgent?.kind;
+  const agentKind = agentScopeKind;
 
   const [files, setFiles] = useState<McpFile[]>([]);
   const [filesLoading, setFilesLoading] = useState(false);
@@ -314,7 +314,7 @@ function McpPage() {
 
   // The sidebar hides MCP for agents without the concept (bead a6y); this
   // covers deep links with an honest not-applicable state. After all hooks.
-  const notApplicable = activeAgent !== undefined && !sectionApplies('mcp', activeAgent.kind);
+  const notApplicable = agentScopeKind !== undefined && !sectionApplies('mcp', agentScopeKind);
   if (notApplicable) {
     return (
       <Frame>
@@ -324,7 +324,7 @@ function McpPage() {
           </div>
         </div>
         <Notice tone="info">
-          <strong>Not applicable to {displayNameForKind(activeAgent.kind)}.</strong> The MCP server
+          <strong>Not applicable to {displayNameForKind(agentScopeKind)}.</strong> The MCP server
           files this page edits (.mcp.json, .claude/settings*.json) are Claude Code surfaces —
           switch the Agent picker to Claude Code to view or edit them.
         </Notice>
