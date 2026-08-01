@@ -287,14 +287,15 @@ describe('parseClaudeSession resilience', () => {
           },
         },
       }),
-      // A malformed usage block coerces every field to 0, never NaN.
+      // Malformed fields are retained as an explicit partial usage block: valid
+      // counts survive, but downstream pricing cannot call this a known zero.
       JSON.stringify({
         type: 'assistant',
         message: {
           role: 'assistant',
           model: 'claude-sonnet-4-5',
           content: [{ type: 'text', text: 'hi' }],
-          usage: { input_tokens: 'bad', output_tokens: -5 },
+          usage: { input_tokens: 'bad', output_tokens: 5, cache_read_input_tokens: 7 },
         },
       }),
       // A user message carries no usage.
@@ -302,18 +303,66 @@ describe('parseClaudeSession resilience', () => {
     ].join('\n');
     const session = parseClaudeSession(text);
     expect(session.messages[0]!.usage).toEqual({
+      status: 'complete',
       inputTokens: 12,
       outputTokens: 340,
       cacheCreationTokens: 35230,
       cacheReadTokens: 900,
     });
     expect(session.messages[1]!.usage).toEqual({
+      status: 'partial',
+      inputTokens: 0,
+      outputTokens: 5,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 7,
+      invalidFields: ['input_tokens'],
+    });
+    expect(session.messages[2]!.usage).toBeUndefined();
+  });
+
+  it('distinguishes a malformed usage block from a valid all-zero usage block', () => {
+    const text = [
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          model: 'claude-sonnet-4-5',
+          content: [],
+          usage: {
+            input_tokens: 0,
+            output_tokens: 0,
+            cache_creation_input_tokens: 0,
+            cache_read_input_tokens: 0,
+          },
+        },
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          model: 'claude-sonnet-4-5',
+          content: [],
+          usage: '/bin/zsh',
+        },
+      }),
+    ].join('\n');
+
+    const session = parseClaudeSession(text);
+    expect(session.messages[0]!.usage).toEqual({
+      status: 'complete',
       inputTokens: 0,
       outputTokens: 0,
       cacheCreationTokens: 0,
       cacheReadTokens: 0,
     });
-    expect(session.messages[2]!.usage).toBeUndefined();
+    expect(session.messages[1]!.usage).toEqual({
+      status: 'partial',
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
+      invalidFields: ['usage'],
+    });
   });
 
   it('does not pollute prototypes when logs carry __proto__ keys', () => {

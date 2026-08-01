@@ -54,23 +54,68 @@ function asString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
-/** A finite non-negative token count, or 0 for anything malformed. */
-function asTokenCount(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+const USAGE_FIELDS = [
+  'input_tokens',
+  'output_tokens',
+  'cache_creation_input_tokens',
+  'cache_read_input_tokens',
+] as const;
+type UsageField = (typeof USAGE_FIELDS)[number];
+
+const REQUIRED_USAGE_FIELDS = new Set<UsageField>(['input_tokens', 'output_tokens']);
+
+interface ParsedTokenCount {
+  value: number;
+  invalid: boolean;
+}
+
+function hasOwn(obj: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(obj, key);
+}
+
+/** Parse one finite non-negative integer token count. */
+function tokenCount(raw: Record<string, unknown>, field: UsageField): ParsedTokenCount {
+  if (!hasOwn(raw, field)) {
+    return { value: 0, invalid: REQUIRED_USAGE_FIELDS.has(field) };
+  }
+  const value = raw[field];
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) {
+    return { value, invalid: false };
+  }
+  return { value: 0, invalid: true };
 }
 
 /**
  * Lift an assistant message's `message.usage` block into a {@link TokenUsage}.
- * Returns undefined when no usage object is present. Every field is coerced to a
- * finite non-negative count, so a malformed usage block yields zeros, never NaN.
+ * Returns undefined when no usage block is present. Valid fields are retained,
+ * but malformed required fields mark the usage as partial so downstream cost
+ * accounting cannot present a fabricated known-zero estimate.
  */
 function toTokenUsage(raw: unknown): TokenUsage | undefined {
-  if (!isRecord(raw)) return undefined;
+  if (raw === undefined) return undefined;
+  if (!isRecord(raw)) {
+    return {
+      status: 'partial',
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
+      invalidFields: ['usage'],
+    };
+  }
+  const input = tokenCount(raw, 'input_tokens');
+  const output = tokenCount(raw, 'output_tokens');
+  const cacheCreation = tokenCount(raw, 'cache_creation_input_tokens');
+  const cacheRead = tokenCount(raw, 'cache_read_input_tokens');
+  const invalidFields = USAGE_FIELDS.filter((field) => tokenCount(raw, field).invalid);
+  const status = invalidFields.length === 0 ? 'complete' : 'partial';
   return {
-    inputTokens: asTokenCount(raw.input_tokens),
-    outputTokens: asTokenCount(raw.output_tokens),
-    cacheCreationTokens: asTokenCount(raw.cache_creation_input_tokens),
-    cacheReadTokens: asTokenCount(raw.cache_read_input_tokens),
+    status,
+    inputTokens: input.value,
+    outputTokens: output.value,
+    cacheCreationTokens: cacheCreation.value,
+    cacheReadTokens: cacheRead.value,
+    ...(invalidFields.length > 0 ? { invalidFields } : {}),
   };
 }
 
@@ -280,7 +325,7 @@ export function parseClaudeSession(text: string, filePath = ''): Session {
         model: asString(record.message.model),
         content: toContentBlocks(record.message.content, ctx),
       };
-      const usage = toTokenUsage(record.message.usage);
+      const usage = type === 'assistant' ? toTokenUsage(record.message.usage) : undefined;
       if (usage !== undefined) message.usage = usage;
       messages.push(message);
       if (message.cwd !== undefined && !cwds.includes(message.cwd)) cwds.push(message.cwd);

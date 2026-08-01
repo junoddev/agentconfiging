@@ -3,14 +3,59 @@ import {
   blockLabel,
   filterSessions,
   formatDuration,
+  formatUsageCost,
+  formatUsageTokens,
   formatWhen,
   messageLabel,
   normalizeTag,
   renderSegments,
   sessionToMarkdown,
   shortId,
+  usageCostTitle,
 } from './logic.js';
-import type { ReplayMessage, SessionDetail, SessionSummary } from '../../api/types.js';
+import type {
+  ReplayMessage,
+  SessionDetail,
+  SessionSummary,
+  UsageSummary,
+} from '../../api/types.js';
+
+const unknownUsage: UsageSummary = {
+  tokens: {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheCreationTokens: 0,
+    cacheReadTokens: 0,
+    totalTokens: 0,
+  },
+  messagesWithUsage: 0,
+  completeUsageMessages: 0,
+  partialUsageMessages: 0,
+  assistantMessagesWithoutUsage: 0,
+  cost: { status: 'unknown', currency: 'USD', pricedMessages: 0, unpricedMessages: 0 },
+};
+
+const knownUsage: UsageSummary = {
+  tokens: {
+    inputTokens: 1000,
+    outputTokens: 200,
+    cacheCreationTokens: 0,
+    cacheReadTokens: 0,
+    totalTokens: 1200,
+  },
+  messagesWithUsage: 1,
+  completeUsageMessages: 1,
+  partialUsageMessages: 0,
+  assistantMessagesWithoutUsage: 0,
+  cost: {
+    status: 'known',
+    currency: 'USD',
+    amountUsd: 0.006,
+    rateSource: 'anthropic-public-pricing-standard-usd-per-mtok-2026-07-26',
+    pricedMessages: 1,
+    unpricedMessages: 0,
+  },
+};
 
 describe('renderSegments', () => {
   it('splits redacted content into plain + mark segments', () => {
@@ -96,6 +141,7 @@ describe('sessionToMarkdown', () => {
     limit: 200,
     live: false,
     tags: ['urgent'],
+    usage: knownUsage,
     messages: [
       {
         role: 'user',
@@ -126,6 +172,8 @@ describe('sessionToMarkdown', () => {
     const md = sessionToMarkdown(detail);
     expect(md).toContain('# My Run');
     expect(md).toContain('- tags: urgent');
+    expect(md).toContain('- tokens: 1,200');
+    expect(md).toContain('- estimated cost: <$0.01');
     expect(md).toContain('[REDACTED:aws_access_key]');
     expect(md).toContain('## user');
     expect(md).toContain('## user · subagent');
@@ -155,6 +203,7 @@ describe('filterSessions', () => {
     messageCount: 0,
     live: false,
     tags: [],
+    usage: unknownUsage,
     ...over,
   });
   const sessions = [
@@ -174,5 +223,27 @@ describe('filterSessions', () => {
     expect(all).toEqual(sessions);
     expect(all).not.toBe(sessions);
     expect(filterSessions(sessions, 'zzz')).toEqual([]);
+  });
+});
+
+describe('usage formatting', () => {
+  it('keeps absent usage unknown', () => {
+    expect(formatUsageTokens(unknownUsage)).toBe('—');
+    expect(formatUsageCost(unknownUsage)).toBe('unknown');
+    expect(usageCostTitle(unknownUsage)).toBe('no usage blocks');
+  });
+
+  it('formats known and partial session cost states', () => {
+    expect(formatUsageTokens(knownUsage)).toBe('1,200');
+    expect(formatUsageCost(knownUsage)).toBe('<$0.01');
+    expect(usageCostTitle(knownUsage)).toBe('token-derived estimate');
+
+    expect(
+      usageCostTitle({
+        ...knownUsage,
+        assistantMessagesWithoutUsage: 1,
+        cost: { ...knownUsage.cost, status: 'partial', unpricedMessages: 1 },
+      }),
+    ).toBe('2 unpriced messages');
   });
 });

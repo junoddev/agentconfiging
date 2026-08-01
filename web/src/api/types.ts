@@ -776,6 +776,37 @@ export interface XpStats {
   levelProgress: number;
 }
 
+/** Token totals from assistant `message.usage` blocks. */
+export interface UsageTokenTotals {
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+  totalTokens: number;
+}
+
+export type UsageCostStatus = 'known' | 'partial' | 'unknown';
+
+/** Token-derived cost estimate; `amountUsd` is omitted when unknown. */
+export interface UsageCostSummary {
+  status: UsageCostStatus;
+  currency: 'USD';
+  amountUsd?: number;
+  rateSource?: string;
+  pricedMessages: number;
+  unpricedMessages: number;
+}
+
+/** Usage + cost summary for a session or rolled-up dashboard window. */
+export interface UsageSummary {
+  tokens: UsageTokenTotals;
+  messagesWithUsage: number;
+  completeUsageMessages: number;
+  partialUsageMessages: number;
+  assistantMessagesWithoutUsage: number;
+  cost: UsageCostSummary;
+}
+
 /** The dashboard stats bundle. All numbers are real, never invented. */
 export interface DashboardStats {
   sessionCount: number;
@@ -785,6 +816,7 @@ export interface DashboardStats {
   activeDays: number;
   streak: StreakStats;
   xp: XpStats;
+  usage: UsageSummary;
   heatmap: HeatmapCell[];
   firstActiveDate?: string;
   lastActiveDate?: string;
@@ -834,6 +866,8 @@ export interface SessionSummary {
   live: boolean;
   /** User-authored tags (local sidecar; may be empty). */
   tags: string[];
+  /** Token/cost usage metadata from assistant `message.usage` blocks. */
+  usage: UsageSummary;
 }
 
 /** GET /api/sessions payload — a bounded, content-free session list. */
@@ -891,6 +925,8 @@ export interface SessionDetail {
   messages: ReplayMessage[];
   live: boolean;
   tags: string[];
+  /** Token/cost usage metadata from assistant `message.usage` blocks. */
+  usage: UsageSummary;
 }
 
 /** POST /api/sessions/:id/tags payload — the stored (sanitized) tag set. */

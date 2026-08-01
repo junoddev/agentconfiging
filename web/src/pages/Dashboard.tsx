@@ -23,10 +23,16 @@ import { EmptyState, Heatmap, StatBlock } from '../components/core/index.js';
 import {
   achievementProgressLabel,
   activityRange,
+  costCaption,
   formatRuntimes,
+  formatUsageInputTokens,
+  formatUsageCost,
+  formatUsageOutputTokens,
+  formatUsageTokens,
   groupThousands,
   hasNoHistory,
   levelProgressLevel,
+  usageMessagesCaption,
 } from './dashboard/logic.js';
 import './dashboard.css';
 
@@ -141,6 +147,24 @@ export function Dashboard() {
               <StatBlock value={groupThousands(stats.xp.xp)} label="XP" />
               <StatBlock value={groupThousands(stats.activeDays)} label="Active days" />
               <StatBlock value={groupThousands(stats.promptCount)} label="Prompts" />
+            </div>
+            <div className="tile-row">
+              <StatBlock
+                value={formatUsageTokens(stats.usage)}
+                label="Tokens"
+                caption={usageMessagesCaption(stats.usage)}
+              />
+              <StatBlock
+                value={formatUsageCost(stats.usage)}
+                label="Estimated cost"
+                caption={costCaption(stats.usage)}
+              />
+              <StatBlock
+                value={formatUsageInputTokens(stats.usage)}
+                label="Input tokens"
+                caption="fresh only"
+              />
+              <StatBlock value={formatUsageOutputTokens(stats.usage)} label="Output tokens" />
             </div>
             <div
               className="dash__progress"

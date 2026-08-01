@@ -12,8 +12,12 @@ export type {
   HeatmapCell,
   MessageCounts,
   StreakStats,
+  UsageCostStatus,
+  UsageCostSummary,
+  UsageSummary,
+  UsageTokenTotals,
   XpStats,
 } from './types.js';
-export { computeStats, computeXpTotal, xpToLevel } from './stats.js';
+export { computeSessionUsage, computeStats, computeXpTotal, xpToLevel } from './stats.js';
 export type { Achievement, AchievementCategory, AchievementEvaluation } from './achievements.js';
 export { ACHIEVEMENTS, evaluateAchievements } from './achievements.js';

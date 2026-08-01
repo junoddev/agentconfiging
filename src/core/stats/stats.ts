@@ -29,6 +29,9 @@ import type {
   HeatmapCell,
   MessageCounts,
   StreakStats,
+  UsageCostSummary,
+  UsageSummary,
+  UsageTokenTotals,
   XpStats,
 } from './types.js';
 
@@ -48,6 +51,68 @@ const XP_PER_LONGEST_STREAK_DAY = 25;
  * without runaway grind.
  */
 const XP_LEVEL_FACTOR = 100;
+
+const USD_PER_MTOK_SOURCE = 'anthropic-public-pricing-standard-usd-per-mtok-2026-08-01';
+
+interface ModelRates {
+  input: number;
+  output: number;
+  cacheCreation: number;
+  cacheRead: number;
+}
+
+const OPUS_45_RATES: ModelRates = { input: 5, output: 25, cacheCreation: 6.25, cacheRead: 0.5 };
+const OPUS_RATES: ModelRates = { input: 15, output: 75, cacheCreation: 18.75, cacheRead: 1.5 };
+const SONNET_RATES: ModelRates = { input: 3, output: 15, cacheCreation: 3.75, cacheRead: 0.3 };
+const HAIKU_45_RATES: ModelRates = { input: 1, output: 5, cacheCreation: 1.25, cacheRead: 0.1 };
+const HAIKU_35_RATES: ModelRates = { input: 0.8, output: 4, cacheCreation: 1, cacheRead: 0.08 };
+const HAIKU_3_RATES: ModelRates = {
+  input: 0.25,
+  output: 1.25,
+  cacheCreation: 0.3,
+  cacheRead: 0.03,
+};
+
+const PRICED_MODEL_IDS: readonly (readonly [string, ModelRates])[] = [
+  ['claude-opus-4-5', OPUS_45_RATES],
+  ['claude-opus-4-5-20251101', OPUS_45_RATES],
+  ['claude-opus-4-1', OPUS_RATES],
+  ['claude-3-opus-20240229', OPUS_RATES],
+  ['claude-sonnet-4-5', SONNET_RATES],
+  ['claude-sonnet-4-5-20250929', SONNET_RATES],
+  ['claude-sonnet-4-0', SONNET_RATES],
+  ['claude-3-7-sonnet-20250219', SONNET_RATES],
+  ['claude-3-5-sonnet-20241022', SONNET_RATES],
+  ['claude-3-5-sonnet-20240620', SONNET_RATES],
+  ['claude-3-sonnet-20240229', SONNET_RATES],
+  ['claude-haiku-4-5', HAIKU_45_RATES],
+  ['claude-haiku-4-5-20251001', HAIKU_45_RATES],
+  ['claude-3-5-haiku-20241022', HAIKU_35_RATES],
+  ['claude-3-haiku-20240307', HAIKU_3_RATES],
+];
+
+const PRICED_MODEL_RATES = new Map<string, ModelRates>();
+for (const [id, rates] of PRICED_MODEL_IDS) {
+  PRICED_MODEL_RATES.set(id, rates);
+  PRICED_MODEL_RATES.set(`anthropic/${id}`, rates);
+}
+
+const ZERO_TOKENS: UsageTokenTotals = {
+  inputTokens: 0,
+  outputTokens: 0,
+  cacheCreationTokens: 0,
+  cacheReadTokens: 0,
+  totalTokens: 0,
+};
+
+function emptyCost(): UsageCostSummary {
+  return {
+    status: 'unknown',
+    currency: 'USD',
+    pricedMessages: 0,
+    unpricedMessages: 0,
+  };
+}
 
 /** UTC day index (days since epoch) for an epoch-ms value. */
 function dayIndex(ms: number): number {
@@ -112,6 +177,150 @@ function computeXp(
   const xpIntoLevel = xp - start;
   const levelProgress = xpForNextLevel > 0 ? xpIntoLevel / xpForNextLevel : 0;
   return { xp, level, xpIntoLevel, xpForNextLevel, levelProgress };
+}
+
+function ratesForModel(model: string | undefined): ModelRates | undefined {
+  if (model === undefined || model.trim() === '') return undefined;
+  return PRICED_MODEL_RATES.get(model.trim().toLowerCase());
+}
+
+function costForUsage(tokens: UsageTokenTotals, rates: ModelRates): number {
+  return (
+    (tokens.inputTokens * rates.input +
+      tokens.outputTokens * rates.output +
+      tokens.cacheCreationTokens * rates.cacheCreation +
+      tokens.cacheReadTokens * rates.cacheRead) /
+    1_000_000
+  );
+}
+
+function addTokens(into: UsageTokenTotals, tokens: UsageTokenTotals): void {
+  into.inputTokens += tokens.inputTokens;
+  into.outputTokens += tokens.outputTokens;
+  into.cacheCreationTokens += tokens.cacheCreationTokens;
+  into.cacheReadTokens += tokens.cacheReadTokens;
+  into.totalTokens += tokens.totalTokens;
+}
+
+function tokensWithTotal(
+  usage: NonNullable<Session['messages'][number]['usage']>,
+): UsageTokenTotals {
+  const totalTokens =
+    usage.inputTokens + usage.outputTokens + usage.cacheCreationTokens + usage.cacheReadTokens;
+  return {
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    cacheCreationTokens: usage.cacheCreationTokens,
+    cacheReadTokens: usage.cacheReadTokens,
+    totalTokens,
+  };
+}
+
+/**
+ * Summarize exact token counts from parsed usage blocks and estimate cost only
+ * when the message model maps to the transparent local rate table. Estimates use
+ * Anthropic's standard first-party USD/MTok rates with 5-minute cache writes, so
+ * discounts, billing-plan details, 1h cache writes, geography multipliers, fast
+ * mode, long-context premiums, and future model-specific prices can make the
+ * true bill differ.
+ */
+export function computeSessionUsage(session: Session): UsageSummary {
+  const tokens: UsageTokenTotals = { ...ZERO_TOKENS };
+  let messagesWithUsage = 0;
+  let completeUsageMessages = 0;
+  let partialUsageMessages = 0;
+  let assistantMessagesWithoutUsage = 0;
+  let pricedMessages = 0;
+  let unpricedMessages = 0;
+  let amountUsd = 0;
+
+  for (const message of session.messages) {
+    if (message.role !== 'assistant') continue;
+    if (message.usage === undefined) {
+      assistantMessagesWithoutUsage += 1;
+      continue;
+    }
+    messagesWithUsage += 1;
+    const messageTokens = tokensWithTotal(message.usage);
+    addTokens(tokens, messageTokens);
+    if (message.usage.status === 'partial') {
+      partialUsageMessages += 1;
+      unpricedMessages += 1;
+      continue;
+    }
+    completeUsageMessages += 1;
+    const rates = ratesForModel(message.model);
+    if (rates === undefined) {
+      unpricedMessages += 1;
+    } else {
+      pricedMessages += 1;
+      amountUsd += costForUsage(messageTokens, rates);
+    }
+  }
+
+  const cost: UsageCostSummary = {
+    status:
+      pricedMessages === 0
+        ? 'unknown'
+        : unpricedMessages > 0 || assistantMessagesWithoutUsage > 0
+          ? 'partial'
+          : 'known',
+    currency: 'USD',
+    pricedMessages,
+    unpricedMessages,
+  };
+  if (pricedMessages > 0) {
+    cost.amountUsd = amountUsd;
+    cost.rateSource = USD_PER_MTOK_SOURCE;
+  }
+  return {
+    tokens,
+    messagesWithUsage,
+    completeUsageMessages,
+    partialUsageMessages,
+    assistantMessagesWithoutUsage,
+    cost,
+  };
+}
+
+function combineUsage(sessions: readonly Session[]): UsageSummary {
+  const tokens: UsageTokenTotals = { ...ZERO_TOKENS };
+  let messagesWithUsage = 0;
+  let completeUsageMessages = 0;
+  let partialUsageMessages = 0;
+  let assistantMessagesWithoutUsage = 0;
+  let pricedMessages = 0;
+  let unpricedMessages = 0;
+  let amountUsd = 0;
+
+  for (const session of sessions) {
+    const usage = computeSessionUsage(session);
+    addTokens(tokens, usage.tokens);
+    messagesWithUsage += usage.messagesWithUsage;
+    completeUsageMessages += usage.completeUsageMessages;
+    partialUsageMessages += usage.partialUsageMessages;
+    assistantMessagesWithoutUsage += usage.assistantMessagesWithoutUsage;
+    pricedMessages += usage.cost.pricedMessages;
+    unpricedMessages += usage.cost.unpricedMessages;
+    amountUsd += usage.cost.amountUsd ?? 0;
+  }
+
+  const cost: UsageCostSummary = emptyCost();
+  cost.pricedMessages = pricedMessages;
+  cost.unpricedMessages = unpricedMessages;
+  if (messagesWithUsage > 0 && pricedMessages > 0) {
+    cost.status = unpricedMessages > 0 || assistantMessagesWithoutUsage > 0 ? 'partial' : 'known';
+    cost.amountUsd = amountUsd;
+    cost.rateSource = USD_PER_MTOK_SOURCE;
+  }
+  return {
+    tokens,
+    messagesWithUsage,
+    completeUsageMessages,
+    partialUsageMessages,
+    assistantMessagesWithoutUsage,
+    cost,
+  };
 }
 
 /** Longest run of consecutive integers in a sorted, unique ascending list. */
@@ -224,6 +433,7 @@ export function computeStats(
   const activeDays = [...activeDaySet].sort((a, b) => a - b);
   const streak = computeStreaks(activeDays, activeDaySet, today);
   const xp = computeXp(messageCounts.total, sessions.length, activeDays.length, streak.longest);
+  const usage = combineUsage(sessions);
   const heatmap = computeHeatmap(eventsPerDay, today, heatmapDays);
 
   const stats: DashboardStats = {
@@ -234,6 +444,7 @@ export function computeStats(
     activeDays: activeDays.length,
     streak,
     xp,
+    usage,
     heatmap,
   };
   if (activeDays.length > 0) {

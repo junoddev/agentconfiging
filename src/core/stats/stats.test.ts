@@ -10,7 +10,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseClaudeHistory, parseClaudeSession } from '../history/claude.js';
 import type { ReadDiagnostics, Runtime, Session, SessionMessage } from '../history/types.js';
-import { computeStats, computeXpTotal, xpToLevel } from './stats.js';
+import { computeSessionUsage, computeStats, computeXpTotal, xpToLevel } from './stats.js';
 
 const sessionsDir = path.resolve(process.cwd(), 'fixtures/sessions/claude');
 
@@ -65,6 +65,37 @@ function makeSession(runtime: Runtime, timestamps: (string | undefined)[]): Sess
   };
 }
 
+function makeUsageSession(messages: SessionMessage[]): Session {
+  return {
+    runtime: 'claude',
+    filePath: '',
+    cwds: [],
+    messages,
+    diagnostics: emptyDiagnostics,
+  };
+}
+
+function usageCostForModel(model: string): number | undefined {
+  return computeSessionUsage(
+    makeUsageSession([
+      {
+        role: 'assistant',
+        model,
+        isSidechain: false,
+        isMeta: false,
+        usage: {
+          status: 'complete',
+          inputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          cacheCreationTokens: 1_000_000,
+          cacheReadTokens: 1_000_000,
+        },
+        content: [],
+      },
+    ]),
+  ).cost.amountUsd;
+}
+
 describe('computeStats — empty / sparse resilience', () => {
   it('returns fully zeroed stats for no sessions, no crash', () => {
     const stats = computeStats([], undefined, { now: NOW });
@@ -81,6 +112,25 @@ describe('computeStats — empty / sparse resilience', () => {
       xpForNextLevel: 100,
       levelProgress: 0,
     });
+    expect(stats.usage).toEqual({
+      tokens: {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+        totalTokens: 0,
+      },
+      messagesWithUsage: 0,
+      completeUsageMessages: 0,
+      partialUsageMessages: 0,
+      assistantMessagesWithoutUsage: 0,
+      cost: {
+        status: 'unknown',
+        currency: 'USD',
+        pricedMessages: 0,
+        unpricedMessages: 0,
+      },
+    });
     expect(stats.firstActiveDate).toBeUndefined();
     expect(stats.lastActiveDate).toBeUndefined();
     expect(stats.heatmap).toHaveLength(365);
@@ -94,6 +144,275 @@ describe('computeStats — empty / sparse resilience', () => {
     expect(stats.messageCounts.total).toBe(2);
     expect(stats.activeDays).toBe(0);
     expect(stats.streak.longest).toBe(0);
+  });
+});
+
+describe('computeSessionUsage / computeStats — token and cost aggregation', () => {
+  it.each([
+    ['claude-opus-4-5', 36.75],
+    ['claude-opus-4-5-20251101', 36.75],
+    ['anthropic/claude-opus-4-5', 36.75],
+    ['anthropic/claude-opus-4-5-20251101', 36.75],
+    ['claude-sonnet-4-5', 22.05],
+    ['claude-sonnet-4-5-20250929', 22.05],
+    ['anthropic/claude-sonnet-4-5', 22.05],
+    ['anthropic/claude-sonnet-4-5-20250929', 22.05],
+    ['claude-haiku-4-5', 7.35],
+    ['claude-haiku-4-5-20251001', 7.35],
+    ['anthropic/claude-haiku-4-5', 7.35],
+    ['anthropic/claude-haiku-4-5-20251001', 7.35],
+  ] as const)(
+    'prices exact Claude 4.5 model id %s with current standard rates',
+    (model, amountUsd) => {
+      expect(usageCostForModel(model)).toBeCloseTo(amountUsd);
+    },
+  );
+
+  it('aggregates usage tokens and explicit known-model cost estimates', () => {
+    const session = makeUsageSession([
+      {
+        role: 'assistant',
+        model: 'claude-sonnet-4-5',
+        isSidechain: false,
+        isMeta: false,
+        usage: {
+          status: 'complete',
+          inputTokens: 1_000_000,
+          outputTokens: 100_000,
+          cacheCreationTokens: 10_000,
+          cacheReadTokens: 20_000,
+        },
+        content: [],
+      },
+      {
+        role: 'assistant',
+        model: 'claude-opus-4-1',
+        isSidechain: false,
+        isMeta: false,
+        usage: {
+          status: 'complete',
+          inputTokens: 100_000,
+          outputTokens: 10_000,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
+        },
+        content: [],
+      },
+    ]);
+
+    const usage = computeSessionUsage(session);
+    expect(usage.tokens).toEqual({
+      inputTokens: 1_100_000,
+      outputTokens: 110_000,
+      cacheCreationTokens: 10_000,
+      cacheReadTokens: 20_000,
+      totalTokens: 1_240_000,
+    });
+    expect(usage.messagesWithUsage).toBe(2);
+    expect(usage.completeUsageMessages).toBe(2);
+    expect(usage.partialUsageMessages).toBe(0);
+    expect(usage.cost.status).toBe('known');
+    expect(usage.cost.amountUsd).toBeCloseTo(6.7935);
+
+    const stats = computeStats([session], undefined, { now: NOW });
+    expect(stats.usage.tokens.totalTokens).toBe(1_240_000);
+    expect(stats.usage.cost.status).toBe('known');
+    expect(stats.usage.cost.amountUsd).toBeCloseTo(6.7935);
+  });
+
+  it('keeps tokens but marks cost partial when some usage models are unknown', () => {
+    const session = makeUsageSession([
+      {
+        role: 'assistant',
+        model: 'claude-sonnet-4-5',
+        isSidechain: false,
+        isMeta: false,
+        usage: {
+          status: 'complete',
+          inputTokens: 1_000,
+          outputTokens: 100,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
+        },
+        content: [],
+      },
+      {
+        role: 'assistant',
+        model: 'future-model-x',
+        isSidechain: false,
+        isMeta: false,
+        usage: {
+          status: 'complete',
+          inputTokens: 2_000,
+          outputTokens: 200,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
+        },
+        content: [],
+      },
+    ]);
+
+    const usage = computeSessionUsage(session);
+    expect(usage.tokens.totalTokens).toBe(3_300);
+    expect(usage.cost.status).toBe('partial');
+    expect(usage.cost.pricedMessages).toBe(1);
+    expect(usage.cost.unpricedMessages).toBe(1);
+    expect(usage.cost.amountUsd).toBeCloseTo(0.0045);
+  });
+
+  it('marks a priced lower bound partial when another assistant lacks usage', () => {
+    const session = makeUsageSession([
+      {
+        role: 'assistant',
+        model: 'claude-sonnet-4-5',
+        isSidechain: false,
+        isMeta: false,
+        usage: {
+          status: 'complete',
+          inputTokens: 1_000,
+          outputTokens: 100,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
+        },
+        content: [],
+      },
+      {
+        role: 'assistant',
+        model: 'claude-sonnet-4-5',
+        isSidechain: false,
+        isMeta: false,
+        content: [],
+      },
+    ]);
+
+    const usage = computeSessionUsage(session);
+    expect(usage.messagesWithUsage).toBe(1);
+    expect(usage.assistantMessagesWithoutUsage).toBe(1);
+    expect(usage.cost.status).toBe('partial');
+    expect(usage.cost.pricedMessages).toBe(1);
+    expect(usage.cost.amountUsd).toBeCloseTo(0.0045);
+    expect(computeStats([session], undefined, { now: NOW }).usage.cost.status).toBe('partial');
+  });
+
+  it('marks cost unknown when usage is absent or all usage models are unpriced', () => {
+    const missing = makeUsageSession([
+      { role: 'assistant', isSidechain: false, isMeta: false, content: [] },
+    ]);
+    expect(computeSessionUsage(missing)).toMatchObject({
+      messagesWithUsage: 0,
+      assistantMessagesWithoutUsage: 1,
+      cost: { status: 'unknown' },
+    });
+
+    const unknownModel = makeUsageSession([
+      {
+        role: 'assistant',
+        model: 'not-priced',
+        isSidechain: false,
+        isMeta: false,
+        usage: {
+          status: 'complete',
+          inputTokens: 12,
+          outputTokens: 3,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
+        },
+        content: [],
+      },
+    ]);
+    const usage = computeSessionUsage(unknownModel);
+    expect(usage.tokens.totalTokens).toBe(15);
+    expect(usage.cost.status).toBe('unknown');
+    expect(usage.cost.amountUsd).toBeUndefined();
+    expect(usage.cost.unpricedMessages).toBe(1);
+  });
+
+  it('keeps an honestly complete zero-token usage block priceable as zero', () => {
+    const session = makeUsageSession([
+      {
+        role: 'assistant',
+        model: 'claude-sonnet-4-5',
+        isSidechain: false,
+        isMeta: false,
+        usage: {
+          status: 'complete',
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
+        },
+        content: [],
+      },
+    ]);
+
+    const usage = computeSessionUsage(session);
+    expect(usage.messagesWithUsage).toBe(1);
+    expect(usage.completeUsageMessages).toBe(1);
+    expect(usage.partialUsageMessages).toBe(0);
+    expect(usage.tokens.totalTokens).toBe(0);
+    expect(usage.cost.status).toBe('known');
+    expect(usage.cost.amountUsd).toBe(0);
+  });
+
+  it('retains valid partial-usage token counts but leaves the message unpriced', () => {
+    const session = makeUsageSession([
+      {
+        role: 'assistant',
+        model: 'claude-sonnet-4-5',
+        isSidechain: false,
+        isMeta: false,
+        usage: {
+          status: 'partial',
+          inputTokens: 120,
+          outputTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 5,
+          invalidFields: ['output_tokens'],
+        },
+        content: [],
+      },
+    ]);
+
+    const usage = computeSessionUsage(session);
+    expect(usage.tokens).toMatchObject({
+      inputTokens: 120,
+      outputTokens: 0,
+      cacheReadTokens: 5,
+      totalTokens: 125,
+    });
+    expect(usage.messagesWithUsage).toBe(1);
+    expect(usage.completeUsageMessages).toBe(0);
+    expect(usage.partialUsageMessages).toBe(1);
+    expect(usage.cost.status).toBe('unknown');
+    expect(usage.cost.pricedMessages).toBe(0);
+    expect(usage.cost.unpricedMessages).toBe(1);
+    expect(usage.cost.amountUsd).toBeUndefined();
+  });
+
+  it('does not price unrecognized or future-looking model ids by substring', () => {
+    for (const model of ['claude-sonnet-4-99', 'my-opus-router', '/bin/claude-sonnet-4-5']) {
+      const usage = computeSessionUsage(
+        makeUsageSession([
+          {
+            role: 'assistant',
+            model,
+            isSidechain: false,
+            isMeta: false,
+            usage: {
+              status: 'complete',
+              inputTokens: 100,
+              outputTokens: 10,
+              cacheCreationTokens: 0,
+              cacheReadTokens: 0,
+            },
+            content: [],
+          },
+        ]),
+      );
+      expect(usage.cost.status).toBe('unknown');
+      expect(usage.cost.pricedMessages).toBe(0);
+      expect(usage.cost.unpricedMessages).toBe(1);
+    }
   });
 });
 

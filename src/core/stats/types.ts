@@ -62,6 +62,52 @@ export interface XpStats {
   levelProgress: number;
 }
 
+/** Token totals from assistant `message.usage` blocks. */
+export interface UsageTokenTotals {
+  /** Fresh (uncached) input tokens. */
+  inputTokens: number;
+  outputTokens: number;
+  /** Prompt-cache write tokens. */
+  cacheCreationTokens: number;
+  /** Prompt-cache read tokens. */
+  cacheReadTokens: number;
+  /** Sum of all token buckets above. */
+  totalTokens: number;
+}
+
+/** Whether every usage-bearing message could be priced with the local rate table. */
+export type UsageCostStatus = 'known' | 'partial' | 'unknown';
+
+/**
+ * Token-derived cost estimate. `amountUsd` is omitted when no usage-bearing
+ * message could be priced.
+ */
+export interface UsageCostSummary {
+  status: UsageCostStatus;
+  currency: 'USD';
+  amountUsd?: number;
+  /** Controlled identifier for the transparent local pricing table used. */
+  rateSource?: string;
+  /** Usage-bearing messages whose model mapped to a local rate. */
+  pricedMessages: number;
+  /** Usage-bearing messages with no model or no known local rate. */
+  unpricedMessages: number;
+}
+
+/** Usage + cost summary for a session or rolled-up dashboard window. */
+export interface UsageSummary {
+  tokens: UsageTokenTotals;
+  /** Assistant messages carrying a `message.usage` block. */
+  messagesWithUsage: number;
+  /** Usage-bearing assistant messages with complete required token counts. */
+  completeUsageMessages: number;
+  /** Usage-bearing assistant messages whose malformed fields made pricing unsafe. */
+  partialUsageMessages: number;
+  /** Assistant messages without a `message.usage` block. */
+  assistantMessagesWithoutUsage: number;
+  cost: UsageCostSummary;
+}
+
 /** The complete dashboard stats bundle. All numbers are real, never invented. */
 export interface DashboardStats {
   /** Number of sessions supplied. */
@@ -78,6 +124,8 @@ export interface DashboardStats {
   streak: StreakStats;
   /** XP + level. */
   xp: XpStats;
+  /** Token/cost accounting from assistant message usage blocks. */
+  usage: UsageSummary;
   /**
    * Windowed activity heatmap: one cell per UTC day for the last
    * {@link ComputeStatsOptions.heatmapDays} days, oldest first, including

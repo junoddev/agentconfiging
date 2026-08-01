@@ -33,6 +33,7 @@ import type { Context, Hono } from 'hono';
 import {
   ACHIEVEMENTS,
   claudeAdapter,
+  computeSessionUsage,
   computeStats,
   evaluateAchievements,
   redact,
@@ -43,6 +44,7 @@ import {
   type RedactionSpan,
   type Session,
   type SessionMessage,
+  type UsageSummary,
 } from '../core/index.js';
 
 /** Most-recent session files fully read + parsed per load (bounds the work). */
@@ -138,6 +140,8 @@ export interface SessionSummary {
   live: boolean;
   /** User-authored tags for this session (local sidecar; may be empty). */
   tags: string[];
+  /** Token/cost usage metadata from assistant `message.usage` blocks. */
+  usage: UsageSummary;
 }
 
 /** GET /api/sessions payload — a bounded, content-free session list. */
@@ -211,6 +215,8 @@ export interface SessionDetailResponse {
   messages: ReplayMessage[];
   live: boolean;
   tags: string[];
+  /** Token/cost usage metadata from assistant `message.usage` blocks. */
+  usage: UsageSummary;
 }
 
 /** POST /api/sessions/:id/tags payload — the stored (sanitized) tag set. */
@@ -365,6 +371,7 @@ export function sessionSummary(session: Session): SessionSummary {
     messageCount: session.messages.length,
     live: false,
     tags: [],
+    usage: computeSessionUsage(session),
   };
   if (session.startedAt !== undefined) summary.startedAt = session.startedAt;
   if (session.endedAt !== undefined) summary.endedAt = session.endedAt;
@@ -608,6 +615,7 @@ export function registerStatsRoutes(app: Hono, config: StatsRoutesConfig = {}): 
       messages: window,
       live: isLive(mtimes.get(session.filePath), nowMs, liveWindowMs),
       tags,
+      usage: computeSessionUsage(session),
     };
     if (session.startedAt !== undefined) body.startedAt = session.startedAt;
     if (session.endedAt !== undefined) body.endedAt = session.endedAt;
