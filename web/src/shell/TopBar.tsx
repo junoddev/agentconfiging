@@ -79,6 +79,11 @@ export function TopBar({ theme, onToggleTheme, onAbout, onToggleNav }: TopBarPro
     selectInstance(id);
   };
 
+  const addFolder = () => {
+    setMenu(null);
+    window.location.hash = '#/instances';
+  };
+
   const pickAgent = (kind: string) => {
     setMenu(null);
     selectAgent(kind);
@@ -154,6 +159,10 @@ export function TopBar({ theme, onToggleTheme, onAbout, onToggleNav }: TopBarPro
                 </button>
               ))
             )}
+            <button type="button" role="menuitem" className="ch-item" onClick={addFolder}>
+              <span>Add new</span>
+              <span className="meta">Instances</span>
+            </button>
           </div>
         )}
         {menu === 'agent' && (
