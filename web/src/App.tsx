@@ -105,13 +105,13 @@ function renderRoute(route: Route) {
     case 'context':
       return <ContextHealth />;
     case 'git':
-      return <Git />;
+      return <Git target={route.target} />;
     case 'terminal':
       // The terminal is rendered persistently at the shell (see App) so its tabs
       // + live PTYs survive navigation; the routed slot renders nothing.
       return null;
     case 'pipelines':
-      return <Pipelines />;
+      return <Pipelines target={route.target} />;
     case 'gallery':
       return <GalleryPage />;
   }
@@ -200,6 +200,7 @@ export function App() {
     <ToastProvider>
       <div className="layout-shell">
         <TopBar
+          route={route}
           theme={theme}
           onToggleTheme={toggleTheme}
           onAbout={() => setAboutOpen(true)}
@@ -222,7 +223,11 @@ export function App() {
                   {renderRoute(route)}
                   {/* Persistent terminal: mounted once, only hidden off-route, so
                     its tabs + live PTYs survive navigation (ngs.2). */}
-                  <Terminal active={route.name === 'terminal'} theme={theme} />
+                  <Terminal
+                    active={route.name === 'terminal'}
+                    theme={theme}
+                    target={route.name === 'terminal' ? route.target : undefined}
+                  />
                 </>
               )}
             </div>
@@ -232,6 +237,7 @@ export function App() {
         <CommandPalette
           open={paletteOpen}
           theme={theme}
+          route={route}
           onClose={() => setPaletteOpen(false)}
           onRun={runCommand}
         />

@@ -11,6 +11,7 @@
 
 import { sourceBadgeText } from '../components/core/index.js';
 import { ROUTE_LABELS, routeHash, type Route, type RouteName } from '../routes.js';
+import { targetForRoute } from '../navigation.js';
 import { isGlobalEntryError } from '../api/types.js';
 import { sectionApplies, useAppState, type ConfigSection } from '../state/index.js';
 import { useConfigureCounts, type ConfigureCountKey } from './useConfigureCounts.js';
@@ -116,11 +117,18 @@ export function Sidebar({ route }: { route: Route }) {
   const navItem = ({ name, glyph, count }: NavItem) => {
     const isActive = name === active;
     const n = count === undefined ? undefined : counts[count];
+    const currentTarget =
+      route.target ??
+      ({
+        ...(currentInstance?.id !== undefined ? { instanceId: currentInstance.id } : {}),
+        ...(agentScopeKind !== undefined ? { agentKind: agentScopeKind } : {}),
+      } as const);
+    const destination = { name } as Route;
     return (
       <a
         key={name}
         className={`nav-item${isActive ? ' active' : ''}`}
-        href={routeHash({ name })}
+        href={routeHash({ ...destination, target: targetForRoute(destination, currentTarget) })}
         aria-current={isActive ? 'page' : undefined}
       >
         <span className="glyph" aria-hidden="true">

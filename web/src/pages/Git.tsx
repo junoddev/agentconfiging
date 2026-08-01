@@ -47,6 +47,7 @@ import {
   type PillTone,
 } from '../components/core/index.js';
 import { useAppState } from '../state/index.js';
+import { resolveOperateTarget, type NavigationTarget } from '../navigation.js';
 import { parseDiff } from '../write/index.js';
 import {
   buildCommitMessage,
@@ -148,10 +149,16 @@ function CommitTimeline({ commits }: { commits: GitCommit[] }) {
   );
 }
 
-function GitPanel() {
-  const { currentInstance, report } = useAppState();
+function GitPanel({ target }: { target?: NavigationTarget }) {
+  const { currentInstance, instances, report } = useAppState();
   const client = useMemo(() => (bootToken ? new ApiClient(bootToken) : undefined), []);
-  const instanceId = currentInstance?.id;
+  const resolvedTarget = useMemo(
+    () => resolveOperateTarget(target, instances, currentInstance?.id),
+    [currentInstance?.id, instances, target],
+  );
+  const instanceId = resolvedTarget?.instanceId;
+  const displayInstance =
+    instances.find((instance) => instance.id === instanceId) ?? currentInstance;
   const toast = useToast();
 
   const [phase, setPhase] = useState<Phase>('loading');
@@ -293,7 +300,7 @@ function GitPanel() {
             <h1>Git</h1>
             <p className="page-sub">
               Branches, changes, conventional commits, and the timeline for{' '}
-              <span className="mono">{currentInstance ? currentInstance.name : 'no instance'}</span>
+              <span className="mono">{displayInstance ? displayInstance.name : 'no instance'}</span>
               .
             </p>
           </div>
@@ -569,7 +576,7 @@ function GitPanel() {
   );
 }
 
-export function Git() {
+export function Git({ target }: { target?: NavigationTarget }) {
   // Toasts confirm through the shell-level ToastProvider (App.tsx).
-  return <GitPanel />;
+  return <GitPanel target={target} />;
 }

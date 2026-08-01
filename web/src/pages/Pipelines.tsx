@@ -42,6 +42,7 @@ import {
 import { bootstrapToken } from '../api/token.js';
 import { Button, Notice, Pill, Switch, useToast, type PillTone } from '../components/core/index.js';
 import { useAppState } from '../state/index.js';
+import { resolveOperateTarget, type NavigationTarget } from '../navigation.js';
 import { AgentConfigNode } from './pipelines/AgentConfigNode.js';
 import { NodeConfigPanel } from './pipelines/NodeConfigPanel.js';
 import { RunHistory } from './pipelines/RunHistory.js';
@@ -87,9 +88,13 @@ function runPillTone(status: string): PillTone {
   return 'off';
 }
 
-function PipelinesPanel() {
-  const { currentInstance } = useAppState();
-  const instanceId = currentInstance?.id;
+function PipelinesPanel({ target }: { target?: NavigationTarget }) {
+  const { currentInstance, instances } = useAppState();
+  const resolvedTarget = useMemo(
+    () => resolveOperateTarget(target, instances, currentInstance?.id),
+    [currentInstance?.id, instances, target],
+  );
+  const instanceId = resolvedTarget?.instanceId;
   const client = useMemo(() => (bootToken ? new ApiClient(bootToken) : undefined), []);
   const toast = useToast();
 
@@ -574,7 +579,7 @@ function PipelinesPanel() {
   );
 }
 
-export function Pipelines() {
+export function Pipelines({ target }: { target?: NavigationTarget }) {
   // Toasts confirm through the shell-level ToastProvider (App.tsx).
-  return <PipelinesPanel />;
+  return <PipelinesPanel target={target} />;
 }

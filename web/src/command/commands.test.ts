@@ -80,6 +80,19 @@ describe('buildCommands', () => {
     expect(railLabel('git')).toBe('Git');
     expect(railLabel('mcp')).toBe('MCP');
   });
+
+  it('carries explicit targets only to context-aware command destinations', () => {
+    const target = { instanceId: 'inst-1', agentKind: 'claude-code' };
+    const commands = buildCommands('light', undefined, target);
+    const hash = (id: string) =>
+      commands.find((command) => command.id === id)?.action.type === 'navigate'
+        ? (commands.find((command) => command.id === id)?.action as { hash: string }).hash
+        : undefined;
+    expect(hash('nav:settings')).toBe('#/settings?instance=inst-1&agent=claude-code');
+    expect(hash('nav:git')).toBe('#/git?instance=inst-1&agent=claude-code');
+    expect(hash('nav:findings')).toBe('#/findings');
+    expect(hash('nav:dashboard')).toBe('#/dashboard');
+  });
 });
 
 describe('railShortcutHash — Cmd+1..9 → route', () => {

@@ -27,6 +27,7 @@ import { bootstrapToken } from '../api/token.js';
 import type { PtyStatusResponse, ShellChoice } from '../api/types.js';
 import { Button, EmptyState, Notice } from '../components/core/index.js';
 import { useAppState } from '../state/index.js';
+import { resolveOperateTarget, type NavigationTarget } from '../navigation.js';
 import {
   buildPtyWsUrl,
   encodeInput,
@@ -94,10 +95,24 @@ interface Session {
   closed: boolean;
 }
 
-export function Terminal({ active, theme }: { active: boolean; theme: ConsoleTheme }) {
+export function Terminal({
+  active,
+  theme,
+  target,
+}: {
+  active: boolean;
+  theme: ConsoleTheme;
+  target?: NavigationTarget;
+}) {
   const client = useMemo(() => (bootToken ? new ApiClient(bootToken) : undefined), []);
-  const { currentInstance } = useAppState();
-  const instanceId = currentInstance?.id;
+  const { currentInstance, instances } = useAppState();
+  const resolvedTarget = useMemo(
+    () => resolveOperateTarget(target, instances, currentInstance?.id),
+    [currentInstance?.id, instances, target],
+  );
+  const instanceId = resolvedTarget?.instanceId;
+  const displayInstance =
+    instances.find((instance) => instance.id === instanceId) ?? currentInstance;
 
   const [status, setStatus] = useState<PtyStatusResponse | 'loading' | 'error'>('loading');
   const [tabs, setTabs] = useState<TerminalTab[]>([]);
@@ -287,6 +302,13 @@ export function Terminal({ active, theme }: { active: boolean; theme: ConsoleThe
 
   const shells: ShellChoice[] =
     status !== 'loading' && status !== 'error' && status.available ? status.shells : [];
+  const targetShell = resolvedTarget?.agentKind
+    ? shells.find((choice) => choice.id === `cli:${resolvedTarget.agentKind}`)
+    : undefined;
+  // An explicit agent target is consumed only when the server offered that
+  // allowlisted CLI for the resolved instance; otherwise retain the normal
+  // shell choices as the safe fallback.
+  const launchShells = targetShell === undefined ? shells : [targetShell];
 
   return (
     <main className="layout-main page terminal-page" hidden={!active} aria-hidden={!active}>
@@ -296,7 +318,7 @@ export function Terminal({ active, theme }: { active: boolean; theme: ConsoleThe
           <p className="page-sub">
             Shells and detected runtime CLIs for{' '}
             <span className="mono">
-              {currentInstance ? currentInstance.name : 'default instance'}
+              {displayInstance ? displayInstance.name : 'default instance'}
             </span>
             .
           </p>
@@ -345,7 +367,7 @@ export function Terminal({ active, theme }: { active: boolean; theme: ConsoleThe
               ))}
             </div>
             <div className="terminal-launch">
-              {shells.map((choice) => (
+              {launchShells.map((choice) => (
                 <Button
                   key={choice.id}
                   label={`+ ${choice.label}`}

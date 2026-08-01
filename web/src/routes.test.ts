@@ -78,6 +78,43 @@ describe('parseRoute', () => {
     expect(parseRoute('/gallery')).toEqual({ name: 'gallery' });
     expect(parseRoute('/')).toEqual({ name: 'overview' });
   });
+
+  it('round-trips explicit instance and agent targets', () => {
+    const route: Route = {
+      name: 'terminal',
+      target: { instanceId: 'inst-1', agentKind: 'claude/code' },
+    };
+    expect(routeHash(route)).toBe('#/terminal?instance=inst-1&agent=claude%2Fcode');
+    expect(parseRoute(routeHash(route))).toEqual(route);
+  });
+
+  it('does not serialize targets on aggregate routes', () => {
+    const route: Route = {
+      name: 'findings',
+      target: { instanceId: 'inst-1', agentKind: 'codex' },
+    };
+    expect(routeHash(route)).toBe('#/findings');
+    expect(parseRoute(routeHash(route))).toEqual({ name: 'findings' });
+  });
+
+  it('keeps a parsed aggregate target available for onward context-aware navigation', () => {
+    const current = parseRoute('#/findings?instance=inst-1&agent=codex');
+    expect(current).toEqual({
+      name: 'findings',
+      target: { instanceId: 'inst-1', agentKind: 'codex' },
+    });
+    expect(routeHash({ name: 'settings', target: current.target })).toBe(
+      '#/settings?instance=inst-1&agent=codex',
+    );
+  });
+
+  it('falls back to the route default for malformed, empty, or unknown targets', () => {
+    expect(parseRoute('#/terminal?instance=')).toEqual({ name: 'terminal' });
+    expect(parseRoute('#/terminal?instance=%E0%A4%A')).toEqual({ name: 'terminal' });
+    expect(parseRoute('#/terminal?unknown=value')).toEqual({ name: 'terminal' });
+    expect(parseRoute('#/terminal?instance=../etc')).toEqual({ name: 'terminal' });
+    expect(parseRoute('#/agent/%E0%A4%A')).toEqual({ name: 'overview' });
+  });
 });
 
 describe('routeHash', () => {

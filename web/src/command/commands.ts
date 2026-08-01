@@ -12,6 +12,7 @@
  */
 
 import { EDITOR_ROUTES, ROUTE_LABELS, routeHash, type Route, type RouteName } from '../routes.js';
+import { targetForRoute, type NavigationTarget } from '../navigation.js';
 import { fuzzyMatch } from './fuzzy.js';
 
 /** What running a command asks the shell to do. Discriminated so the effectful
@@ -65,8 +66,9 @@ export function railLabel(name: RouteName): string {
 }
 
 /** Canonical hash for a simple (no-param) route name. */
-function navHash(name: RouteName): string {
-  return routeHash({ name } as Route);
+function navHash(name: RouteName, target?: NavigationTarget): string {
+  const route = { name } as Route;
+  return routeHash({ ...route, target: targetForRoute(route, target) });
 }
 
 /**
@@ -89,20 +91,21 @@ export function railShortcutHash(digit: number): string | undefined {
 export function buildCommands(
   theme: 'light' | 'dark',
   hiddenRoutes?: ReadonlySet<RouteName>,
+  target?: NavigationTarget,
 ): Command[] {
   const nav: Command[] = RAIL_ORDER.filter((name) => !hiddenRoutes?.has(name)).map((name) => ({
     id: `nav:${name}`,
     label: railLabel(name),
-    hint: navHash(name),
-    action: { type: 'navigate', hash: navHash(name) },
+    hint: navHash(name, target),
+    action: { type: 'navigate', hash: navHash(name, target) },
   }));
   // The internal gallery is de-emphasized (sidebar bottom) — navigable, but
   // outside Cmd+1..9.
   nav.push({
     id: 'nav:gallery',
     label: railLabel('gallery'),
-    hint: navHash('gallery'),
-    action: { type: 'navigate', hash: navHash('gallery') },
+    hint: navHash('gallery', target),
+    action: { type: 'navigate', hash: navHash('gallery', target) },
   });
 
   const actions: Command[] = [

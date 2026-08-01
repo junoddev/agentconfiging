@@ -22,6 +22,7 @@ import {
   type CommandAction,
 } from '../command/commands.js';
 import { EDITOR_ROUTES, type RouteName } from '../routes.js';
+import type { Route } from '../routes.js';
 import { sectionApplies, useAppState } from '../state/index.js';
 import type { Theme } from './theme.js';
 import '../command/command.css';
@@ -29,16 +30,18 @@ import '../command/command.css';
 export interface CommandPaletteProps {
   open: boolean;
   theme: Theme;
+  /** Current route, including an explicit deep-link target when present. */
+  route?: Route;
   onClose: () => void;
   /** Run a chosen command's action (the shell performs the effect). */
   onRun: (action: CommandAction) => void;
 }
 
-export function CommandPalette({ open, theme, onClose, onRun }: CommandPaletteProps) {
+export function CommandPalette({ open, theme, route, onClose, onRun }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { agentScopeKind } = useAppState();
+  const { agentScopeKind, currentInstance } = useAppState();
 
   // Mirror the sidebar's adaptive rail (bead a6y): no nav commands for
   // Configure sections the active agent has no concept of.
@@ -48,7 +51,17 @@ export function CommandPalette({ open, theme, onClose, onRun }: CommandPalettePr
     );
   }, [agentScopeKind]);
 
-  const commands = useMemo(() => buildCommands(theme, hiddenRoutes), [theme, hiddenRoutes]);
+  const target = useMemo(() => {
+    if (route?.target !== undefined) return route.target;
+    return {
+      ...(currentInstance?.id !== undefined ? { instanceId: currentInstance.id } : {}),
+      ...(agentScopeKind !== undefined ? { agentKind: agentScopeKind } : {}),
+    };
+  }, [agentScopeKind, currentInstance?.id, route?.target]);
+  const commands = useMemo(
+    () => buildCommands(theme, hiddenRoutes, target),
+    [theme, hiddenRoutes, target],
+  );
   const results = useMemo(() => filterCommands(commands, query), [commands, query]);
 
   // Reset + focus each time it opens (after the Dialog's showModal, which

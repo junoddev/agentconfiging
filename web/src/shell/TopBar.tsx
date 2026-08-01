@@ -14,12 +14,16 @@ import { ApiClient } from '../api/index.js';
 import { bootstrapToken } from '../api/token.js';
 import { displayNameForKind, useAppState } from '../state/index.js';
 import type { Theme as ConsoleTheme } from './theme.js';
+import { isChooserVisible } from '../navigation.js';
+import type { Route } from '../routes.js';
 
 // Like the about dialog: the shell keeps its ApiClient private,
 // so capture the launch token at module load for the version probe.
 const bootToken = typeof window !== 'undefined' ? bootstrapToken() : undefined;
 
 export interface TopBarProps {
+  /** Current route; omitted only for legacy standalone shell callers. */
+  route?: Route;
   theme: ConsoleTheme;
   onToggleTheme: () => void;
   /** Open the about dialog (name / version / licence / local-only note). */
@@ -30,12 +34,19 @@ export interface TopBarProps {
 
 type MenuId = 'folder' | 'agent';
 
-export function TopBar({ theme, onToggleTheme, onAbout, onToggleNav }: TopBarProps) {
+export function TopBar({ route, theme, onToggleTheme, onAbout, onToggleNav }: TopBarProps) {
   const { instances, currentInstance, selectInstance, availableAgents, activeAgent, selectAgent } =
     useAppState();
   const [version, setVersion] = useState<string | undefined>();
   const [menu, setMenu] = useState<MenuId | null>(null);
   const chooserRef = useRef<HTMLDivElement>(null);
+  // A standalone TopBar defaults to a Configure surface for backwards
+  // compatibility; the App always supplies the actual route.
+  const showChooser = isChooserVisible(route ?? { name: 'settings' });
+
+  useEffect(() => {
+    if (!showChooser) setMenu(null);
+  }, [showChooser]);
 
   // Version probe — shows nothing (never an invented number) until it resolves.
   useEffect(() => {
@@ -109,85 +120,87 @@ export function TopBar({ theme, onToggleTheme, onAbout, onToggleNav }: TopBarPro
         {version !== undefined && <span className="ver">v{version}</span>}
       </div>
 
-      <div className="chooser" ref={chooserRef}>
-        <button
-          type="button"
-          className="ch-side"
-          aria-haspopup="menu"
-          aria-expanded={menu === 'folder'}
-          onClick={() => toggleMenu('folder')}
-        >
-          <span className="ch-label">Folder</span>
-          <span className="ch-value mono">{currentInstance?.name ?? '—'}</span>
-          <span className="ch-caret" aria-hidden="true">
-            ▾
-          </span>
-        </button>
-        <span className="ch-div" aria-hidden="true" />
-        <button
-          type="button"
-          className="ch-side"
-          aria-haspopup="menu"
-          aria-expanded={menu === 'agent'}
-          onClick={() => toggleMenu('agent')}
-        >
-          <span className="ch-label">Agent</span>
-          <span className="ch-value">
-            {activeAgent !== undefined ? displayNameForKind(activeAgent.kind) : '—'}
-          </span>
-          <span className="ch-caret" aria-hidden="true">
-            ▾
-          </span>
-        </button>
-        {menu === 'folder' && (
-          <div className="ch-menu ch-left open" role="menu" aria-label="Workspaces">
-            {instances.length === 0 ? (
-              <div className="ch-item" aria-disabled="true">
-                <span className="muted">No instances loaded</span>
-              </div>
-            ) : (
-              instances.map((inst) => (
-                <button
-                  key={inst.id}
-                  type="button"
-                  role="menuitem"
-                  className={`ch-item${inst.id === currentInstance?.id ? ' active' : ''}`}
-                  onClick={() => pickFolder(inst.id)}
-                >
-                  <span className="mono">{inst.root}</span>
-                  {inst.isDefault && <span className="meta">default</span>}
-                </button>
-              ))
-            )}
-            <button type="button" role="menuitem" className="ch-item" onClick={addFolder}>
-              <span>Add new</span>
-              <span className="meta">Instances</span>
-            </button>
-          </div>
-        )}
-        {menu === 'agent' && (
-          <div className="ch-menu ch-right open" role="menu" aria-label="Agent runtimes">
-            {availableAgents.length === 0 ? (
-              <div className="ch-item" aria-disabled="true">
-                <span className="muted">No agents detected</span>
-              </div>
-            ) : (
-              availableAgents.map((agent) => (
-                <button
-                  key={agent.kind}
-                  type="button"
-                  role="menuitem"
-                  className={`ch-item${agent.kind === activeAgent?.kind ? ' active' : ''}`}
-                  onClick={() => pickAgent(agent.kind)}
-                >
-                  <span className="mono">{agent.kind}</span>
-                  <span className="meta">{agent.confidence}</span>
-                </button>
-              ))
-            )}
-          </div>
-        )}
-      </div>
+      {showChooser && (
+        <div className="chooser" ref={chooserRef}>
+          <button
+            type="button"
+            className="ch-side"
+            aria-haspopup="menu"
+            aria-expanded={menu === 'folder'}
+            onClick={() => toggleMenu('folder')}
+          >
+            <span className="ch-label">Folder</span>
+            <span className="ch-value mono">{currentInstance?.name ?? '—'}</span>
+            <span className="ch-caret" aria-hidden="true">
+              ▾
+            </span>
+          </button>
+          <span className="ch-div" aria-hidden="true" />
+          <button
+            type="button"
+            className="ch-side"
+            aria-haspopup="menu"
+            aria-expanded={menu === 'agent'}
+            onClick={() => toggleMenu('agent')}
+          >
+            <span className="ch-label">Agent</span>
+            <span className="ch-value">
+              {activeAgent !== undefined ? displayNameForKind(activeAgent.kind) : '—'}
+            </span>
+            <span className="ch-caret" aria-hidden="true">
+              ▾
+            </span>
+          </button>
+          {menu === 'folder' && (
+            <div className="ch-menu ch-left open" role="menu" aria-label="Workspaces">
+              {instances.length === 0 ? (
+                <div className="ch-item" aria-disabled="true">
+                  <span className="muted">No instances loaded</span>
+                </div>
+              ) : (
+                instances.map((inst) => (
+                  <button
+                    key={inst.id}
+                    type="button"
+                    role="menuitem"
+                    className={`ch-item${inst.id === currentInstance?.id ? ' active' : ''}`}
+                    onClick={() => pickFolder(inst.id)}
+                  >
+                    <span className="mono">{inst.root}</span>
+                    {inst.isDefault && <span className="meta">default</span>}
+                  </button>
+                ))
+              )}
+              <button type="button" role="menuitem" className="ch-item" onClick={addFolder}>
+                <span>Add new</span>
+                <span className="meta">Instances</span>
+              </button>
+            </div>
+          )}
+          {menu === 'agent' && (
+            <div className="ch-menu ch-right open" role="menu" aria-label="Agent runtimes">
+              {availableAgents.length === 0 ? (
+                <div className="ch-item" aria-disabled="true">
+                  <span className="muted">No agents detected</span>
+                </div>
+              ) : (
+                availableAgents.map((agent) => (
+                  <button
+                    key={agent.kind}
+                    type="button"
+                    role="menuitem"
+                    className={`ch-item${agent.kind === activeAgent?.kind ? ' active' : ''}`}
+                    onClick={() => pickAgent(agent.kind)}
+                  >
+                    <span className="mono">{agent.kind}</span>
+                    <span className="meta">{agent.confidence}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <button
         type="button"
