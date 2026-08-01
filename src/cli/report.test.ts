@@ -5,7 +5,8 @@
  * mapping, --pretty, --global, per-global-dir ScanError isolation, the
  * engine-failure path, and — structurally — that no file content ever
  * reaches stdout (no 'patch'/'content'/'edits' key anywhere in the output
- * graph; fix payloads are summarized as hasFix/fixKind).
+ * graph; no provider credential keys such as apiKey/token; fix payloads are
+ * summarized as hasFix/fixKind).
  */
 
 import fs from 'node:fs';
@@ -59,8 +60,19 @@ interface FindingLike {
   fixKind?: string;
 }
 
-/** Keys that would mean file content leaked into the report. */
-const BANNED_KEYS = new Set(['patch', 'content', 'edits']);
+/** Keys that would mean file content or provider credentials leaked into the report. */
+const BANNED_KEYS = new Set([
+  'patch',
+  'content',
+  'edits',
+  'apiKey',
+  'api_key',
+  'accessToken',
+  'access_token',
+  'refreshToken',
+  'refresh_token',
+  'token',
+]);
 
 /** Walk the whole output object graph and collect any banned key names. */
 function bannedKeys(value: unknown, found: string[] = []): string[] {
@@ -234,6 +246,30 @@ describe('--global', () => {
     const stale = globals[0]?.findings.find((f) => f.id.startsWith('stale-model-ref'));
     expect(stale).toMatchObject({ severity: 'warning', hasFix: true, fixKind: 'replace-file' });
     expect(code).toBe(1); // the global warning drives the exit code
+  });
+
+  it('never leaks opencode provider credential objects from global reports', () => {
+    const home = mkTmpDir();
+    fs.mkdirSync(path.join(home, '.opencode'));
+    fs.writeFileSync(
+      path.join(home, '.opencode', 'opencode.json'),
+      JSON.stringify({
+        provider: {
+          anthropic: { options: { apiKey: 'sk-GLOBAL-PROVIDER-SECRET' } },
+          openai: { options: { token: 'tok-GLOBAL-PROVIDER-SECRET' } },
+        },
+      }),
+    );
+    const { code, stdout, json } = run({
+      path: path.join(trees, 'negative-plain'),
+      global: true,
+      homeDir: home,
+    });
+    expect(code).toBe(0);
+    expect(stdout).not.toContain('GLOBAL-PROVIDER-SECRET');
+    expect(bannedKeys(json)).toEqual([]);
+    const globals = json['global'] as { agents: { extras: Record<string, unknown> }[] }[];
+    expect(globals[0]?.agents[0]?.extras['providers']).toEqual(['anthropic', 'openai']);
   });
 
   it('isolates a ScanError to its global dir instead of killing the report', () => {

@@ -54,8 +54,19 @@ function get(pathname: string, headers: Record<string, string> = {}): Promise<Re
   );
 }
 
-/** Keys that would mean file content leaked into the report (see cli/report.test.ts). */
-const BANNED_KEYS = new Set(['patch', 'content', 'edits']);
+/** Keys that would mean file content or provider credentials leaked into the report. */
+const BANNED_KEYS = new Set([
+  'patch',
+  'content',
+  'edits',
+  'apiKey',
+  'api_key',
+  'accessToken',
+  'access_token',
+  'refreshToken',
+  'refresh_token',
+  'token',
+]);
 function bannedKeys(value: unknown, found: string[] = []): string[] {
   if (Array.isArray(value)) {
     for (const item of value) bannedKeys(item, found);
@@ -347,6 +358,28 @@ describe('GET /api/report?scope=global (agentconfig-71h.2)', () => {
     expect(bannedKeys(json)).toEqual([]); // no patch/content/edits anywhere
     const stale = json.entries[0]!.findings.find((f) => f.id.startsWith('stale-model-ref'));
     expect(stale).toMatchObject({ hasFix: true, fixKind: 'replace-file' });
+  });
+
+  it('content-free: opencode provider config secrets stay out of global report', async () => {
+    const { home, gget } = makeGlobalApp();
+    fs.mkdirSync(path.join(home, '.opencode'), { recursive: true });
+    fs.writeFileSync(
+      path.join(home, '.opencode', 'opencode.json'),
+      JSON.stringify({
+        provider: {
+          anthropic: { options: { apiKey: 'sk-GLOBAL-PROVIDER-SECRET' } },
+          openai: { options: { token: 'tok-GLOBAL-PROVIDER-SECRET' } },
+        },
+      }),
+    );
+    const body = await (await gget('/api/report?scope=global&fresh=1')).text();
+    expect(body).not.toContain('GLOBAL-PROVIDER-SECRET');
+    const json = JSON.parse(body) as {
+      entries: { dir: string; agents: { extras: Record<string, unknown> }[] }[];
+    };
+    expect(bannedKeys(json)).toEqual([]);
+    const opencode = json.entries.find((entry) => entry.dir === '.opencode');
+    expect(opencode?.agents[0]?.extras['providers']).toEqual(['anthropic', 'openai']);
   });
 
   it('caches until fresh=1: a fixture mutation is visible only after fresh', async () => {

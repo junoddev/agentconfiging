@@ -137,8 +137,19 @@ function req(
   );
 }
 
-/** Recursively collect any content-bearing keys that must never appear. */
-const BANNED_KEYS = new Set(['patch', 'content', 'edits']);
+/** Recursively collect content-bearing or provider credential keys that must never appear. */
+const BANNED_KEYS = new Set([
+  'patch',
+  'content',
+  'edits',
+  'apiKey',
+  'api_key',
+  'accessToken',
+  'access_token',
+  'refreshToken',
+  'refresh_token',
+  'token',
+]);
 function bannedKeys(value: unknown, found: string[] = []): string[] {
   if (Array.isArray(value)) {
     for (const item of value) bannedKeys(item, found);

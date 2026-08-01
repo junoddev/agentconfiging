@@ -130,6 +130,62 @@ describe('detect() fixture matrix', () => {
     expect(agent.extras['model']).toBe('anthropic/claude-sonnet-4-5');
   });
 
+  it('opencode providers: reports only provider name strings, never provider config objects', () => {
+    const raw = {
+      root: '/tmp/proj',
+      cwdBasename: 'proj',
+      files: [
+        {
+          path: 'opencode.json',
+          size: 1,
+          sha256: 'a'.repeat(64),
+          content: JSON.stringify({
+            providers: [
+              'anthropic',
+              { name: 'openai', apiKey: 'sk-SHOULD-NOT-LEAK' },
+              { id: 'nameless', token: 'tok-SHOULD-NOT-LEAK' },
+              42,
+            ],
+          }),
+        },
+      ],
+      stats: { fileCount: 1, totalBytes: 1 },
+    };
+
+    const agent = only(detect(parseManifest(raw)), 'opencode');
+    expect(agent.extras['providers']).toEqual(['anthropic', 'openai']);
+    expect(JSON.stringify(agent.extras)).not.toContain('SHOULD-NOT-LEAK');
+    expect(JSON.stringify(agent.extras)).not.toContain('apiKey');
+    expect(JSON.stringify(agent.extras)).not.toContain('token');
+  });
+
+  it('opencode provider map: current schema reports only map keys as provider names', () => {
+    const raw = {
+      root: '/tmp/proj',
+      cwdBasename: 'proj',
+      files: [
+        {
+          path: 'opencode.json',
+          size: 1,
+          sha256: 'a'.repeat(64),
+          content: JSON.stringify({
+            provider: {
+              anthropic: { options: { apiKey: 'sk-SHOULD-NOT-LEAK' } },
+              openai: { options: { token: 'tok-SHOULD-NOT-LEAK' } },
+            },
+          }),
+        },
+      ],
+      stats: { fileCount: 1, totalBytes: 1 },
+    };
+
+    const agent = only(detect(parseManifest(raw)), 'opencode');
+    expect(agent.extras['providers']).toEqual(['anthropic', 'openai']);
+    expect(JSON.stringify(agent.extras)).not.toContain('SHOULD-NOT-LEAK');
+    expect(JSON.stringify(agent.extras)).not.toContain('apiKey');
+    expect(JSON.stringify(agent.extras)).not.toContain('token');
+  });
+
   it('multi-runtime: detects exactly Claude + Codex + Copilot + Cursor (no gemini from AGENTS.md)', () => {
     const agents = detectFixture('multi-runtime');
     const byKind = new Map(agents.map((a) => [a.kind, a]));

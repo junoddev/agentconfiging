@@ -4,8 +4,8 @@
  * Signals (match triggers, not counted): opencode.json, .opencode/ dir
  * presence. Confidence: fixed 'medium' (as in the Elixir source).
  *
- * Extras: `providers` ported from the Elixir rules (`providers` list or
- * `provider` string in opencode.json); `model` added on top because the
+ * Extras: `providers` as provider name strings from legacy `providers` lists,
+ * legacy `provider` strings, or current-schema `provider` maps; `model` added on top because the
  * current opencode config schema (and the canonical opencode-basic
  * fixture) uses a "provider/model" `model` field instead.
  *
@@ -35,10 +35,30 @@ function decodeConfig(m: Manifest): Record<string, unknown> | undefined {
   return undefined;
 }
 
-function extractProviders(config: Record<string, unknown> | undefined): unknown[] {
+function extractProviderName(entry: unknown): string | undefined {
+  if (typeof entry === 'string') return entry;
+  if (typeof entry === 'object' && entry !== null && !Array.isArray(entry)) {
+    const name = (entry as Record<string, unknown>)['name'];
+    if (typeof name === 'string') return name;
+  }
+  return undefined;
+}
+
+function extractProviders(config: Record<string, unknown> | undefined): string[] {
   if (config === undefined) return [];
-  if (Array.isArray(config['providers'])) return config['providers'];
+  if (Array.isArray(config['providers'])) {
+    return config['providers'].map(extractProviderName).filter((name): name is string => {
+      return name !== undefined;
+    });
+  }
   if (typeof config['provider'] === 'string') return [config['provider']];
+  if (
+    typeof config['provider'] === 'object' &&
+    config['provider'] !== null &&
+    !Array.isArray(config['provider'])
+  ) {
+    return Object.keys(config['provider']);
+  }
   return [];
 }
 
