@@ -11,10 +11,14 @@ export type { RunOptions } from './executor.js';
 
 export {
   defaultRuntimes,
+  runBashDisabled,
+  BASH_DISABLED_MESSAGE,
   buildChildEnv,
   defaultBashExec,
   defaultHttpFetch,
   defaultGitExecFn,
+  isBlockedHttpHost,
+  assertHttpTargetAllowed,
   isValidGitArg,
   GIT_SUBCOMMANDS,
   STRIPPED_ENV_KEYS,
@@ -22,6 +26,7 @@ export {
   HTTP_TIMEOUT_MS,
   GIT_TIMEOUT_MS,
   HTTP_MAX_BYTES,
+  HTTP_MAX_REDIRECTS,
   MAX_OUTPUT_BYTES,
   DELAY_MAX_MS,
 } from './runtimes.js';

@@ -22,11 +22,17 @@
  *   2. github           gh[pousr]_[A-Za-z0-9]{36,255} | github_pat_[A-Za-z0-9_]{22,255}
  *   3. slack            xox[baprs]-[A-Za-z0-9-]{10,250}
  *   4. aws_access_key   (AKIA|ASIA|AROA)[0-9A-Z]{16}
- *   5. jwt              eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+
- *   6. bearer           Bearer\s+[A-Za-z0-9_-]{20,}
- *   7. openai           (?<![A-Za-z0-9])sk-(?!ant-)[A-Za-z0-9_-]{20,}
- *   8. url_credentials  scheme://user:PASSWORD@ — redacts the password only
- *   9. kv_secret        (key)(sep)(value)  where key ∈ /token|secret|key|password/i
+ *   5. google_api_key   AIza[0-9A-Za-z_-]{35}
+ *   6. stripe           (sk|rk)_(live|test)_[0-9A-Za-z]{10,247}
+ *   7. npm_token        npm_[A-Za-z0-9]{36}
+ *   8. google_oauth     ya29\.[0-9A-Za-z_-]{10,}
+ *   9. private_key      -----BEGIN … PRIVATE KEY----- … -----END … PRIVATE KEY-----
+ *  10. slack_webhook    https://hooks.slack.com/services/[A-Za-z0-9/]{1,255}
+ *  11. jwt              eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+
+ *  12. bearer           Bearer\s+[A-Za-z0-9._+/=-]{20,}
+ *  13. openai           (?<![A-Za-z0-9])sk-(?!ant-)[A-Za-z0-9_-]{20,}
+ *  14. url_credentials  scheme://user:PASSWORD@ — redacts the password only
+ *  15. kv_secret        (key)(sep)(value)  where key ∈ /token|secret|key|password/i
  *
  * The KV pattern is the catch-all and runs LAST so a value that already
  * matched a provider-specific pattern doesn't get re-mangled.
@@ -142,6 +148,33 @@
  * 11. slack pattern (redacts-MORE, not in upstream):
  *    `xox[baprs]-[A-Za-z0-9-]{10,250}` — bot/user/app/refresh/session
  *    tokens. Single bounded character class, no ambiguity.
+ *
+ * 12. Additional provider formats (redacts-MORE, np6 coverage gaps). Every one
+ *    is a single bounded character class after a fixed literal prefix — no
+ *    nested quantifiers, no ambiguity, linear per start offset (same ReDoS
+ *    hygiene as items 9/11). Fixed left/right boundaries where the token has an
+ *    EXACT length so a longer alnum run is not sliced (partial-redaction leak):
+ *      - google_api_key `AIza` + 35 base64url chars (exact; both boundaries).
+ *      - stripe         `(sk|rk)_(live|test)_` + 10..247 base62.
+ *      - npm_token      `npm_` + 36 base62 (exact; both boundaries).
+ *      - google_oauth   `ya29.` + 10.. base64url run.
+ *      - private_key    a PEM `-----BEGIN … PRIVATE KEY-----` … `-----END …
+ *                       PRIVATE KEY-----` block; the body is a BOUNDED lazy
+ *                       `[\s\S]{0,4096}?` so an unterminated BEGIN fails after a
+ *                       bounded scan per occurrence (never unbounded backtracking).
+ *      - slack_webhook  `https://hooks.slack.com/services/<path>` — the secret is
+ *                       in the URL PATH, so url_credentials (which needs
+ *                       `user:pass@`) never fires; a dedicated pattern is needed.
+ *
+ * 13. bearer value class WIDENED (redacts-MORE, tail-leak fix): the bearer token
+ *    run was `[A-Za-z0-9_-]` — base64url only. A bearer holding a JWT
+ *    (`Bearer eyJ….payload.sig`) or a STANDARD-base64 token (`+`, `/`, `=`
+ *    padding) stopped at the first `.`/`+`/`/`, redacting only the head and
+ *    PRINTING the tail (same dangerous polarity as item 8). Widened to
+ *    `[A-Za-z0-9._+/=-]` — a single class, still linear. jwt and openai/anthropic
+ *    are DELIBERATELY left narrow: JWTs are base64url (never `+`//), and the
+ *    provider `sk-`/`sk-ant-` alphabets do not use `+`//= either, so widening
+ *    them would only over-consume adjacent prose.
  */
 
 export type RedactionPatternId =
@@ -149,6 +182,12 @@ export type RedactionPatternId =
   | 'github'
   | 'slack'
   | 'aws_access_key'
+  | 'google_api_key'
+  | 'stripe'
+  | 'npm_token'
+  | 'google_oauth'
+  | 'private_key'
+  | 'slack_webhook'
   | 'jwt'
   | 'bearer'
   | 'openai'
@@ -295,20 +334,40 @@ export const REDACTION_PATTERNS: readonly RedactionPattern[] = [
   whole('slack', /xox[baprs]-[A-Za-z0-9-]{10,250}/g),
   // 4. AWS access keys (long-lived AKIA, temporary ASIA, role AROA).
   whole('aws_access_key', /\b(?:AKIA|ASIA|AROA)[0-9A-Z]{16}\b/g),
-  // 5. JWT-shaped tokens (header.payload.signature, base64url chunks).
+  // 5. Google API keys (divergence 12) — `AIza` + exactly 35 base64url chars.
+  //    Both boundaries so a longer alnum run is never sliced to a partial hit.
+  whole('google_api_key', /(?<![A-Za-z0-9_-])AIza[0-9A-Za-z_-]{35}(?![0-9A-Za-z_-])/g),
+  // 6. Stripe secret/restricted keys (divergence 12) — live + test variants.
+  whole('stripe', /(?<![A-Za-z0-9])(?:sk|rk)_(?:live|test)_[0-9A-Za-z]{10,247}/g),
+  // 7. npm tokens (divergence 12) — `npm_` + exactly 36 base62 chars.
+  whole('npm_token', /(?<![A-Za-z0-9])npm_[A-Za-z0-9]{36}(?![A-Za-z0-9])/g),
+  // 8. Google OAuth access tokens (divergence 12) — `ya29.` + a base64url run.
+  whole('google_oauth', /(?<![A-Za-z0-9_-])ya29\.[0-9A-Za-z_-]{10,}/g),
+  // 9. PEM private-key blocks (divergence 12). The body is a BOUNDED lazy
+  //    `[\s\S]{0,4096}?` — an unterminated BEGIN fails after a bounded scan per
+  //    occurrence, never unbounded backtracking. Whole block → the mark.
+  whole(
+    'private_key',
+    /-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----[\s\S]{0,4096}?-----END (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/g,
+  ),
+  // 10. Slack webhook URLs (divergence 12) — the token is in the URL PATH, so
+  //    url_credentials (which needs `user:pass@`) never covers it.
+  whole('slack_webhook', /https:\/\/hooks\.slack\.com\/services\/[A-Za-z0-9/]{1,255}/g),
+  // 11. JWT-shaped tokens (header.payload.signature, base64url chunks).
   //    Divergence from upstream (see header): left boundary added so
   //    `eyJeyJ…` repeats don't rescan quadratically.
   whole('jwt', /(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g),
-  // 6. Bearer tokens.
-  prefixed('bearer', /Bearer\s+[A-Za-z0-9_-]{20,}/g, 'Bearer '),
-  // 7. OpenAI sk- — explicitly exclude sk-ant- via negative lookahead so
+  // 12. Bearer tokens. Value class widened (divergence 13) to cover JWT dots +
+  //    standard-base64 `+`/`/`/`=` so the tail is never left printed.
+  prefixed('bearer', /Bearer\s+[A-Za-z0-9._+/=-]{20,}/g, 'Bearer '),
+  // 13. OpenAI sk- — explicitly exclude sk-ant- via negative lookahead so
   //    Anthropic keys are tagged anthropic (and not silently downgraded).
   //    Left boundary is divergence 6 (risk-/disk- prose FP fix).
   whole('openai', /(?<![A-Za-z0-9])sk-(?!ant-)[A-Za-z0-9_-]{20,}/g),
-  // 8. URL-embedded credentials (divergence 9) — before the KV catch-all;
+  // 14. URL-embedded credentials (divergence 9) — before the KV catch-all;
   //    when a secret-named key's value is a credentialed URL the kv match
   //    starts earlier and wins the overlap watermark (redacts strictly more).
   URL_CRED_ENTRY,
-  // 9. KV catch-all — runs last.
+  // 15. KV catch-all — runs last.
   KV_ENTRY,
 ];
