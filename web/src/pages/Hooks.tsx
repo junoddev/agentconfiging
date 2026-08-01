@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ApiError, type FileContent } from '../api/index.js';
 import {
   Button,
   Dialog,
   EmptyState,
+  Frame,
   ListCard,
   ListRow,
   Notice,
@@ -12,7 +13,12 @@ import {
   type SourceScope,
 } from '../components/core/index.js';
 import { homeRel } from '../lib/format.js';
-import { useAppState, useGlobalConfig } from '../state/index.js';
+import {
+  displayNameForKind,
+  sectionApplies,
+  useAppState,
+  useGlobalConfig,
+} from '../state/index.js';
 import { WriteFlow, useWriteFlow } from '../write/index.js';
 import { HookForm } from './hooks/HookForm.js';
 import { HOOK_EVENTS } from './hooks/events.js';
@@ -116,7 +122,7 @@ export function Hooks() {
  * /api/write fallback instead (the structured endpoint 404s on absent files).
  */
 function HooksPage() {
-  const { getFile, report, currentInstance } = useAppState();
+  const { getFile, report, currentInstance, activeAgent } = useAppState();
   const { entries: globalEntries } = useGlobalConfig();
   const flow = useWriteFlow();
   const toast = useToast();
@@ -402,6 +408,28 @@ function HooksPage() {
     // flow.phase is the trigger; toast + flow.cancel are stable.
   }, [flow.phase]);
 
+  // Claude-only surface (bead a6y): lifecycle hooks live in .claude/settings*.json,
+  // which only Claude Code reads — any other active agent gets an honest
+  // not-applicable state. Placed AFTER every hook call so hook order never changes.
+  const notApplicable = activeAgent !== undefined && !sectionApplies('hooks', activeAgent.kind);
+  if (notApplicable) {
+    return (
+      <Frame>
+        <div className="page-head">
+          <div>
+            <h1>Hooks</h1>
+            <p className="page-sub">Commands that run on agent lifecycle events.</p>
+          </div>
+        </div>
+        <Notice tone="info">
+          <strong>Not applicable to {displayNameForKind(activeAgent.kind)}.</strong> Lifecycle hooks
+          live in .claude/settings.json and .claude/settings.local.json — Claude Code surfaces.
+          Switch the Agent picker to Claude Code to view or edit them.
+        </Notice>
+      </Frame>
+    );
+  }
+
   // Fetch error before anything loaded (unauthorized handled by the shell).
   if (!report && !currentInstance) {
     return (
@@ -563,9 +591,4 @@ function HooksPage() {
       </Dialog>
     </Frame>
   );
-}
-
-/** Shared page chassis so every state renders in the same main shell. */
-function Frame({ children }: { children: ReactNode }) {
-  return <main className="layout-main">{children}</main>;
 }

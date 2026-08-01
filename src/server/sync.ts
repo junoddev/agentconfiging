@@ -41,6 +41,7 @@ import { getRuntimeFormat, listSyncTargets } from '../core/runtimes/index.js';
 import type { RuntimeFormat } from '../core/runtimes/index.js';
 import { syncPlan, type SyncStatus } from '../core/sync/index.js';
 import { resolveWriteTarget, type ResolvedTarget, type WriteScope } from './pathguard.js';
+import { jsonError } from './http.js';
 import type { InstanceRegistry } from './registry.js';
 import { commitResolved, previewResolved, statFile } from './write.js';
 
@@ -50,13 +51,6 @@ export interface SyncRoutesConfig {
 }
 
 const O_NOFOLLOW = fs.constants.O_NOFOLLOW ?? 0;
-
-function jsonError(status: 400 | 403 | 404 | 413 | 500, message: string): Response {
-  return new Response(JSON.stringify({ error: message }), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
-}
 
 async function readJsonBody(req: Request): Promise<Record<string, unknown> | undefined> {
   try {

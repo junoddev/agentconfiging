@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ApiError, type FileContent, type RedactionSpan } from '../api/index.js';
 import {
+  AlsoAgents,
   Button,
   Card,
   Dialog,
@@ -13,9 +13,18 @@ import {
   SourceBadge,
   useToast,
 } from '../components/core/index.js';
-import { fileReadOnly } from '../lib/editable.js';
 import { homeRel } from '../lib/format.js';
-import { useAppState, useGlobalConfig } from '../state/index.js';
+import { tokenizeMarkdown, type MarkdownBlock } from '../lib/markdown.js';
+import { renderRedacted } from '../lib/redacted.js';
+import { useCommitToast } from '../lib/useCommitToast.js';
+import { useFileEditor } from '../lib/useFileEditor.js';
+import {
+  displayNameForKind,
+  otherAgentKinds,
+  scopedAgents,
+  useAppState,
+  useGlobalConfig,
+} from '../state/index.js';
 import { WriteFlow, useWriteFlow } from '../write/index.js';
 import {
   collectGlobalInstructionFiles,
@@ -23,10 +32,7 @@ import {
   extractImports,
   groupByScope,
   groupGlobalByRoot,
-  hasRedactionMarks,
   resolveImports,
-  tokenizeMarkdown,
-  type MarkdownBlock,
   type ResolvedImport,
 } from './instructions/logic.js';
 import './instructions.css';
@@ -34,47 +40,9 @@ import './instructions.css';
 /** Which pane of an editable file is showing. */
 type Mode = 'edit' | 'preview';
 
-/** Honest one-line error voice per API failure kind (§7). */
-function errorText(err: unknown): string {
-  if (err instanceof ApiError) {
-    if (err.kind === 'notfound') return 'file not found';
-    if (err.kind === 'forbidden') return 'file out of scope';
-    if (err.kind === 'unauthorized') return 'session expired — reopen from the CLI';
-    if (err.kind === 'network') return 'cannot reach the local server';
-  }
-  return 'could not load file';
-}
-
-/** A file is redacted when the server marked spans OR the text carries a
- *  `[REDACTED:*]` placeholder. Either way the editor must stay read-only so a
- *  save can never overwrite the real on-disk secret with the placeholder. */
-function isRedacted(file: FileContent): boolean {
-  return file.spans.length > 0 || hasRedactionMarks(file.content);
-}
-
 /** Which scope badge a project instruction file earns (`*.local.*` = local). */
 function fileScope(path: string): 'project' | 'local' {
   return path.includes('.local.') ? 'local' : 'project';
-}
-
-/** Redacted `content` + mark `spans` → text nodes with styled `[REDACTED:*]`
- *  marks. Everything is a TEXT node — never markup; marks are already redacted
- *  server-side so no secret is present to leak. */
-function renderRedacted(content: string, spans: readonly RedactionSpan[]): ReactNode[] {
-  const nodes: ReactNode[] = [];
-  let cursor = 0;
-  spans.forEach((span, i) => {
-    if (span.start < cursor || span.end > content.length) return;
-    if (span.start > cursor) nodes.push(content.slice(cursor, span.start));
-    nodes.push(
-      <mark key={i} className="redact-mark" title={`redacted: ${span.id}`}>
-        {content.slice(span.start, span.end)}
-      </mark>,
-    );
-    cursor = span.end;
-  });
-  if (cursor < content.length) nodes.push(content.slice(cursor));
-  return nodes;
 }
 
 /** One safe preview block → a text-node element. No HTML is ever interpreted;
@@ -153,10 +121,11 @@ export function Instructions() {
  * way. All file content is rendered as TEXT NODES — never HTML.
  */
 function InstructionsPage() {
-  const { report, getFile } = useAppState();
+  const { report, getFile, activeAgent } = useAppState();
   const { entries: globalEntries } = useGlobalConfig();
   const flow = useWriteFlow();
   const toast = useToast();
+  const agentKind = activeAgent?.kind;
 
   // Every instance file (not just instruction files) — the set an @import is
   // resolved against to decide present vs broken.
@@ -166,92 +135,57 @@ function InstructionsPage() {
     return set;
   }, [report]);
 
-  const instructionFiles = useMemo(() => collectInstructionFiles(report?.agents ?? []), [report]);
+  // Scoped to the ACTIVE agent (bead a6y); each row notes the other detected
+  // agents that read the same file via the AlsoAgents badge.
+  const instructionFiles = useMemo(
+    () => collectInstructionFiles(scopedAgents(report?.agents ?? [], agentKind)),
+    [report, agentKind],
+  );
   const groups = useMemo(() => groupByScope(instructionFiles), [instructionFiles]);
 
   // Inherited GLOBAL instruction files (bead 71h.5): absolute root-joined paths.
   // Since 71h.10 they are editable when served unredacted — saves take the same
   // write flow, gated by its global-scope warning. Absent/failed global data ⇒
-  // empty lists and the page renders exactly as before.
-  const globalFiles = useMemo(() => collectGlobalInstructionFiles(globalEntries), [globalEntries]);
+  // empty lists and the page renders exactly as before. Scoped like the project
+  // list: only the active agent's global homes contribute.
+  const scopedGlobalEntries = useMemo(
+    () => globalEntries.map((e) => ({ ...e, agents: scopedAgents(e.agents, agentKind) })),
+    [globalEntries, agentKind],
+  );
+  const globalFiles = useMemo(
+    () => collectGlobalInstructionFiles(scopedGlobalEntries),
+    [scopedGlobalEntries],
+  );
   const globalGroups = useMemo(() => groupGlobalByRoot(globalFiles), [globalFiles]);
   const globalByPath = useMemo(() => new Map(globalFiles.map((f) => [f.path, f])), [globalFiles]);
 
   const [selected, setSelected] = useState<string | undefined>(undefined);
-  const [file, setFile] = useState<FileContent | undefined>(undefined);
-  const [draft, setDraft] = useState<string>('');
-  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
-  const [errMsg, setErrMsg] = useState<string>('');
   const [mode, setMode] = useState<Mode>('edit');
 
   // Import peek: the ref being viewed in the shared Dialog.
   const [peek, setPeek] = useState<ResolvedImport | undefined>(undefined);
 
-  // Load the selected file's redacted content. Mirrors the Artifacts browser:
-  // reload on selection change only (a WS-driven report refetch never clobbers
-  // an in-progress draft); our own commit reload is handled separately below.
-  useEffect(() => {
-    if (selected === undefined) {
-      setFile(undefined);
-      setStatus('idle');
-      return;
-    }
-    let cancelled = false;
-    setStatus('loading');
-    setFile(undefined);
-    setMode('edit');
-    getFile(selected)
-      .then((loaded) => {
-        if (cancelled) return;
-        setFile(loaded);
-        setDraft(loaded.content);
-        setStatus('idle');
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setErrMsg(errorText(err));
-        setStatus('error');
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selected, getFile]);
-
-  // After our own commit lands, reload the file so the draft baseline matches
-  // what is now on disk (keeps the save button honestly disabled post-write).
-  useEffect(() => {
-    if (flow.phase !== 'done' || selected === undefined) return;
-    let cancelled = false;
-    getFile(selected)
-      .then((loaded) => {
-        if (cancelled) return;
-        setFile(loaded);
-        setDraft(loaded.content);
-      })
-      .catch(() => {
-        /* a load failure here is non-fatal; the toast already confirmed. */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [flow.phase, selected, getFile]);
-
-  // Every committed mutation confirms via Toast (§5), then the flow resets.
-  useEffect(() => {
-    if (flow.phase !== 'done') return;
-    const label = flow.request?.label;
-    toast(label !== undefined ? `Applied — ${label}` : 'Change applied');
-    flow.cancel();
-    // flow.phase is the trigger; toast + flow.cancel are stable.
-  }, [flow.phase]);
-
-  const redacted = file ? isRedacted(file) : false;
   // Inherited global file: kept for provenance (badge/notice), but since bead
   // 71h.10 it is EDITABLE — the save goes through the same /api/write flow and
   // the WriteFlow global-scope warning. Only redaction forces read-only.
   const inherited = selected !== undefined && globalByPath.has(selected);
-  const readOnly = fileReadOnly({ redacted, inherited });
-  const dirty = file !== undefined && !readOnly && draft !== file.content;
+
+  // Shared single-file editor: load-on-select, redacted/readOnly/dirty
+  // derivation, and reload-after-commit. The page keeps its own `mode` and
+  // @import navigation on top (below), which the hook does not model.
+  const { file, draft, setDraft, status, errMsg, redacted, readOnly, dirty, reload } =
+    useFileEditor({ path: selected, getFile, inherited });
+
+  // The hook releases the file on selection change but leaves the pane mode
+  // alone; reset it to EDIT on every selection so a new file opens in edit.
+  useEffect(() => {
+    setMode('edit');
+  }, [selected]);
+
+  // Every committed mutation confirms via Toast (§5), reloads the file so the
+  // draft baseline matches disk (save stays honestly disabled), then resets.
+  useCommitToast(flow, toast, { onDone: reload });
+
   const busy = flow.phase === 'loading' || flow.phase === 'committing';
 
   const imports = useMemo<ResolvedImport[]>(() => {
@@ -280,8 +214,9 @@ function InstructionsPage() {
         <div>
           <h1>Instructions</h1>
           <p className="page-sub">
-            Standing instruction files the agent reads every session — CLAUDE.md, AGENTS.md and
-            friends. {totalFiles} file{totalFiles === 1 ? '' : 's'}, provenance on every row.
+            Standing instruction files {agentKind ? displayNameForKind(agentKind) : 'the agent'}{' '}
+            reads every session — CLAUDE.md, AGENTS.md and friends. {totalFiles} file
+            {totalFiles === 1 ? '' : 's'}, provenance on every row.
           </p>
         </div>
       </div>
@@ -299,7 +234,12 @@ function InstructionsPage() {
                 <ListRow
                   key={path}
                   title={<span className="mono">{path}</span>}
-                  badge={<SourceBadge scope={fileScope(path)} />}
+                  badge={
+                    <>
+                      <SourceBadge scope={fileScope(path)} />
+                      <AlsoAgents kinds={otherAgentKinds(report?.agents ?? [], path, agentKind)} />
+                    </>
+                  }
                   trailing={
                     <Button label="Open" variant="ghost" onClick={() => setSelected(path)} />
                   }
@@ -446,31 +386,7 @@ function InstructionsPage() {
 /** Dialog body for an @import peek: loads and shows the file read-only. */
 function ImportPeek({ path }: { path: string }) {
   const { getFile } = useAppState();
-  const [file, setFile] = useState<FileContent | undefined>(undefined);
-  const [status, setStatus] = useState<'loading' | 'idle' | 'error'>('loading');
-  const [errMsg, setErrMsg] = useState<string>('');
-
-  useEffect(() => {
-    let cancelled = false;
-    setStatus('loading');
-    setFile(undefined);
-    getFile(path)
-      .then((loaded) => {
-        if (cancelled) return;
-        setFile(loaded);
-        setStatus('idle');
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setErrMsg(errorText(err));
-        setStatus('error');
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [path, getFile]);
-
-  const redacted = file ? isRedacted(file) : false;
+  const { file, status, errMsg, redacted } = useFileEditor({ path, getFile });
 
   return (
     <>

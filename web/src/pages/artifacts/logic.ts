@@ -7,6 +7,7 @@
  *  global path. */
 
 import type { GlobalEntry } from '../../api/types.js';
+import { joinGlobalPath } from '../../lib/paths.js';
 
 /** One global file: display path (entry-relative) + fetch/selection path. */
 export interface GlobalFile {
@@ -19,12 +20,6 @@ export interface GlobalFileGroup {
   /** Real path of the global config dir (filesystem data — text nodes only). */
   root: string;
   files: GlobalFile[];
-}
-
-/** Join a global entry root and an entry-relative file into an absolute path.
- *  Roots are realpaths (no trailing slash), but normalize defensively. */
-function joinGlobalPath(root: string, rel: string): string {
-  return `${root.replace(/\/+$/, '')}/${rel}`;
 }
 
 /** Per-entry chip groups: the union of each entry's agents' files, de-duplicated

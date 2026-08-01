@@ -201,7 +201,6 @@ export function App() {
           onToggleTheme={toggleTheme}
           onAbout={() => setAboutOpen(true)}
           onToggleNav={() => setNavOpen((o) => !o)}
-          route={route}
         />
         <div className={`app-main${navOpen ? ' nav-open' : ''}`}>
           <Sidebar route={route} />

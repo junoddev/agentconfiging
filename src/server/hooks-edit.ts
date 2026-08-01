@@ -62,6 +62,7 @@ import { CAPS, redact } from '../core/index.js';
 import { unifiedDiff } from './diff.js';
 import { resolveWriteTarget, type WriteScope } from './pathguard.js';
 import { commitResolved, O_NOFOLLOW, readJsonBody, statFile } from './write.js';
+import { jsonError } from './http.js';
 
 export interface HooksEditRoutesConfig {
   scopes: WriteScope[];
@@ -75,13 +76,6 @@ export type HookEditOp =
       address: { event: string; groupIndex: number; hookIndex: number };
       expected: { command: string };
     };
-
-function jsonError(status: 400 | 403 | 404 | 409 | 413, message: string): Response {
-  return new Response(JSON.stringify({ error: message }), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

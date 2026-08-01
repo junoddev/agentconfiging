@@ -18,7 +18,10 @@
  */
 
 import type { FileContent, Report } from '../../api/types.js';
-import { emitScalar, parseScalars, splitFrontmatter } from './frontmatter.js';
+import { collectFiles, collectGlobalFiles } from '../../lib/collect.js';
+import { emitScalar, parseScalars, splitFrontmatter } from '../../lib/frontmatter.js';
+import { joinGlobalPath } from '../../lib/paths.js';
+import { isRedactedFile } from '../../lib/redacted.js';
 
 /** The frontmatter `type` values SPEC §5 row 5 gives a dedicated badge colour.
  *  Any other value (e.g. the fixtures' `context` / `decision`, or none) still
@@ -48,11 +51,9 @@ export function memoryName(path: string): string {
 /** Every memory file referenced by any detected agent, de-duplicated by path
  *  and deterministically sorted (so the grid never jitters on refetch). */
 export function collectMemoryFiles(report: Report | undefined): string[] {
-  const set = new Set<string>();
-  for (const agent of report?.agents ?? []) {
-    for (const file of agent.files) if (isMemoryFile(file)) set.add(file);
-  }
-  return [...set].sort((a, b) => a.localeCompare(b));
+  return collectFiles(report?.agents ?? [], (p) => (isMemoryFile(p) ? { path: p } : null)).map(
+    (e) => e.path,
+  );
 }
 
 // ── Inherited global memory files (bead 71h.5) ──────────────────────────────
@@ -72,48 +73,15 @@ export interface GlobalMemoryFile {
   root: string;
 }
 
-/** Join a global root and a root-relative path into one absolute path. */
-export function joinGlobalPath(root: string, rel: string): string {
-  return `${root.replace(/\/+$/, '')}/${rel.replace(/^\/+/, '')}`;
-}
-
 /** Every global entry's memory files (same `memory/*.md` filter as the project
  *  list), absolute-joined, de-duped, and sorted. No global entries ⇒ [] (the
  *  page renders exactly as before). */
 export function collectGlobalMemoryFiles(
   entries: readonly GlobalMemorySource[],
 ): GlobalMemoryFile[] {
-  const byPath = new Map<string, GlobalMemoryFile>();
-  for (const entry of entries) {
-    for (const agent of entry.agents) {
-      for (const rel of agent.files) {
-        if (!isMemoryFile(rel)) continue;
-        const path = joinGlobalPath(entry.root, rel);
-        if (!byPath.has(path)) byPath.set(path, { path, root: entry.root });
-      }
-    }
-  }
-  return [...byPath.values()].sort((a, b) => a.path.localeCompare(b.path));
-}
-
-// ── Redaction trap ───────────────────────────────────────────────────────────
-
-/** Matches a server-inserted `[REDACTED:*]` placeholder mark. */
-const REDACTION_RE = /\[REDACTED:[^\]]*\]/;
-
-/** True when text carries a `[REDACTED:*]` mark. */
-export function hasRedactionMarks(content: string): boolean {
-  return REDACTION_RE.test(content);
-}
-
-/**
- * A file is redacted when the server marked `spans` OR its content still carries
- * a `[REDACTED:*]` placeholder. BOTH signals are checked: memory notes can quote
- * secrets, and saving the redacted text would overwrite the real value on disk
- * with the placeholder. Redacted files are shown read-only.
- */
-export function isRedacted(file: Pick<FileContent, 'content' | 'spans'>): boolean {
-  return file.spans.length > 0 || hasRedactionMarks(file.content);
+  return collectGlobalFiles(entries, (entry, rel) =>
+    isMemoryFile(rel) ? { path: joinGlobalPath(entry.root, rel), root: entry.root } : null,
+  );
 }
 
 // ── Fields (editor / create form) ────────────────────────────────────────────
@@ -213,7 +181,7 @@ export function buildCard(path: string, file: Pick<FileContent, 'content' | 'spa
     type: type.trim(),
     description,
     preview: bodyPreview(body),
-    redacted: isRedacted(file),
+    redacted: isRedactedFile(file),
   };
 }
 

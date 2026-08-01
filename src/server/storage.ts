@@ -46,6 +46,7 @@ import type { Hono } from 'hono';
 import type { Context } from 'hono';
 import { KNOWN_DIRS } from '../core/index.js';
 import { isWithin, type WriteScope } from './pathguard.js';
+import { jsonError } from './http.js';
 import type { InstanceRegistry } from './registry.js';
 import { trashFile } from './trash.js';
 
@@ -75,13 +76,6 @@ const SAFE_CLEAN_SUBDIRS: ReadonlySet<string> = new Set([
 
 /** Bound the usage walk so a pathological tree cannot block the event loop. */
 const MAX_WALK_ENTRIES = 50_000;
-
-function jsonError(status: 400 | 403 | 404 | 500, message: string): Response {
-  return new Response(JSON.stringify({ error: message }), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
-}
 
 async function readJsonBody(req: Request): Promise<Record<string, unknown> | undefined> {
   try {

@@ -17,8 +17,9 @@
  *                      only, never in `error` (the shell reacts only to `error`).
  */
 
-import type { GlobalReport, InstanceSummary, Report } from '../api/types.js';
+import type { DetectedAgent, GlobalReport, InstanceSummary, Report } from '../api/types.js';
 import type { WsState } from '../ws/client.js';
+import { resolveActiveAgent } from './agentScope.js';
 
 export type AppErrorKind = 'unauthorized' | 'network' | 'unknown';
 
@@ -30,6 +31,11 @@ export interface AppError {
 export interface AppState {
   instances: InstanceSummary[];
   currentInstanceId?: string;
+  /** The PREFERRED agent kind (picker choice / stored preference). May name a
+   *  kind the current report did not detect — the `activeAgent` selector
+   *  resolves it against the report (falling back to the first detection), so
+   *  the preference stays sticky across instance switches. */
+  activeAgentKind?: string;
   report?: Report;
   wsState: WsState;
   loading: boolean;
@@ -44,10 +50,15 @@ export type AppAction =
   | { type: 'report:loading' }
   /** The instance list arrived. */
   | { type: 'instances:loaded'; instances: InstanceSummary[] }
-  /** A report arrived for the current instance. */
-  | { type: 'report:loaded'; report: Report }
+  /** A report arrived. `instanceId` is the instance the fetch targeted; the
+   *  reducer drops it when it no longer matches `currentInstanceId` so a slow
+   *  response for a since-abandoned instance cannot overwrite the current one
+   *  (out-of-order guard, bead — pairs with the provider's generation ref). */
+  | { type: 'report:loaded'; report: Report; instanceId?: string }
   /** The user (or WS) selected an instance; clears the stale report. */
   | { type: 'instance:select'; id: string }
+  /** The user picked an agent in the top-bar chooser (bead a6y). */
+  | { type: 'agent:select'; kind: string }
   /** WS connection state changed. */
   | { type: 'ws:state'; state: WsState }
   /** A fatal-to-view error. */
@@ -61,8 +72,14 @@ export type AppAction =
   /** The global fetch failed — confined to the global slice, never `error`. */
   | { type: 'global:error'; error: AppError };
 
-export function initialAppState(): AppState {
-  return { instances: [], wsState: 'offline', loading: false, globalLoading: false };
+export function initialAppState(activeAgentKind?: string): AppState {
+  return {
+    instances: [],
+    ...(activeAgentKind !== undefined ? { activeAgentKind } : {}),
+    wsState: 'offline',
+    loading: false,
+    globalLoading: false,
+  };
 }
 
 export function appReducer(state: AppState, action: AppAction): AppState {
@@ -72,7 +89,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case 'instances:loaded':
       return { ...state, instances: action.instances };
     case 'report:loaded':
-      // A successful report clears any prior error and marks the instance loaded.
+      // Out-of-order guard: ignore a response whose target instance is no longer
+      // the current one (a fast A→B switch where getReport(A) resolves after
+      // getReport(B)). An undefined `instanceId` is unscoped (server default) and
+      // always applies. A matching id (or none) marks the instance loaded and
+      // clears any prior error.
+      if (action.instanceId !== undefined && action.instanceId !== state.currentInstanceId) {
+        return state;
+      }
       return {
         ...state,
         report: action.report,
@@ -83,6 +107,9 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       if (action.id === state.currentInstanceId) return state;
       // Drop the stale report so pages don't show another instance's data.
       return { ...state, currentInstanceId: action.id, report: undefined, loading: true };
+    case 'agent:select':
+      if (action.kind === state.activeAgentKind) return state;
+      return { ...state, activeAgentKind: action.kind };
     case 'ws:state':
       if (action.state === state.wsState) return state;
       return { ...state, wsState: action.state };
@@ -105,6 +132,12 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     default:
       return state;
   }
+}
+
+/** The effective active agent: the preferred kind when this report detected
+ *  it, else the first detected agent, else undefined (nothing detected). */
+export function activeAgent(state: AppState): DetectedAgent | undefined {
+  return resolveActiveAgent(state.report?.agents ?? [], state.activeAgentKind);
 }
 
 /** The currently-selected instance summary, or undefined when none resolved. */

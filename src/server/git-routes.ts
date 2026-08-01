@@ -20,6 +20,7 @@
 import type { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { InstanceRegistry, RegistryInstance } from './registry.js';
+import { jsonError, resolveInstanceFromBody, resolveInstanceFromQuery } from './http.js';
 import {
   DEFAULT_TIMEOUT_MS,
   LOG_FORMAT,
@@ -49,20 +50,6 @@ export interface GitRoutesConfig {
   netTimeoutMs?: number;
 }
 
-function jsonError(status: 400 | 404, message: string): Response {
-  return new Response(JSON.stringify({ error: message }), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
-}
-
-/** A plain JSON object, or undefined for anything else. */
-function asObject(v: unknown): Record<string, unknown> | undefined {
-  return v !== null && typeof v === 'object' && !Array.isArray(v)
-    ? (v as Record<string, unknown>)
-    : undefined;
-}
-
 /** Map a typed git failure to the wire shape shared by every route. */
 function failureBody(err: unknown): Record<string, unknown> {
   const failure = classifyError(err);
@@ -86,23 +73,13 @@ export function registerGitRoutes(app: Hono, config: GitRoutesConfig): void {
 
   /** Resolve the instance from a query param; undefined ⇒ 404 caller-side. */
   const resolveQuery = (c: Context): RegistryInstance | undefined =>
-    registry.resolve(new URL(c.req.url).searchParams.get('instance') ?? undefined);
+    resolveInstanceFromQuery(c, registry);
 
   /** Read + resolve the instance from a POST body (returns the parsed body too). */
-  const resolveBody = async (
+  const resolveBody = (
     c: Context,
-  ): Promise<{ instance?: RegistryInstance; body: Record<string, unknown> } | undefined> => {
-    let raw: unknown;
-    try {
-      raw = await c.req.json();
-    } catch {
-      return undefined; // malformed body
-    }
-    const body = asObject(raw);
-    if (!body) return undefined;
-    const sel = typeof body['instance'] === 'string' ? (body['instance'] as string) : undefined;
-    return { instance: registry.resolve(sel), body };
-  };
+  ): Promise<{ instance?: RegistryInstance; body: Record<string, unknown> } | undefined> =>
+    resolveInstanceFromBody(c, registry);
 
   const run = (instance: RegistryInstance, args: string[], input?: string): Promise<ExecResult> =>
     exec(args, {

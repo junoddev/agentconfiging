@@ -514,6 +514,10 @@ describe('createApp with search unavailable', () => {
       distDir: path.join(base, 'nodist'),
       registry,
       version: '1.0.0',
+      // Pin the module ABSENT so this "search unavailable" suite tests the
+      // graceful-degradation contract deterministically, regardless of whether
+      // the optional better-sqlite3 native module happens to be built in the env.
+      searchLoader: NULL_LOADER,
     });
   }
 

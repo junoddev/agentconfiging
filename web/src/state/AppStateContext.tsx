@@ -30,6 +30,7 @@ import { bootstrapToken } from '../api/token.js';
 import { isGlobalEntryError } from '../api/types.js';
 import type {
   ApplyFixResponse,
+  DetectedAgent,
   FileContent,
   GlobalEntry,
   GlobalEntryError,
@@ -40,7 +41,9 @@ import type {
   WriteResponse,
 } from '../api/types.js';
 import { WsClient, type WsState } from '../ws/client.js';
+import { readStoredAgentKind, writeStoredAgentKind } from './agentScope.js';
 import {
+  activeAgent as selectActiveAgent,
   appReducer,
   currentInstance as selectCurrentInstance,
   initialAppState,
@@ -50,10 +53,24 @@ import {
 
 /** The data + actions every page consumes. */
 export interface AppStateValue extends AppState {
+  /** The token-bearing API client, or undefined when unauthenticated. Exposed so
+   *  pages needing endpoints the provider does not wrap (storage, scan, known
+   *  projects, sync dry-runs) inherit the SAME injectable client instead of
+   *  bootstrapping a private one (bead — restores test injectability). */
+  client?: ApiClient;
   /** The resolved current-instance summary (or undefined before load). */
   currentInstance?: InstanceSummary;
+  /** The EFFECTIVE active agent (bead a6y): the picked kind when this report
+   *  detected it, else the first detection. Every scoped page reads this. */
+  activeAgent?: DetectedAgent;
   /** Switch instances; triggers a report fetch for the new instance. */
   selectInstance: (id: string) => void;
+  /** Re-fetch the instance list into the shared state so the top-bar FOLDER
+   *  chooser reflects adds/removes made on the Instances page. Best-effort: a
+   *  failure leaves the prior list in place. */
+  refreshInstances: () => Promise<void>;
+  /** Pick the active agent (top-bar chooser); persisted across reloads. */
+  selectAgent: (kind: string) => void;
   /** Re-fetch the current instance's report (also called on a WS report push). */
   refetch: () => void;
   /** Re-fetch the machine-global report (bead 71h.3). Manual only — WS pushes
@@ -137,7 +154,7 @@ export interface AppStateProviderProps {
 }
 
 export function AppStateProvider({ children, deps }: AppStateProviderProps) {
-  const [state, dispatch] = useReducer(appReducer, undefined, initialAppState);
+  const [state, dispatch] = useReducer(appReducer, readStoredAgentKind(), initialAppState);
 
   // Resolve deps exactly once. `undefined` (prop omitted) ⇒ build the real ones
   // from the URL token; `null` ⇒ explicitly no deps; a builder returning
@@ -155,14 +172,24 @@ export function AppStateProvider({ children, deps }: AppStateProviderProps) {
 
   const client = resolvedDeps?.client;
 
+  // Single-flight guard for report fetches: each loadReport bumps this and drops
+  // its result if a newer load has since started, so an out-of-order response
+  // (e.g. a slow refetch of the same instance) can never render a stale report.
+  // The reducer's instanceId check covers cross-instance switches; this covers
+  // same-instance ordering. Mirrors the runId pattern in useWriteFlow.
+  const loadGenRef = useRef(0);
+
   const loadReport = useCallback(
     async (instanceId: string | undefined) => {
       if (!client) return;
+      const gen = ++loadGenRef.current;
       dispatch({ type: 'report:loading' });
       try {
         const report: Report = await client.getReport(instanceId);
-        dispatch({ type: 'report:loaded', report });
+        if (gen !== loadGenRef.current) return; // superseded by a newer load
+        dispatch({ type: 'report:loaded', report, instanceId });
       } catch (err) {
+        if (gen !== loadGenRef.current) return;
         dispatch({ type: 'error', error: toAppError(err) });
       }
     },
@@ -199,6 +226,21 @@ export function AppStateProvider({ children, deps }: AppStateProviderProps) {
     },
     [loadReport],
   );
+
+  const refreshInstances = useCallback(async () => {
+    if (!client) return;
+    try {
+      dispatch({ type: 'instances:loaded', instances: await client.getInstances() });
+    } catch {
+      // Best-effort: a failed refresh leaves the prior list in place; the shell
+      // surfaces fatal (network/unauthorized) states through its own chrome.
+    }
+  }, [client]);
+
+  const selectAgent = useCallback((kind: string) => {
+    dispatch({ type: 'agent:select', kind });
+    writeStoredAgentKind(kind);
+  }, []);
 
   const clearError = useCallback(() => dispatch({ type: 'error:clear' }), []);
 
@@ -261,7 +303,17 @@ export function AppStateProvider({ children, deps }: AppStateProviderProps) {
         if (cancelled) return;
         dispatch({ type: 'instances:loaded', instances });
         const def = instances.find((i) => i.isDefault) ?? instances[0];
-        if (def) currentIdRef.current = def.id;
+        // Put the resolved default INTO state (not just the ref): a render-time
+        // `currentIdRef.current = state.currentInstanceId` would otherwise revert
+        // the ref to undefined, leaving the WS push guard (which compares against
+        // the ref) permanently mismatched for the boot instance. Dispatching
+        // instance:select fixes both — it seeds currentInstanceId AND the ref
+        // stays consistent across re-renders. No extra fetch: the loadReport
+        // below is the only report request.
+        if (def) {
+          currentIdRef.current = def.id;
+          dispatch({ type: 'instance:select', id: def.id });
+        }
       } catch (err) {
         if (!cancelled) dispatch({ type: 'error', error: toAppError(err) });
       }
@@ -272,10 +324,10 @@ export function AppStateProvider({ children, deps }: AppStateProviderProps) {
     const ws = boot.makeWs({
       onState: (s) => dispatch({ type: 'ws:state', state: s }),
       onMessage: (instance) => {
-        // Refetch only when the push targets the instance we're viewing. During
-        // the boot window currentIdRef is undefined and the initial loadReport
-        // above already covers it, so a push for any instance is ignored until
-        // the current instance resolves (then the match is exact).
+        // Refetch only when the push targets the instance we're viewing. The boot
+        // path seeds currentIdRef (and currentInstanceId) with the default before
+        // this can matter, so a push for the default instance matches and refetches
+        // — the case that previously fell through the crack (bead).
         if (currentIdRef.current !== undefined && instance === currentIdRef.current) {
           void loadReport(currentIdRef.current);
         }
@@ -292,8 +344,12 @@ export function AppStateProvider({ children, deps }: AppStateProviderProps) {
   const value = useMemo<AppStateValue>(
     () => ({
       ...state,
+      ...(client ? { client } : {}),
       currentInstance: selectCurrentInstance(state),
+      activeAgent: selectActiveAgent(state),
       selectInstance,
+      refreshInstances,
+      selectAgent,
       refetch,
       refetchGlobal,
       clearError,
@@ -304,7 +360,10 @@ export function AppStateProvider({ children, deps }: AppStateProviderProps) {
     }),
     [
       state,
+      client,
       selectInstance,
+      refreshInstances,
+      selectAgent,
       refetch,
       refetchGlobal,
       clearError,

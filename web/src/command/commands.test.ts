@@ -66,6 +66,15 @@ describe('buildCommands', () => {
     expect(buildCommands('light').some((c) => c.action.type === 'refetch')).toBe(true);
   });
 
+  it('hiddenRoutes drops those nav commands only (bead a6y adaptive rail)', () => {
+    const cmds = buildCommands('light', new Set(['hooks', 'settings']));
+    const ids = cmds.map((c) => c.id);
+    expect(ids).not.toContain('nav:hooks');
+    expect(ids).not.toContain('nav:settings');
+    expect(ids).toContain('nav:instructions');
+    expect(ids).toContain('nav:overview');
+  });
+
   it('labels routes from the routes.ts label seam', () => {
     expect(railLabel('overview')).toBe('Overview');
     expect(railLabel('git')).toBe('Git');
