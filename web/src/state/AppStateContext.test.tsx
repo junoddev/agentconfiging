@@ -18,7 +18,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApiClient } from '../api/client.js';
-import type { InstanceSummary, Report } from '../api/types.js';
+import type { GlobalReport, InstanceSummary, Report } from '../api/types.js';
 import type { WsState } from '../ws/client.js';
 import { AppStateProvider, useAppState, type AppStateDeps, type AppStateValue } from './index.js';
 
@@ -132,6 +132,78 @@ suite('AppStateProvider (render)', () => {
     });
     await flush();
     expect(getReport).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a global-only agent available when the selected folder has none', async () => {
+    const def = inst({ id: 'def', isDefault: true });
+    const global: GlobalReport = {
+      version: '1',
+      generatedAt: 'now',
+      scope: 'global',
+      localOnly: true,
+      entries: [
+        {
+          root: '/home/u/.claude',
+          dir: '.claude',
+          agents: [
+            { kind: 'claude-code', confidence: 'high', files: ['settings.json'], extras: {} },
+          ],
+          findings: [],
+          stats: { fileCount: 1, totalBytes: 10 },
+        },
+      ],
+    };
+    const deps: AppStateDeps = {
+      client: {
+        getInstances: async () => [def],
+        getGlobalReport: async () => global,
+        getReport: async () => report(),
+      } as unknown as ApiClient,
+      makeWs: () => ({ start: () => {}, close: () => {} }),
+    };
+
+    await render(deps);
+    expect(latest?.report?.agents).toEqual([]);
+    expect(latest?.availableAgents.map((a) => a.kind)).toEqual(['claude-code']);
+    expect(latest?.activeAgent?.kind).toBe('claude-code');
+  });
+
+  it('keeps project config and global overlays when Codex is global-only', async () => {
+    const def = inst({ id: 'def', isDefault: true });
+    const global: GlobalReport = {
+      version: '1',
+      generatedAt: 'now',
+      scope: 'global',
+      localOnly: true,
+      entries: [
+        {
+          root: '/home/u/.codex',
+          dir: '.codex',
+          agents: [{ kind: 'codex', confidence: 'high', files: ['AGENTS.md'], extras: {} }],
+          findings: [],
+          stats: { fileCount: 1, totalBytes: 10 },
+        },
+      ],
+    };
+    const deps: AppStateDeps = {
+      client: {
+        getInstances: async () => [def],
+        getGlobalReport: async () => global,
+        getReport: async () =>
+          report({
+            agents: [{ kind: 'claude-code', confidence: 'low', files: ['CLAUDE.md'], extras: {} }],
+          }),
+      } as unknown as ApiClient,
+      makeWs: () => ({ start: () => {}, close: () => {} }),
+    };
+
+    await render(deps);
+    await act(async () => {
+      latest?.selectAgent('codex');
+      await Promise.resolve();
+    });
+    expect(latest?.activeAgent?.kind).toBe('codex');
+    expect(latest?.agentScopeKind).toBeUndefined();
   });
 
   it('an out-of-order report response does NOT overwrite the current instance (finding #2)', async () => {

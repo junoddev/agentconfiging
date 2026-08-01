@@ -122,7 +122,7 @@ export function Hooks() {
  * /api/write fallback instead (the structured endpoint 404s on absent files).
  */
 function HooksPage() {
-  const { getFile, report, currentInstance, activeAgent } = useAppState();
+  const { getFile, report, currentInstance, agentScopeKind } = useAppState();
   const { entries: globalEntries } = useGlobalConfig();
   const flow = useWriteFlow();
   const toast = useToast();
@@ -411,7 +411,7 @@ function HooksPage() {
   // Claude-only surface (bead a6y): lifecycle hooks live in .claude/settings*.json,
   // which only Claude Code reads — any other active agent gets an honest
   // not-applicable state. Placed AFTER every hook call so hook order never changes.
-  const notApplicable = activeAgent !== undefined && !sectionApplies('hooks', activeAgent.kind);
+  const notApplicable = agentScopeKind !== undefined && !sectionApplies('hooks', agentScopeKind);
   if (notApplicable) {
     return (
       <Frame>
@@ -422,7 +422,7 @@ function HooksPage() {
           </div>
         </div>
         <Notice tone="info">
-          <strong>Not applicable to {displayNameForKind(activeAgent.kind)}.</strong> Lifecycle hooks
+          <strong>Not applicable to {displayNameForKind(agentScopeKind)}.</strong> Lifecycle hooks
           live in .claude/settings.json and .claude/settings.local.json — Claude Code surfaces.
           Switch the Agent picker to Claude Code to view or edit them.
         </Notice>

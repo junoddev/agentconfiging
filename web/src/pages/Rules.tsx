@@ -76,11 +76,11 @@ export function Rules() {
 }
 
 function RulesPage() {
-  const { report, getFile, activeAgent } = useAppState();
+  const { report, getFile, agentScopeKind } = useAppState();
   const { entries: globalDirs } = useGlobalConfig();
   const flow = useWriteFlow();
   const toast = useToast();
-  const agentKind = activeAgent?.kind;
+  const agentKind = agentScopeKind;
 
   // Scoped to the ACTIVE agent (bead a6y); each row notes the other detected
   // agents that read the same file via the AlsoAgents badge.
@@ -194,7 +194,7 @@ function RulesPage() {
 
   // The sidebar hides RULES for agents without the concept (bead a6y); this
   // covers deep links with an honest not-applicable state. After all hooks.
-  const notApplicable = activeAgent !== undefined && !sectionApplies('rules', activeAgent.kind);
+  const notApplicable = agentScopeKind !== undefined && !sectionApplies('rules', agentScopeKind);
   if (notApplicable) {
     return (
       <main className="layout-main">
@@ -205,9 +205,9 @@ function RulesPage() {
           </div>
         </div>
         <Notice tone="info">
-          <strong>Not applicable to {displayNameForKind(activeAgent.kind)}.</strong> Contextual
-          rules (.claude/rules/*.md, .cursor/rules/*.mdc) are Claude Code and Cursor surfaces —
-          switch the Agent picker to one of those to view or edit them.
+          <strong>Not applicable to {displayNameForKind(agentScopeKind)}.</strong> Contextual rules
+          (.claude/rules/*.md, .cursor/rules/*.mdc) are Claude Code and Cursor surfaces — switch the
+          Agent picker to one of those to view or edit them.
         </Notice>
       </main>
     );

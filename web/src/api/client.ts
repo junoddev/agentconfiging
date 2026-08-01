@@ -14,6 +14,7 @@ import type {
   ApplyFixResponse,
   CatalogInstallResponse,
   ContextHealth,
+  ExtensionInventoryResponse,
   CatalogRemoveResponse,
   CatalogResponse,
   FileContent,
@@ -352,6 +353,11 @@ export class ApiClient {
   /** The installed Claude Code plugins (version/scope/date). */
   getInstalledPlugins(): Promise<InstalledPluginsResponse> {
     return this.#get<InstalledPluginsResponse>('/api/marketplace/installed');
+  }
+
+  /** Normalized read-only inventory across configured runtime providers. */
+  getExtensions(): Promise<ExtensionInventoryResponse> {
+    return this.#get<ExtensionInventoryResponse>('/api/extensions');
   }
 
   /**

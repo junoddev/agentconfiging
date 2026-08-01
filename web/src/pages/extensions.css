@@ -1,0 +1,43 @@
+.extensions__marketplace-note a {
+  margin-left: 4px;
+}
+.extensions__providers {
+  display: grid;
+  gap: 10px;
+}
+.extensions__provider {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 7px 12px;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.extensions__reason {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.extensions__caps {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.extensions__caps .chip {
+  cursor: default;
+}
+.extensions__group {
+  margin-top: 16px;
+}
+.extensions__group-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-bottom: 8px;
+}
+.extensions__group-head h3 {
+  margin: 0;
+  font-size: 14px;
+}
