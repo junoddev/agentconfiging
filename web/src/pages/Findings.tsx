@@ -59,10 +59,13 @@ export function Findings() {
 }
 
 function FindingsBody() {
-  const { report, loading, error, agentScopeKind } = useAppState();
+  const { report, loading, error, activeAgent, agentScopeKind } = useAppState();
   const flow = useWriteFlow();
   const toast = useToast();
-  const agentKind = agentScopeKind;
+  // Findings are scoped to the effective picker selection, including a
+  // runtime found only in GLOBAL. The project-only scope remains available to
+  // pages that intentionally keep project data visible for global-only picks.
+  const agentKind = activeAgent?.kind ?? agentScopeKind;
   // Inherited (machine-global) findings (E12), rendered in a GLOBAL list-card
   // with per-row provenance badges. APPLY is NEVER offered for them (see
   // `canApply` — /api/fix cannot reach the global store by design). Absent or
@@ -103,8 +106,13 @@ function FindingsBody() {
     flow.begin({ kind: 'fix', findingId: id });
   }
 
-  // Counts are over the FULL set so the chips report totals, not the filtered view.
-  const counts = useMemo(() => countBySeverity(findings), [findings]);
+  // Counts cover the complete currently scoped project + global set, so every
+  // visible finding is represented by the same severity chip.
+  const scopedFindings = useMemo(
+    () => [...findings, ...globalRows.map((row) => row.finding)],
+    [findings, globalRows],
+  );
+  const counts = useMemo(() => countBySeverity(scopedFindings), [scopedFindings]);
   const visible = useMemo(() => filterFindings(findings, active), [findings, active]);
 
   // Global layer: its own severity tally (the layers' tallies stay distinct)
@@ -157,7 +165,7 @@ function FindingsBody() {
 
   return (
     <Frame>
-      {findings.length > 0 && (
+      {scopedFindings.length > 0 && (
         <div className="toolbar">
           <div className="chip-row" role="group" aria-label="filter by severity">
             {SEVERITY_ORDER.map((sev) => {

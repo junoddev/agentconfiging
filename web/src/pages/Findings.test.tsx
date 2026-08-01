@@ -157,7 +157,7 @@ describe('Findings agent scoping', () => {
     expect(container.textContent).not.toContain('Codex global finding');
     expect(container.textContent).toContain('1 error');
     expect(container.textContent).toContain('0 warnings');
-    expect(container.textContent).toContain('0 info');
+    expect(container.textContent).toContain('1 info');
 
     await act(async () => {
       container.querySelector<HTMLButtonElement>('button')?.click();
@@ -167,7 +167,7 @@ describe('Findings agent scoping', () => {
     expect(container.textContent).toContain('Codex global finding');
     expect(container.textContent).not.toContain('Claude project finding');
     expect(container.textContent).not.toContain('Claude global finding');
-    expect(container.textContent).toContain('0 errors');
+    expect(container.textContent).toContain('1 error');
     expect(container.textContent).toContain('1 warning');
     expect(container.textContent).toContain('0 info');
   });
