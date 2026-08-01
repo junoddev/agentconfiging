@@ -12,15 +12,15 @@
  * markup. git-absent → a clear "git not found" state; a non-repo instance → a
  * clear "not a git repository" state; neither is a crash.
  *
- * REFRESH via the WATCHER, not polling: the page re-fetches git state whenever
- * the shell's `report` object changes — which happens on the WS report-change
- * push the file watcher drives (SPEC §4.4) — plus after each mutation it issues.
+ * REFRESH via the WATCHER, not polling: the page opens its own WS listener and
+ * re-fetches git state only for the selected operational target's report-change
+ * pushes (SPEC §4.4), plus after each mutation it issues.
  *
  * CLIENT SEAM: like Sync/Marketplace, the shell keeps its ApiClient private, so
  * this page captures the launch token at module load and builds its own client.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ApiClient,
   ApiError,
@@ -47,7 +47,9 @@ import {
   type PillTone,
 } from '../components/core/index.js';
 import { useAppState } from '../state/index.js';
-import { resolveOperateTarget, type NavigationTarget } from '../navigation.js';
+import { resolveExplicitOperateTarget, type NavigationTarget } from '../navigation.js';
+import { routeHash } from '../routes.js';
+import { WsClient } from '../ws/index.js';
 import { parseDiff } from '../write/index.js';
 import {
   buildCommitMessage,
@@ -150,15 +152,14 @@ function CommitTimeline({ commits }: { commits: GitCommit[] }) {
 }
 
 function GitPanel({ target }: { target?: NavigationTarget }) {
-  const { currentInstance, instances, report } = useAppState();
+  const { instances } = useAppState();
   const client = useMemo(() => (bootToken ? new ApiClient(bootToken) : undefined), []);
-  const resolvedTarget = useMemo(
-    () => resolveOperateTarget(target, instances, currentInstance?.id),
-    [currentInstance?.id, instances, target],
+  const targetState = useMemo(
+    () => resolveExplicitOperateTarget(target, instances),
+    [instances, target],
   );
-  const instanceId = resolvedTarget?.instanceId;
-  const displayInstance =
-    instances.find((instance) => instance.id === instanceId) ?? currentInstance;
+  const instanceId = targetState.state === 'ready' ? targetState.target.instanceId : undefined;
+  const displayInstance = targetState.state === 'ready' ? targetState.instance : undefined;
   const toast = useToast();
 
   const [phase, setPhase] = useState<Phase>('loading');
@@ -179,35 +180,83 @@ function GitPanel({ target }: { target?: NavigationTarget }) {
   const [openDiff, setOpenDiff] = useState<OpenDiff | undefined>();
   const [diffText, setDiffText] = useState('');
   const [busy, setBusy] = useState(false);
+  const refreshGenRef = useRef(0);
+  const diffRequestGenRef = useRef(0);
 
   const refresh = useCallback(async () => {
+    const gen = ++refreshGenRef.current;
+    diffRequestGenRef.current += 1;
     if (!client) {
       setPhase('error');
       setErrMsg('session token missing');
       return;
     }
+    if (instanceId === undefined) {
+      setPhase('ok');
+      setStatus(undefined);
+      setBranches([]);
+      setCommits([]);
+      setOpenDiff(undefined);
+      setDiffText('');
+      return;
+    }
+    setPhase('loading');
     try {
       const [s, log, br] = await Promise.all([
         client.getGitStatus(instanceId),
         client.getGitLog(instanceId),
         client.getGitBranches(instanceId),
       ]);
+      if (gen !== refreshGenRef.current) return;
       setStatus(s);
       setCommits(s.gitAvailable && s.isRepo && log.gitAvailable && log.isRepo ? log.commits : []);
       setBranches(br.gitAvailable && br.isRepo ? br.branches : []);
       setPhase('ok');
     } catch (err) {
+      if (gen !== refreshGenRef.current) return;
       setPhase('error');
       setErrMsg(loadError(err));
     }
   }, [client, instanceId]);
 
-  // Refresh on instance change AND whenever the shell's report updates — the
-  // report refetch is driven by the WS report-change push (the file watcher),
-  // so this is watcher-driven refresh, not polling.
+  const onTargetChange = useCallback((id: string) => {
+    window.location.hash =
+      id === ''
+        ? routeHash({ name: 'git' })
+        : routeHash({ name: 'git', target: { instanceId: id } });
+  }, []);
+
+  // Refresh on instance change. Missing/invalid Operate targets intentionally do
+  // not fall back to the Configure chooser or server default.
   useEffect(() => {
     void refresh();
-  }, [refresh, report]);
+  }, [refresh]);
+
+  useEffect(() => {
+    diffRequestGenRef.current += 1;
+    setOpenDiff(undefined);
+    setDiffText('');
+  }, [instanceId]);
+
+  // Git is an Operate page with a route-local target, so its live refresh must
+  // listen to WS report pushes by target instance instead of piggybacking on
+  // AppState's current Configure report.
+  useEffect(() => {
+    if (bootToken === undefined || instanceId === undefined || typeof WebSocket === 'undefined') {
+      return;
+    }
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WsClient({
+      url: `${protocol}://${window.location.host}/api/ws`,
+      token: bootToken,
+      onState: () => {},
+      onMessage: (msg) => {
+        if (msg.type === 'report' && msg.instance === instanceId) void refresh();
+      },
+    });
+    ws.start();
+    return () => ws.close();
+  }, [instanceId, refresh]);
 
   const commitMessage = useMemo(
     () => buildCommitMessage({ type: ctype, scope, subject, body, breaking }),
@@ -246,16 +295,20 @@ function GitPanel({ target }: { target?: NavigationTarget }) {
     async (path: string, staged: boolean) => {
       if (!client) return;
       if (openDiff && openDiff.path === path && openDiff.staged === staged) {
+        diffRequestGenRef.current += 1;
         setOpenDiff(undefined);
         setDiffText('');
         return;
       }
+      const gen = ++diffRequestGenRef.current;
       setOpenDiff({ path, staged });
       setDiffText('');
       try {
         const res = await client.getGitDiff(path, staged, instanceId);
+        if (gen !== diffRequestGenRef.current) return;
         setDiffText(res.gitAvailable && res.isRepo ? res.diff : '');
       } catch {
+        if (gen !== diffRequestGenRef.current) return;
         setDiffText('');
       }
     },
@@ -291,6 +344,7 @@ function GitPanel({ target }: { target?: NavigationTarget }) {
   const gitAbsent = status !== undefined && !status.gitAvailable;
   const notRepo = status !== undefined && status.gitAvailable && !status.isRepo;
   const repo = status !== undefined && status.gitAvailable && status.isRepo ? status : undefined;
+  const targetBlocked = targetState.state !== 'ready';
 
   return (
     <main className="layout-main page">
@@ -299,15 +353,49 @@ function GitPanel({ target }: { target?: NavigationTarget }) {
           <div>
             <h1>Git</h1>
             <p className="page-sub">
-              Branches, changes, conventional commits, and the timeline for{' '}
-              <span className="mono">{displayInstance ? displayInstance.name : 'no instance'}</span>
-              .
+              Branches, changes, conventional commits, and the timeline for the selected target.
             </p>
           </div>
         </div>
       </section>
 
-      {phase === 'loading' && (
+      <section className="page__section operate-target">
+        <div className="operate-target__copy">
+          <span className="micro-label">TARGET</span>
+          <strong>{displayInstance?.name ?? 'No target selected'}</strong>
+          <span className="mono muted">
+            {displayInstance?.root ??
+              (targetState.state === 'invalid'
+                ? `missing instance ${targetState.requested.instanceId ?? ''}`
+                : 'select a repository before git actions can run')}
+          </span>
+        </div>
+        <Select
+          className="operate-target__select mono"
+          aria-label="git target repository"
+          value={instanceId ?? ''}
+          onChange={(e) => onTargetChange(e.target.value)}
+        >
+          <option value="">Choose target…</option>
+          {targetState.instances.map((instance) => (
+            <option key={instance.id} value={instance.id}>
+              {instance.name}
+            </option>
+          ))}
+        </Select>
+      </section>
+
+      {targetBlocked && (
+        <section className="page__section">
+          <Notice>
+            {targetState.state === 'invalid'
+              ? 'The selected Git target no longer exists. Choose a repository before running git actions.'
+              : 'Choose a repository target before running git actions.'}
+          </Notice>
+        </section>
+      )}
+
+      {phase === 'loading' && !targetBlocked && (
         <section className="page__section">
           <p className="meta">reading git…</p>
         </section>

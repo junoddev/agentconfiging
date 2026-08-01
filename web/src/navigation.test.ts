@@ -5,7 +5,7 @@ import {
   navigationMode,
   navigationScope,
   normalizeNavigationTarget,
-  resolveOperateTarget,
+  resolveExplicitOperateTarget,
   targetForRoute,
   type NavigationMode,
 } from './navigation.js';
@@ -96,24 +96,35 @@ describe('normalizeNavigationTarget', () => {
   });
 });
 
-describe('resolveOperateTarget', () => {
-  const instances = [{ id: 'default' }, { id: 'other' }];
+describe('resolveExplicitOperateTarget', () => {
+  const instances = [
+    { id: 'default', name: 'Default', root: '/repo/default' },
+    { id: 'other', name: 'Other', root: '/repo/other' },
+  ];
 
   it('applies a known deep-link instance and keeps its explicit agent', () => {
     expect(
-      resolveOperateTarget({ instanceId: 'other', agentKind: 'codex' }, instances, 'default'),
-    ).toEqual({ instanceId: 'other', agentKind: 'codex' });
-  });
-
-  it('falls back to the current instance for an unknown target id', () => {
-    expect(resolveOperateTarget({ instanceId: 'missing' }, instances, 'default')).toEqual({
-      instanceId: 'default',
+      resolveExplicitOperateTarget({ instanceId: 'other', agentKind: 'codex' }, instances),
+    ).toEqual({
+      state: 'ready',
+      target: { instanceId: 'other', agentKind: 'codex' },
+      instance: instances[1],
+      instances,
     });
   });
 
-  it('keeps an agent-only target without inventing a folder', () => {
-    expect(resolveOperateTarget({ agentKind: 'codex' }, [], undefined)).toEqual({
-      agentKind: 'codex',
+  it('blocks an unknown instance instead of falling back to the Configure selection', () => {
+    expect(resolveExplicitOperateTarget({ instanceId: 'missing' }, instances)).toEqual({
+      state: 'invalid',
+      requested: { instanceId: 'missing' },
+      instances,
+    });
+  });
+
+  it('requires an explicit instance target even when an agent target is present', () => {
+    expect(resolveExplicitOperateTarget({ agentKind: 'codex' }, instances)).toEqual({
+      state: 'missing',
+      instances,
     });
   });
 });

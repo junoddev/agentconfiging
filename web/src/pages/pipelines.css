@@ -64,6 +64,10 @@
   gap: 8px;
 }
 
+.pipeline-schedule__target--blocked {
+  color: var(--danger);
+}
+
 /* ── Workspace: palette · canvas · config panel ──────────────────────────── */
 
 .pipeline-workspace {

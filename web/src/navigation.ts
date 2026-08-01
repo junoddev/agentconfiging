@@ -32,6 +32,26 @@ export type NavigationScope =
   | AggregateNavigationState
   | { mode: 'operate'; target?: NavigationTarget };
 
+export interface OperateTargetInstance {
+  id: string;
+  name: string;
+  root?: string;
+}
+
+export type OperateTargetResolution =
+  | { state: 'missing'; instances: OperateTargetInstance[] }
+  | {
+      state: 'invalid';
+      requested: NavigationTarget;
+      instances: OperateTargetInstance[];
+    }
+  | {
+      state: 'ready';
+      target: NavigationTarget & { instanceId: string };
+      instance: OperateTargetInstance;
+      instances: OperateTargetInstance[];
+    };
+
 const ROUTE_MODES: Record<Exclude<RouteName, 'agent'>, NavigationMode> = {
   overview: 'workspace',
   agents: 'workspace',
@@ -151,29 +171,31 @@ export function targetForRoute(
 }
 
 /**
- * Resolve an Operate target against the instances already known by AppState.
+ * Resolve an Operate target without consulting Configure/Library chooser state.
  *
- * Route syntax validation keeps hostile values out of the API query, while the
- * instance-list check prevents a well-formed but unknown id from selecting an
- * arbitrary server scope. Missing or unknown instance ids fall back to the
- * shell's current selection. Agent ids remain explicit here; the consuming
- * Operate surface validates them against its own allowlisted choices.
+ * Operational pages must name the instance they affect before issuing privileged
+ * actions. A syntactically invalid target, an absent target, or a target whose
+ * instance disappeared is a blocked state the page can render explicitly.
  */
-export function resolveOperateTarget(
+export function resolveExplicitOperateTarget(
   target: NavigationTarget | undefined,
-  instances: readonly { id: string }[],
-  fallbackInstanceId?: string,
-): NavigationTarget | undefined {
+  instances: readonly OperateTargetInstance[],
+): OperateTargetResolution {
   const normalized = normalizeNavigationTarget(target);
-  const instanceId = normalized?.instanceId;
-  const resolvedInstance =
-    instanceId !== undefined && instances.some((instance) => instance.id === instanceId)
-      ? instanceId
-      : fallbackInstanceId;
-
-  if (resolvedInstance === undefined && normalized?.agentKind === undefined) return undefined;
+  if (normalized?.instanceId === undefined) {
+    return { state: 'missing', instances: [...instances] };
+  }
+  const instance = instances.find((item) => item.id === normalized.instanceId);
+  if (instance === undefined) {
+    return { state: 'invalid', requested: normalized, instances: [...instances] };
+  }
   return {
-    ...(resolvedInstance !== undefined ? { instanceId: resolvedInstance } : {}),
-    ...(normalized?.agentKind !== undefined ? { agentKind: normalized.agentKind } : {}),
+    state: 'ready',
+    target: {
+      instanceId: instance.id,
+      ...(normalized.agentKind !== undefined ? { agentKind: normalized.agentKind } : {}),
+    },
+    instance,
+    instances: [...instances],
   };
 }

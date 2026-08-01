@@ -92,9 +92,9 @@ describe('xtermTheme', () => {
 
 describe('tab bookkeeping', () => {
   const tabs: TerminalTab[] = [
-    { id: 1, shell: 'shell', label: 'zsh' },
-    { id: 2, shell: 'cli:codex', label: 'codex' },
-    { id: 3, shell: 'shell', label: 'zsh' },
+    { id: 1, shell: 'shell', instanceId: 'a', label: 'zsh' },
+    { id: 2, shell: 'cli:codex', instanceId: 'a', label: 'codex' },
+    { id: 3, shell: 'shell', instanceId: 'b', label: 'zsh' },
   ];
 
   it('nextTabId is monotonic (never reuses a closed id)', () => {
@@ -103,7 +103,11 @@ describe('tab bookkeeping', () => {
   });
 
   it('tabTitle labels the choice + ordinal', () => {
-    expect(tabTitle({ label: 'claude' }, 2)).toBe('claude 2');
+    expect(tabTitle({ label: 'claude' }, 2, 'project')).toBe('claude 2 · project');
+  });
+
+  it('tabs carry the explicit target captured when opened', () => {
+    expect(tabs.map((tab) => tab.instanceId)).toEqual(['a', 'a', 'b']);
   });
 
   it('closing a background tab keeps the active one', () => {
@@ -115,6 +119,8 @@ describe('tab bookkeeping', () => {
   });
 
   it('closing the only tab clears the active id', () => {
-    expect(nextActiveAfterClose([{ id: 5, shell: 'shell', label: 'sh' }], 5, 5)).toBeUndefined();
+    expect(
+      nextActiveAfterClose([{ id: 5, shell: 'shell', instanceId: 'a', label: 'sh' }], 5, 5),
+    ).toBeUndefined();
   });
 });

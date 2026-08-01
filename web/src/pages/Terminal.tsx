@@ -25,9 +25,10 @@ import '@xterm/xterm/css/xterm.css';
 import { ApiClient } from '../api/client.js';
 import { bootstrapToken } from '../api/token.js';
 import type { PtyStatusResponse, ShellChoice } from '../api/types.js';
-import { Button, EmptyState, Notice } from '../components/core/index.js';
+import { Button, EmptyState, Notice, Select } from '../components/core/index.js';
 import { useAppState } from '../state/index.js';
-import { resolveOperateTarget, type NavigationTarget } from '../navigation.js';
+import { resolveExplicitOperateTarget, type NavigationTarget } from '../navigation.js';
+import { routeHash } from '../routes.js';
 import {
   buildPtyWsUrl,
   encodeInput,
@@ -105,14 +106,13 @@ export function Terminal({
   target?: NavigationTarget;
 }) {
   const client = useMemo(() => (bootToken ? new ApiClient(bootToken) : undefined), []);
-  const { currentInstance, instances } = useAppState();
-  const resolvedTarget = useMemo(
-    () => resolveOperateTarget(target, instances, currentInstance?.id),
-    [currentInstance?.id, instances, target],
+  const { instances } = useAppState();
+  const targetState = useMemo(
+    () => resolveExplicitOperateTarget(target, instances),
+    [instances, target],
   );
-  const instanceId = resolvedTarget?.instanceId;
-  const displayInstance =
-    instances.find((instance) => instance.id === instanceId) ?? currentInstance;
+  const instanceId = targetState.state === 'ready' ? targetState.target.instanceId : undefined;
+  const displayInstance = targetState.state === 'ready' ? targetState.instance : undefined;
 
   const [status, setStatus] = useState<PtyStatusResponse | 'loading' | 'error'>('loading');
   const [tabs, setTabs] = useState<TerminalTab[]>([]);
@@ -128,6 +128,10 @@ export function Terminal({
       setStatus('error');
       return;
     }
+    if (instanceId === undefined) {
+      setStatus({ available: false, interactive: true, shells: [], reason: 'choose a target' });
+      return;
+    }
     let cancelled = false;
     void (async () => {
       try {
@@ -141,6 +145,21 @@ export function Terminal({
       cancelled = true;
     };
   }, [client, instanceId]);
+
+  const onTargetChange = useCallback(
+    (id: string) => {
+      const agentKind =
+        targetState.state === 'ready' ? targetState.target.agentKind : target?.agentKind;
+      window.location.hash =
+        id === ''
+          ? routeHash({ name: 'terminal' })
+          : routeHash({
+              name: 'terminal',
+              target: { instanceId: id, ...(agentKind !== undefined ? { agentKind } : {}) },
+            });
+    },
+    [target?.agentKind, targetState],
+  );
 
   /** Tear a session down: dispose xterm + close its socket (→ server kills PTY). */
   const disposeSession = useCallback((id: number) => {
@@ -189,7 +208,7 @@ export function Terminal({
       }
 
       const url = buildPtyWsUrl(window.location, {
-        ...(instanceId !== undefined ? { instance: instanceId } : {}),
+        instance: tab.instanceId,
         shell: tab.shell,
       });
       let ws: WebSocket;
@@ -224,21 +243,30 @@ export function Terminal({
         if (ws.readyState === WebSocket.OPEN) ws.send(encodeResize(cols, rows));
       });
     },
-    [instanceId, theme],
+    [theme],
   );
 
   /** Open a new tab for a launch choice. */
-  const openTab = useCallback((choice: ShellChoice) => {
-    setTabs((prev) => {
-      const id = nextTabId(prev);
-      const ordinals = ordinalsRef.current;
-      const ordinal = (ordinals.get(choice.id) ?? 0) + 1;
-      ordinals.set(choice.id, ordinal);
-      const tab: TerminalTab = { id, shell: choice.id, label: tabTitle(choice, ordinal) };
-      setActiveId(id);
-      return [...prev, tab];
-    });
-  }, []);
+  const openTab = useCallback(
+    (choice: ShellChoice) => {
+      if (targetState.state !== 'ready') return;
+      setTabs((prev) => {
+        const id = nextTabId(prev);
+        const ordinals = ordinalsRef.current;
+        const ordinal = (ordinals.get(choice.id) ?? 0) + 1;
+        ordinals.set(choice.id, ordinal);
+        const tab: TerminalTab = {
+          id,
+          shell: choice.id,
+          label: tabTitle(choice, ordinal, targetState.instance.name),
+          instanceId: targetState.target.instanceId,
+        };
+        setActiveId(id);
+        return [...prev, tab];
+      });
+    },
+    [targetState],
+  );
 
   const closeTab = useCallback(
     (id: number) => {
@@ -302,9 +330,10 @@ export function Terminal({
 
   const shells: ShellChoice[] =
     status !== 'loading' && status !== 'error' && status.available ? status.shells : [];
-  const targetShell = resolvedTarget?.agentKind
-    ? shells.find((choice) => choice.id === `cli:${resolvedTarget.agentKind}`)
-    : undefined;
+  const targetShell =
+    targetState.state === 'ready' && targetState.target.agentKind
+      ? shells.find((choice) => choice.id === `cli:${targetState.target.agentKind}`)
+      : undefined;
   // An explicit agent target is consumed only when the server offered that
   // allowlisted CLI for the resolved instance; otherwise retain the normal
   // shell choices as the safe fallback.
@@ -315,15 +344,45 @@ export function Terminal({
       <header className="page-head">
         <div>
           <h1>Terminal</h1>
-          <p className="page-sub">
-            Shells and detected runtime CLIs for{' '}
-            <span className="mono">
-              {displayInstance ? displayInstance.name : 'default instance'}
-            </span>
-            .
-          </p>
+          <p className="page-sub">Shells and detected runtime CLIs for the selected target.</p>
         </div>
       </header>
+
+      <section className="page__section operate-target">
+        <div className="operate-target__copy">
+          <span className="micro-label">TARGET</span>
+          <strong>{displayInstance?.name ?? 'No target selected'}</strong>
+          <span className="mono muted">
+            {displayInstance?.root ??
+              (targetState.state === 'invalid'
+                ? `missing instance ${targetState.requested.instanceId ?? ''}`
+                : 'select a repository before opening new terminal sessions')}
+          </span>
+        </div>
+        <Select
+          className="operate-target__select mono"
+          aria-label="terminal target repository"
+          value={instanceId ?? ''}
+          onChange={(e) => onTargetChange(e.target.value)}
+        >
+          <option value="">Choose target…</option>
+          {targetState.instances.map((instance) => (
+            <option key={instance.id} value={instance.id}>
+              {instance.name}
+            </option>
+          ))}
+        </Select>
+      </section>
+
+      {targetState.state !== 'ready' && (
+        <section className="page__section">
+          <Notice>
+            {targetState.state === 'invalid'
+              ? 'The selected Terminal target no longer exists. Choose a repository before opening new sessions.'
+              : 'Choose a repository target before opening new terminal sessions.'}
+          </Notice>
+        </section>
+      )}
 
       {status === 'loading' ? (
         <section className="page__section">

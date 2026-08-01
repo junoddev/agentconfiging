@@ -40,13 +40,28 @@ import {
   type RunSnapshot,
 } from '../api/index.js';
 import { bootstrapToken } from '../api/token.js';
-import { Button, Notice, Pill, Switch, useToast, type PillTone } from '../components/core/index.js';
+import {
+  Button,
+  Notice,
+  Pill,
+  Select,
+  Switch,
+  useToast,
+  type PillTone,
+} from '../components/core/index.js';
 import { useAppState } from '../state/index.js';
-import { resolveOperateTarget, type NavigationTarget } from '../navigation.js';
+import { resolveExplicitOperateTarget, type NavigationTarget } from '../navigation.js';
+import { routeHash } from '../routes.js';
 import { AgentConfigNode } from './pipelines/AgentConfigNode.js';
 import { NodeConfigPanel } from './pipelines/NodeConfigPanel.js';
 import { RunHistory } from './pipelines/RunHistory.js';
-import { SCHEDULE_PRESETS, formatLastRun, formatNextRun } from './pipelines/schedule.js';
+import {
+  SCHEDULE_PRESETS,
+  formatLastRun,
+  formatNextRun,
+  scheduleTargetLabel,
+  scheduleTargetState,
+} from './pipelines/schedule.js';
 import {
   AGENTCONFIG_NODE,
   PALETTE,
@@ -89,12 +104,13 @@ function runPillTone(status: string): PillTone {
 }
 
 function PipelinesPanel({ target }: { target?: NavigationTarget }) {
-  const { currentInstance, instances } = useAppState();
-  const resolvedTarget = useMemo(
-    () => resolveOperateTarget(target, instances, currentInstance?.id),
-    [currentInstance?.id, instances, target],
+  const { instances } = useAppState();
+  const targetState = useMemo(
+    () => resolveExplicitOperateTarget(target, instances),
+    [instances, target],
   );
-  const instanceId = resolvedTarget?.instanceId;
+  const instanceId = targetState.state === 'ready' ? targetState.target.instanceId : undefined;
+  const displayInstance = targetState.state === 'ready' ? targetState.instance : undefined;
   const client = useMemo(() => (bootToken ? new ApiClient(bootToken) : undefined), []);
   const toast = useToast();
 
@@ -246,6 +262,10 @@ function PipelinesPanel({ target }: { target?: NavigationTarget }) {
   const displayNodes = useMemo(() => applyRunStatus(nodes, run), [nodes, run]);
   const selected = nodes.find((n) => n.selected);
   const selectedConfig = selected ? (selected.data as FlowNodeData).config : undefined;
+  const scheduleTarget = useMemo(
+    () => scheduleTargetState(schedule, displayInstance?.root),
+    [schedule, displayInstance?.root],
+  );
 
   const onConnect: OnConnect = useCallback(
     (connection: Connection) => setEdges((es) => addEdge({ ...connection, type: 'step' }, es)),
@@ -337,6 +357,10 @@ function PipelinesPanel({ target }: { target?: NavigationTarget }) {
 
   const onRun = useCallback(async () => {
     if (!client) return;
+    if (instanceId === undefined) {
+      setNotice('choose a project target before running a pipeline');
+      return;
+    }
     const pipeline = graphToPipeline(pipelineId, pipelineName.trim() || 'Untitled', nodes, edges);
     try {
       // Persist the current graph, then run it (the server validates + guards).
@@ -369,6 +393,16 @@ function PipelinesPanel({ target }: { target?: NavigationTarget }) {
 
   const onSaveSchedule = useCallback(async () => {
     if (!client) return;
+    if (instanceId === undefined) {
+      setScheduleNotice('choose a project target before saving a schedule');
+      return;
+    }
+    if (scheduleTarget.state === 'mismatch' || scheduleTarget.state === 'orphaned') {
+      setScheduleNotice(
+        'saved schedule is bound to a different target; open that target before saving',
+      );
+      return;
+    }
     const cron = cronText.trim();
     if (cron === '') {
       setScheduleNotice('enter a cron expression or preset');
@@ -397,9 +431,17 @@ function PipelinesPanel({ target }: { target?: NavigationTarget }) {
     edges,
     scheduleEnabled,
     instanceId,
+    scheduleTarget,
     refreshList,
     toast,
   ]);
+
+  const onTargetChange = useCallback((id: string) => {
+    window.location.hash =
+      id === ''
+        ? routeHash({ name: 'pipelines' })
+        : routeHash({ name: 'pipelines', target: { instanceId: id } });
+  }, []);
 
   if (phase === 'error') {
     return (
@@ -415,6 +457,15 @@ function PipelinesPanel({ target }: { target?: NavigationTarget }) {
   }
 
   const runStatus = running ? 'running' : (run?.status ?? undefined);
+  const targetBlocked = targetState.state !== 'ready';
+  const scheduleTargetBlocked =
+    targetBlocked || scheduleTarget.state === 'mismatch' || scheduleTarget.state === 'orphaned';
+  const scheduleTargetProblem =
+    scheduleTarget.state === 'mismatch'
+      ? 'The saved schedule target differs from the selected page target. Open the matching target before saving.'
+      : scheduleTarget.state === 'orphaned'
+        ? 'The saved schedule target is not available as the selected page target. Choose its project before saving.'
+        : undefined;
 
   return (
     <main className="layout-main page pipeline-page">
@@ -439,12 +490,48 @@ function PipelinesPanel({ target }: { target?: NavigationTarget }) {
           <Button
             label={running ? 'Running…' : 'Run'}
             variant="primary"
-            disabled={running}
+            disabled={running || targetBlocked}
             onClick={() => void onRun()}
           />
         </div>
         {runStatus !== undefined && <Pill tone={runPillTone(runStatus)}>run {runStatus}</Pill>}
       </section>
+
+      <section className="page__section operate-target">
+        <div className="operate-target__copy">
+          <span className="micro-label">TARGET</span>
+          <strong>{displayInstance?.name ?? 'No target selected'}</strong>
+          <span className="mono muted">
+            {displayInstance?.root ??
+              (targetState.state === 'invalid'
+                ? `missing instance ${targetState.requested.instanceId ?? ''}`
+                : 'select a project before running or scheduling pipelines')}
+          </span>
+        </div>
+        <Select
+          className="operate-target__select mono"
+          aria-label="pipeline target project"
+          value={instanceId ?? ''}
+          onChange={(e) => onTargetChange(e.target.value)}
+        >
+          <option value="">Choose target…</option>
+          {targetState.instances.map((instance) => (
+            <option key={instance.id} value={instance.id}>
+              {instance.name}
+            </option>
+          ))}
+        </Select>
+      </section>
+
+      {targetBlocked && (
+        <section className="page__section">
+          <Notice>
+            {targetState.state === 'invalid'
+              ? 'The selected Pipeline target no longer exists. Choose a project before running or scheduling.'
+              : 'Choose a project target before running or scheduling pipelines.'}
+          </Notice>
+        </section>
+      )}
 
       {notice !== undefined && (
         <section className="page__section">
@@ -475,7 +562,20 @@ function PipelinesPanel({ target }: { target?: NavigationTarget }) {
           <Switch on={scheduleEnabled} onChange={setScheduleEnabled} label="schedule enabled" />
           <span className="meta">enabled</span>
         </span>
-        <Button label="Save schedule" onClick={() => void onSaveSchedule()} />
+        <Button
+          label="Save schedule"
+          disabled={scheduleTargetBlocked}
+          onClick={() => void onSaveSchedule()}
+        />
+        <span
+          className={`meta ${
+            scheduleTarget.state === 'mismatch' || scheduleTarget.state === 'orphaned'
+              ? 'pipeline-schedule__target--blocked'
+              : ''
+          }`}
+        >
+          {scheduleTargetLabel(scheduleTarget)}
+        </span>
         <span className="meta">
           next {formatNextRun(nextRun)} · last {formatLastRun(schedule?.lastRunAt)}
         </span>
@@ -484,6 +584,14 @@ function PipelinesPanel({ target }: { target?: NavigationTarget }) {
           them)
         </span>
       </section>
+
+      {scheduleTargetProblem !== undefined && (
+        <section className="page__section">
+          <Notice>
+            <span role="status">{scheduleTargetProblem}</span>
+          </Notice>
+        </section>
+      )}
 
       {scheduleNotice !== undefined && (
         <section className="page__section">
@@ -570,7 +678,7 @@ function PipelinesPanel({ target }: { target?: NavigationTarget }) {
           replay={replay}
           selectedRunId={selectedRunId}
           loading={historyLoading}
-          canRerun={nodes.length > 0 && !running}
+          canRerun={nodes.length > 0 && !running && !targetBlocked}
           onSelect={(rid) => void onSelectRun(rid)}
           onRerun={() => void onRun()}
         />
