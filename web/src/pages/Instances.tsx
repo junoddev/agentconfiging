@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ApiClient, ApiError } from '../api/client.js';
-import { bootstrapToken } from '../api/token.js';
-import type { InstanceSummary, KnownProject, ScanResponse } from '../api/types.js';
+import { useCallback, useEffect, useState } from 'react';
+import { ApiError } from '../api/client.js';
+import type { KnownProject, ScanResponse } from '../api/types.js';
 import {
   Button,
   Card,
@@ -27,24 +26,24 @@ import './instances.css';
  * instances. All root paths and scan-hit paths are user/filesystem data and are
  * rendered as TEXT nodes only (never HTML). Every mutation confirms via Toast.
  *
- * CLIENT SEAM: mutations and the post-mutation list refresh need an ApiClient,
- * but the shell keeps its own client private and consumes the URL token on its
- * first render. We therefore capture the token at MODULE LOAD (this module is
- * imported by App before the shell renders and strips the fragment) and build a
- * dedicated client. The instance list still seeds from `useAppState().instances`
- * for the first paint; `selectInstance` remains the shell's job.
+ * CLIENT SEAM: mutations need an ApiClient. Rather than bootstrap a private one,
+ * the page reads the shared, token-bearing client off the app-state context (the
+ * same injectable seam the provider uses). The list itself also lives in the
+ * SHARED app-state so an add/remove here refreshes the top-bar FOLDER chooser:
+ * mutations dispatch through the shell's `refreshInstances` rather than a
+ * page-local copy (the old private list left the chooser stale after an add).
+ * `selectInstance` remains the shell's job.
  */
-const bootToken = typeof window !== 'undefined' ? bootstrapToken() : undefined;
 
 function InstancesBody() {
-  const { instances: shellInstances, currentInstance, selectInstance } = useAppState();
-  const client = useMemo(() => (bootToken ? new ApiClient(bootToken) : undefined), []);
+  const {
+    instances,
+    currentInstance,
+    selectInstance,
+    refreshInstances: refreshList,
+    client,
+  } = useAppState();
   const toast = useToast();
-
-  // Local, live copy of the list: seeded from the shell, then owned by this page
-  // so mutations reflect immediately (the shell does not re-fetch instances).
-  const [rows, setRows] = useState<InstanceSummary[] | null>(null);
-  const instances = rows ?? shellInstances;
 
   const [addPath, setAddPath] = useState('');
   const [addError, setAddError] = useState<string | null>(null);
@@ -57,16 +56,6 @@ function InstancesBody() {
   // Known-project suggestions (roots seen in ~/.claude the user can one-click add).
   const [known, setKnown] = useState<KnownProject[] | null>(null);
   const [knownError, setKnownError] = useState<string | null>(null);
-
-  const refreshList = useCallback(async () => {
-    if (!client) return;
-    try {
-      setRows(await client.getInstances());
-    } catch {
-      // A refresh failure leaves the last-known list in place; the shell surfaces
-      // fatal (network/unauthorized) states in the chrome.
-    }
-  }, [client]);
 
   const refreshKnown = useCallback(async () => {
     if (!client) return;

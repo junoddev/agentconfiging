@@ -23,9 +23,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { ApiClient } from '../api/client.js';
-import { bootstrapToken } from '../api/token.js';
-import { useAppState } from '../state/index.js';
+import { isClaudeKind, scopeReport, scopedAgents, useAppState } from '../state/index.js';
 import { collectInstructionFiles } from '../pages/instructions/logic.js';
 import { collectEntries } from '../pages/skills/logic.js';
 import { collectRules } from '../pages/rules/logic.js';
@@ -69,23 +67,32 @@ function parseSettingsObject(content: string): Record<string, unknown> | undefin
 }
 
 export function useConfigureCounts(): ConfigureCounts {
-  const { report, getFile, currentInstance } = useAppState();
+  const { report, getFile, currentInstance, activeAgent, client } = useAppState();
   const instanceId = currentInstance?.id;
+  // Counts scope to the ACTIVE AGENT (bead a6y) — the same slice each page shows.
+  const agentKind = activeAgent?.kind;
+  // Settings/hooks/keybindings are Claude-only files: for another active agent
+  // their reads are skipped and the counts fall out as an honest 0 (that agent
+  // has none of these), keeping every Configure badge present and consistent.
+  const claudeSurfaces = agentKind === undefined || isClaudeKind(agentKind);
 
   // Cheap, synchronous counts (undefined until the first report arrives).
-  const cheap = useMemo(
-    () => ({
-      instructions: report ? collectInstructionFiles(report.agents).length : undefined,
-      skills: report ? collectEntries(report).length : undefined,
-      rules: report ? collectRules(report).length : undefined,
-      memory: report ? collectMemoryFiles(report).length : undefined,
-    }),
-    [report],
-  );
+  const cheap = useMemo(() => {
+    const scoped = report ? scopeReport(report, agentKind) : undefined;
+    return {
+      instructions: scoped ? collectInstructionFiles(scoped.agents).length : undefined,
+      skills: scoped ? collectEntries(scoped).length : undefined,
+      rules: scoped ? collectRules(scoped).length : undefined,
+      memory: scoped ? collectMemoryFiles(scoped).length : undefined,
+    };
+  }, [report, agentKind]);
 
   // MCP candidate paths drive one of the fetched counts; their identity keys the
   // fetch effect so a report push with an unchanged file set does not refetch.
-  const mcpCandidates = useMemo(() => collectMcpCandidates(report?.agents ?? []), [report]);
+  const mcpCandidates = useMemo(
+    () => collectMcpCandidates(scopedAgents(report?.agents ?? [], agentKind)),
+    [report, agentKind],
+  );
   const candidateKey = mcpCandidates.join('\n');
 
   const [fetched, setFetched] = useState<{
@@ -110,9 +117,9 @@ export function useConfigureCounts(): ConfigureCounts {
     void (async () => {
       const [settingsContent, localContent, keybindingsContent, ...mcpContents] = await Promise.all(
         [
-          read(SETTINGS_PATH),
-          read(LOCAL_SETTINGS_PATH),
-          read(KEYBINDINGS_PATH),
+          claudeSurfaces ? read(SETTINGS_PATH) : Promise.resolve(null),
+          claudeSurfaces ? read(LOCAL_SETTINGS_PATH) : Promise.resolve(null),
+          claudeSurfaces ? read(KEYBINDINGS_PATH) : Promise.resolve(null),
           ...mcpCandidates.map(read),
         ],
       );
@@ -146,15 +153,13 @@ export function useConfigureCounts(): ConfigureCounts {
     return () => {
       cancelled = true;
     };
-  }, [getFile, report, candidateKey, mcpCandidates]);
+  }, [getFile, report, candidateKey, mcpCandidates, claudeSurfaces]);
 
   // Sync target count via a dry-run plan — keyed on the instance only, so it does
   // not re-run on every report push. A failed plan leaves the count unset.
   useEffect(() => {
-    const token = bootstrapToken();
-    if (token === undefined) return;
+    if (!client) return;
     let cancelled = false;
-    const client = new ApiClient(token);
     const source = SOURCE_CANDIDATES[0] ?? 'CLAUDE.md';
 
     client
@@ -169,7 +174,7 @@ export function useConfigureCounts(): ConfigureCounts {
     return () => {
       cancelled = true;
     };
-  }, [instanceId]);
+  }, [instanceId, client]);
 
   return {
     settings: fetched.settings,

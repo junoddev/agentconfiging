@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { GlobalReport, InstanceSummary, Report } from '../api/types.js';
-import { appReducer, currentInstance, initialAppState } from './appState.js';
+import type { DetectedAgent, GlobalReport, InstanceSummary, Report } from '../api/types.js';
+import { activeAgent, appReducer, currentInstance, initialAppState } from './appState.js';
 
 function inst(over: Partial<InstanceSummary> = {}): InstanceSummary {
   return {
@@ -70,12 +70,51 @@ describe('appReducer', () => {
     expect(s.error).toBeUndefined();
   });
 
+  it('report:loaded applies when its instanceId matches the current instance', () => {
+    const onB = appReducer(initialAppState(), { type: 'instance:select', id: 'b' });
+    const s = appReducer(onB, { type: 'report:loaded', report: REPORT, instanceId: 'b' });
+    expect(s.report).toBe(REPORT);
+    expect(s.loading).toBe(false);
+  });
+
+  it('report:loaded is DROPPED when its instanceId no longer matches (out-of-order guard)', () => {
+    // Simulates a fast A→B switch: the current instance is now B, but a slow
+    // getReport(A) resolves and dispatches report:loaded for A. It must not
+    // overwrite B's view (regression: finding #2).
+    const onB = appReducer(initialAppState(), { type: 'instance:select', id: 'b' });
+    const s = appReducer(onB, { type: 'report:loaded', report: REPORT, instanceId: 'a' });
+    expect(s).toBe(onB); // unchanged — the stale A report is ignored
+    expect(s.report).toBeUndefined();
+    expect(s.loading).toBe(true);
+  });
+
+  it('report:loaded with no instanceId is unscoped and always applies', () => {
+    const onB = appReducer(initialAppState(), { type: 'instance:select', id: 'b' });
+    const s = appReducer(onB, { type: 'report:loaded', report: REPORT });
+    expect(s.report).toBe(REPORT);
+  });
+
   it('instance:select switches id, drops stale report, sets loading', () => {
     const base = appReducer(initialAppState(), { type: 'report:loaded', report: REPORT });
     const s = appReducer(base, { type: 'instance:select', id: 'b' });
     expect(s.currentInstanceId).toBe('b');
     expect(s.report).toBeUndefined();
     expect(s.loading).toBe(true);
+  });
+
+  it('boot sequence seeds currentInstanceId so the default instance resolves (finding #1)', () => {
+    // The provider boot now dispatches instance:select for the resolved default
+    // (instead of only poking a ref), so currentInstanceId lands in state and the
+    // WS push guard — which compares the live instance against the ref kept in
+    // sync with currentInstanceId — matches for the boot instance.
+    const def = inst({ id: 'def', isDefault: true });
+    let s = appReducer(initialAppState(), { type: 'instances:loaded', instances: [def] });
+    s = appReducer(s, { type: 'instance:select', id: 'def' });
+    expect(s.currentInstanceId).toBe('def');
+    expect(currentInstance(s)?.id).toBe('def');
+    // The default report then applies because its instanceId matches.
+    s = appReducer(s, { type: 'report:loaded', report: REPORT, instanceId: 'def' });
+    expect(s.report).toBe(REPORT);
   });
 
   it('instance:select is a no-op when the id is unchanged', () => {
@@ -156,6 +195,53 @@ describe('appReducer', () => {
     const recovered = appReducer(withGlobalErr, { type: 'report:loaded', report: REPORT });
     expect(recovered.error).toBeUndefined();
     expect(recovered.globalError?.kind).toBe('network');
+  });
+});
+
+function agent(kind: string): DetectedAgent {
+  return { kind, confidence: 'high', files: [], extras: {} };
+}
+
+describe('agent:select / activeAgent', () => {
+  const twoAgents: Report = { ...REPORT, agents: [agent('claude-code'), agent('cursor')] };
+
+  it('initialAppState seeds the stored preference when given', () => {
+    expect(initialAppState('cursor').activeAgentKind).toBe('cursor');
+    expect(initialAppState().activeAgentKind).toBeUndefined();
+  });
+
+  it('agent:select stores the kind and de-dupes', () => {
+    const s = appReducer(initialAppState(), { type: 'agent:select', kind: 'cursor' });
+    expect(s.activeAgentKind).toBe('cursor');
+    expect(appReducer(s, { type: 'agent:select', kind: 'cursor' })).toBe(s);
+  });
+
+  it('activeAgent resolves the preferred kind against the report', () => {
+    const s = appReducer(
+      { ...initialAppState('cursor') },
+      { type: 'report:loaded', report: twoAgents },
+    );
+    expect(activeAgent(s)?.kind).toBe('cursor');
+  });
+
+  it('activeAgent falls back to the first detection when the preference is absent', () => {
+    const s = appReducer(
+      { ...initialAppState('codex') },
+      { type: 'report:loaded', report: twoAgents },
+    );
+    expect(activeAgent(s)?.kind).toBe('claude-code');
+  });
+
+  it('activeAgent is undefined with no report or no detections', () => {
+    expect(activeAgent(initialAppState('cursor'))).toBeUndefined();
+    const empty = appReducer(initialAppState(), { type: 'report:loaded', report: REPORT });
+    expect(activeAgent(empty)).toBeUndefined();
+  });
+
+  it('the preference survives an instance switch (only the report drops)', () => {
+    const picked = appReducer(initialAppState(), { type: 'agent:select', kind: 'cursor' });
+    const switched = appReducer(picked, { type: 'instance:select', id: 'b' });
+    expect(switched.activeAgentKind).toBe('cursor');
   });
 });
 
