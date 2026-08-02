@@ -82,7 +82,7 @@ describe('buildCommands', () => {
     expect(railLabel('mcp')).toBe('MCP');
   });
 
-  it('carries chooser context only to Configure and Library command destinations', () => {
+  it('carries folder context to Configure, Library, and Tools destinations', () => {
     const target = { instanceId: 'inst-1', agentKind: 'claude-code' };
     const commands = buildCommands('light', undefined, target);
     const hash = (id: string) =>
@@ -93,7 +93,7 @@ describe('buildCommands', () => {
     expect(hash('nav:catalog')).toBe('#/catalog?instance=inst-1&agent=claude-code');
     expect(hash('nav:findings')).toBe('#/findings');
     expect(hash('nav:dashboard')).toBe('#/dashboard');
-    expect(hash('nav:git')).toBe('#/git');
+    expect(hash('nav:git')).toBe('#/git?instance=inst-1&agent=claude-code');
   });
 
   it('carries explicit Operate targets separately from chooser context', () => {
@@ -133,7 +133,7 @@ describe('buildCommands', () => {
       expect(hash('nav:catalog')).toBe('#/catalog?instance=deep&agent=codex');
       expect(hash('nav:findings')).toBe('#/findings');
       expect(hash('nav:dashboard')).toBe('#/dashboard');
-      expect(hash('nav:git')).toBe('#/git');
+      expect(hash('nav:git')).toBe('#/git?instance=chooser&agent=claude-code');
     }
   });
 });

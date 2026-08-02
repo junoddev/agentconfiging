@@ -25,8 +25,10 @@ This is a planning document; nothing in it has been executed.
 `/Users/tranqy/projects/agentconfig/PUBLISHING.md` is a real runbook, and its
 claims check out against the repo:
 
-- Pre-flight done: `publishConfig.access: public`, `prepublishOnly` runs a fresh build, tarball verified via `npm pack --dry-run` (21 files, ~693 kB, no src/tests/maps/fixtures).
-- Optional native deps (`better-sqlite3`, `node-pty`) in `optionalDependencies`; core CLI proven to work without them via `npm run e2e` (`scripts/e2e-smoke.mjs`: pack → clean-dir install → `agentconfiging report` → server serves bundled UI).
+- Pre-flight done: `publishConfig.access: public`, `prepublishOnly` runs a fresh
+  build, and the packaging e2e checks required/forbidden tarball content without
+  pinning volatile hashed filenames, file counts, or byte sizes.
+- Optional native deps (`better-sqlite3`, `node-pty`) in `optionalDependencies`; core CLI proven to work without them via `npm run e2e` (`scripts/e2e-smoke.mjs`: pack → clean-dir `--omit=optional` install → assert modules absent → report/server degradation checks).
 - Naming caveat: unscoped `agentconfiging` must be owned by the publishing account; `@capabletooling/agentconfiging` is the scoped fallback (bead `agentconfig-fy8.3`).
 - Recommended path: tag-driven CI publish with provenance via `.github/workflows/publish.yml` (exists; triggers on `v*.*.*`, runs lint/typecheck/test/build/e2e, then `npm publish --provenance --access public` with `NPM_TOKEN`).
 - Manual local publish documented as the no-provenance fallback.
@@ -88,9 +90,13 @@ npm run release:gate  # lint → typecheck → test → build → packaging e2e 
 
 ### 3.2 Package contents verification
 
-- [ ] `npm pack --dry-run` and read the file list end-to-end. Expected: `dist/{cli,server,core}` JS, `dist/web` assets, `LICENSE`, `README.md`, `package.json` — roughly the 21 files / ~693 kB recorded in PUBLISHING.md.
+- [x] The packaging e2e reads npm's generated manifest and requires
+  `dist/{cli,server,core}` JS, the web shell and all recursively referenced web
+  assets, `LICENSE`, `README.md`, and `package.json`.
 - [ ] Confirm **absent**: `src/`, tests, `*.map`, `fixtures/`, `opendesign/`, `.beads/`, docs, any `.env`-like or local-config files.
-- [ ] Confirm the registry seed snapshot (offline first-run catalog) is inside `dist/` — the README promises a 40-entry seed ships in the package.
+- [x] The packaging e2e imports the installed core bundle and validates its
+  embedded, nonempty offline registry seed. The gate derives the entry count at
+  runtime rather than duplicating a stale hardcoded count.
 - [ ] `npm pack` (real tarball), then `tar -tzf` as a second pair of eyes; the e2e script already installs from this tarball.
 
 ### 3.3 npx cold-start testing (clean machine/directory)
@@ -183,7 +189,8 @@ Current release gate:
   symlink/ENOENT write, 0zm.4 reserved-namespace poisoning, gxo.1 token URL leak,
   np8.7 fix.patch secret carriage, upstream-port ReDoS payload, and 0zm.7
   registry SSRF incidents, including private DNS answers and internal redirect
-  targets. Its manifest asserts the exact executed count for every incident so
+  targets, plus the full server-output canary leak sweep. Its manifest asserts
+  the exact executed count for every incident/sweep so
   selector drift or deleted cases fail the command. Keep it mandatory while
   71h.11 write-path hardening follow-ups remain open.
 - `ci.yml` runs that command on Node 20.x/22.x and Ubuntu/macOS for pushes and

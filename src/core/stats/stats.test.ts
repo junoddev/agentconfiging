@@ -145,6 +145,29 @@ describe('computeStats — empty / sparse resilience', () => {
     expect(stats.activeDays).toBe(0);
     expect(stats.streak.longest).toBe(0);
   });
+
+  it('ignores finite prompt timestamps outside the TimeClip range', () => {
+    const history = loadFixtureHistory();
+    history.entries = history.entries.map((entry, index) => ({
+      ...entry,
+      timestamp: index === 0 ? 1e300 : -1e300,
+    }));
+
+    const stats = computeStats([], history, { now: NOW });
+
+    expect(stats.promptCount).toBe(history.entries.length);
+    expect(stats.activeDays).toBe(0);
+    expect(stats.heatmap.every((cell) => cell.count === 0)).toBe(true);
+  });
+
+  it.each([1e300, -1e300, Number.NaN, Number.POSITIVE_INFINITY])(
+    'falls back safely when now is unusable (%s)',
+    (now) => {
+      const stats = computeStats([], undefined, { now, heatmapDays: 1 });
+      expect(stats.heatmap).toHaveLength(1);
+      expect(stats.heatmap[0]?.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    },
+  );
 });
 
 describe('computeSessionUsage / computeStats — token and cost aggregation', () => {

@@ -108,8 +108,8 @@ Prose, titles, and button labels stay sans.
 
 | Region | Spec |
 |---|---|
-| Topbar | 49px, `--surface`, bottom hairline; brand (mono, accent sigil) left, context chooser centered, utilities right |
-| Sidebar | 232px, `--surface`, right hairline; grouped nav + scope legend pinned to bottom |
+| Topbar | 49px, `--surface`, bottom hairline; brand (mono, accent sigil) left, persistent Folder chooser centered, utilities right |
+| Sidebar | 232px, `--surface`, right hairline; folder-scoped grouped nav, Configure Agent chooser, scope legend pinned to bottom |
 | Content | scrollable, dot-grid background, inner column max-width 980px |
 | Statusbar | 30px, mono 11.5px `--muted`; see content spec below |
 | Breakpoint | ≤860px: sidebar hides, grids collapse to 2-col, micro labels drop |
@@ -127,7 +127,9 @@ Prose, titles, and button labels stay sans.
 
 Class names are the contract — reuse them, don't reinvent.
 
-- **Context chooser** (`.chooser` / `.ch-side` / `.ch-menu` / `.ch-item`): one bordered control, two baseline-aligned sides (micro label + value + 9px caret) split by a hairline `.ch-div`. Menus drop 6px below, 250px min, 5px padding, 7px-radius items; active item = accent-soft bg + accent text.
+- **Folder chooser** (`.chooser` / `.ch-side` / `.ch-menu` / `.ch-item`): one persistent bordered control in the top bar. Folder is the application boundary and therefore remains visible on every route. Its menu drops 6px below, 250px min, 5px padding; active item = accent-soft bg + accent text.
+- **Configure Agent chooser** (`.side-agent`): a compact bordered control directly below the Configure group label. It scopes only Configure and Library destinations; its remembered selection is not presented as the context of Folder, Activity, or Tools pages.
+- **Agent-native terminology:** Library inventory labels adapt to the Configure agent. Claude Code uses “Plugins”; Codex and extension-oriented agents use “Extensions.” Sidebar, command palette, and page heading must resolve through the same terminology helper.
 - **Sidebar nav** (`.nav-item`): 7px/10px padding, transparent 2px left border; active = `--accent-soft` bg, accent left bar, 550 weight. Mono glyph (15px box) + label + mono count pushed right.
 - **Scope badges** (`.scope.s-*`): the system's signature. 10.5px mono uppercase, 5px radius. Every configurable row shows one — provenance is never implicit. See the scope mapping below.
 - **Status pills** (`.pill.p-*`): 999px radius, 11px mono. ok/connected = accent-soft · warn = warn-soft · error = danger-soft · disabled = fg-soft/muted.

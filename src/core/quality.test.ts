@@ -158,6 +158,33 @@ describe('agent config quality score', () => {
     expect(findings.map((f) => f.agent)).toEqual(['multi', 'multi', 'multi']);
   });
 
+  it('flags contradictory distinct directives within one guide', () => {
+    const findings = findingsFor({
+      'AGENTS.md': '# Guide\n\n- Always run tests before committing.\n- Never run tests.\n',
+    });
+
+    expect(findings.map((f) => f.id)).toContain(
+      'quality-bloat-contradiction-tests-agents-md-3-agents-md-4',
+    );
+    expect(findings.find((f) => f.id.includes('contradiction-tests'))?.agent).toBe('codex');
+  });
+
+  it('deduplicates repeated identical claims before pairing contradictions', () => {
+    const findings = findingsFor({
+      'AGENTS.md': [
+        '# Guide',
+        '',
+        '- Always run tests before committing.',
+        '- Always run tests before committing.',
+        '- Never run tests.',
+      ].join('\n'),
+    });
+
+    expect(findings.filter((f) => f.id.includes('contradiction-tests')).map((f) => f.id)).toEqual([
+      'quality-bloat-contradiction-tests-agents-md-3-agents-md-5',
+    ]);
+  });
+
   it('flags concrete cross-runtime policy contradictions without leaking directive text', () => {
     const files = {
       'CLAUDE.md': [

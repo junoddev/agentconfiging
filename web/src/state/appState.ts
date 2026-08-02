@@ -57,7 +57,7 @@ export type AppAction =
   | { type: 'report:loaded'; report: Report; instanceId?: string }
   /** The user (or WS) selected an instance; clears the stale report. */
   | { type: 'instance:select'; id: string }
-  /** The user picked an agent in the top-bar chooser (bead a6y). */
+  /** The user picked an agent in Configure's sidebar chooser (bead a6y). */
   | { type: 'agent:select'; kind: string }
   /** WS connection state changed. */
   | { type: 'ws:state'; state: WsState }

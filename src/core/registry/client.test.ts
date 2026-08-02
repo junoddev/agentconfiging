@@ -100,7 +100,7 @@ function client(opts: {
     ttlMs: opts.ttlMs,
     timeoutMs: opts.timeoutMs,
     maxFileBytes: opts.maxFileBytes,
-    resolveHost: opts.resolveHost ?? (async () => ['203.0.113.10']),
+    resolveHost: opts.resolveHost ?? (async () => ['8.8.8.8']),
     allowInsecureLocalhost: opts.allowInsecureLocalhost,
   });
   return { c, files };
@@ -287,6 +287,27 @@ describe('fetchEntryFiles — payload verification', () => {
     expect(calls).toBe(1);
   });
 
+  it('re-fetches and replaces a tampered content-addressed payload cache entry', async () => {
+    const payload = 'authentic payload';
+    const sha = sha256Hex(payload);
+    let calls = 0;
+    const payloadPath = `${CACHE_DIR}/payloads/${sha}`;
+    const remote = entry({
+      files: [{ path: 'a', url: 'https://cdn.example/a', sha256: sha }],
+    });
+    const { c, files } = client({
+      files: { [payloadPath]: 'tampered payload' },
+      fetch: async () => {
+        calls += 1;
+        return httpResponse(payload);
+      },
+    });
+
+    await expect(c.fetchEntryFiles(remote)).resolves.toEqual([{ path: 'a', content: payload }]);
+    expect(calls).toBe(1);
+    expect(files.get(payloadPath)).toBe(payload);
+  });
+
   it('rejects a url payload whose bytes do not match the declared sha256', async () => {
     const fetchFn: HttpFetch = async () => httpResponse('not what was promised');
     const url = entry({
@@ -324,6 +345,39 @@ describe('fetchEntryFiles — payload verification', () => {
     const { c } = client({ fetch: fetchFn, maxFileBytes: 10 });
     await expect(c.fetchEntryFiles(url)).rejects.toBeInstanceOf(RegistryFetchError);
   });
+
+  it('stops a chunked response as soon as its streamed bytes exceed the cap', async () => {
+    let produced = 0;
+    let textCalled = false;
+    let discarded = false;
+    const fetchFn: HttpFetch = async () => ({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      body: (async function* () {
+        for (const chunk of ['12345', '67890', 'must-not-be-read']) {
+          produced += 1;
+          yield Buffer.from(chunk);
+        }
+      })(),
+      text: async () => {
+        textCalled = true;
+        return 'wrong path';
+      },
+      discard: () => {
+        discarded = true;
+      },
+    });
+    const remote = entry({
+      files: [{ path: 'a', url: 'https://cdn.example/a', sha256: sha256Hex('unused') }],
+    });
+    const { c } = client({ fetch: fetchFn, maxFileBytes: 6 });
+
+    await expect(c.fetchEntryFiles(remote)).rejects.toBeInstanceOf(RegistryFetchError);
+    expect(produced).toBe(2);
+    expect(textCalled).toBe(false);
+    expect(discarded).toBe(true);
+  });
 });
 
 describe('timeout', () => {
@@ -338,6 +392,22 @@ describe('timeout', () => {
 
     expect(result.overlaySource).toBe('none');
     expect(result.entries.length).toBe(SEED_COUNT);
+  });
+
+  it('bounds DNS resolution under the same request timeout', async () => {
+    let fetchCalls = 0;
+    const { c } = client({
+      timeoutMs: 10,
+      resolveHost: () => new Promise(() => {}),
+      fetch: async () => {
+        fetchCalls += 1;
+        return httpResponse(indexJson([]));
+      },
+    });
+
+    const result = await c.loadCatalog();
+    expect(result.overlaySource).toBe('none');
+    expect(fetchCalls).toBe(0);
   });
 });
 
@@ -364,6 +434,17 @@ describe('assertFetchableUrl', () => {
     expect(() => assertFetchableUrl('https://[::ffff:192.168.1.2]/x', false)).toThrow(
       RegistryFetchError,
     );
+  });
+
+  it.each([
+    'https://100.64.0.1/x',
+    'https://198.18.0.1/x',
+    'https://198.51.100.1/x',
+    'https://203.0.113.1/x',
+    'https://[fec0::1]/x',
+    'https://[2001:db8::1]/x',
+  ])('refuses reserved or otherwise non-public destination %s', (url) => {
+    expect(() => assertFetchableUrl(url, false)).toThrow(RegistryFetchError);
   });
 
   // Incident agentconfig-0zm.7: a malicious registry entry must not turn the

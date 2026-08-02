@@ -57,7 +57,7 @@ export const ROUTE_LABELS: Record<RouteName, string> = {
   agent: 'Agent detail',
   findings: 'Findings',
   artifacts: 'Artifacts',
-  instances: 'Instances',
+  instances: 'Folders',
   settings: 'Settings',
   instructions: 'Instructions',
   skills: 'Skills',

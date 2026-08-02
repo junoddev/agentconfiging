@@ -81,6 +81,7 @@ interface PolicyClaim {
   path: string;
   line: number;
   agent: string;
+  directive: string;
 }
 
 const ROOT_GUIDES = new Set([
@@ -414,7 +415,14 @@ function claimForDirective(doc: QualityDocument, directive: DirectiveLine): Poli
   const text = directive.text;
   const out: PolicyClaim[] = [];
   const add = (subject: string, value: string) =>
-    out.push({ subject, value, path: doc.path, line: directive.line, agent: doc.agent });
+    out.push({
+      subject,
+      value,
+      path: doc.path,
+      line: directive.line,
+      agent: doc.agent,
+      directive: directive.text,
+    });
 
   const testCommand = testCommandValue(text);
   if (testCommand) add('test-command', testCommand);
@@ -483,7 +491,7 @@ function claimForDirective(doc: QualityDocument, directive: DirectiveLine): Poli
 }
 
 function contradictionIssues(docs: readonly QualityDocument[]): QualityIssue[] {
-  const claims = docs
+  const allClaims = docs
     .flatMap((doc) => doc.directives.flatMap((directive) => claimForDirective(doc, directive)))
     .sort(
       (a, b) =>
@@ -492,6 +500,12 @@ function contradictionIssues(docs: readonly QualityDocument[]): QualityIssue[] {
         a.line - b.line ||
         a.value.localeCompare(b.value),
     );
+  const uniqueClaims = new Map<string, PolicyClaim>();
+  for (const claim of allClaims) {
+    const key = `${claim.path}\0${claim.subject}\0${claim.value}\0${claim.directive}`;
+    if (!uniqueClaims.has(key)) uniqueClaims.set(key, claim);
+  }
+  const claims = [...uniqueClaims.values()];
   const issues: QualityIssue[] = [];
   const seen = new Set<string>();
 
@@ -501,7 +515,7 @@ function contradictionIssues(docs: readonly QualityDocument[]): QualityIssue[] {
       const b = claims[j];
       if (!a || !b) continue;
       if (a.subject !== b.subject) break;
-      if (a.value === b.value || a.path === b.path) continue;
+      if (a.value === b.value) continue;
       const [first, second] =
         a.path < b.path || (a.path === b.path && a.line <= b.line) ? [a, b] : [b, a];
       const key = `${a.subject}:${first.path}:${first.line}:${second.path}:${second.line}`;

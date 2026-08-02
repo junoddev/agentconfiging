@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ApiClient } from '../api/client.js';
 import type { GlobalReport, InstanceSummary, Report } from '../api/types.js';
 import { buildCommands } from '../command/commands.js';
+import { integrationInventoryTerm } from '../lib/agentTerminology.js';
 import { ROUTE_LABELS, type Route } from '../routes.js';
 import { AppStateProvider, type AppStateDeps } from '../state/index.js';
 import { Sidebar } from './Sidebar.js';
@@ -108,7 +109,7 @@ describe('Sidebar navigation targets', () => {
     );
     expect(link('Findings').getAttribute('href')).toBe('#/findings');
     expect(link('Dashboard').getAttribute('href')).toBe('#/dashboard');
-    expect(link('Git').getAttribute('href')).toBe('#/git');
+    expect(link('Git').getAttribute('href')).toBe('#/git?instance=default&agent=claude-code');
   });
 
   it('carries explicit Operate targets between Operate pages only', async () => {
@@ -133,7 +134,7 @@ describe('Sidebar navigation targets', () => {
       expect(link('Catalog').getAttribute('href')).toBe('#/catalog?instance=deep&agent=codex');
       expect(link('Findings').getAttribute('href')).toBe('#/findings');
       expect(link('Dashboard').getAttribute('href')).toBe('#/dashboard');
-      expect(link('Git').getAttribute('href')).toBe('#/git');
+      expect(link('Git').getAttribute('href')).toBe('#/git?instance=default&agent=claude-code');
     }
   });
 
@@ -149,15 +150,28 @@ describe('Sidebar navigation targets', () => {
           .trim(),
     );
     const commandLabels = new Set(
-      buildCommands('light')
+      buildCommands('light', undefined, undefined, undefined, {
+        extensions: integrationInventoryTerm('claude-code'),
+      })
         .filter((command) => command.id.startsWith('nav:'))
         .map((command) => command.label),
     );
 
     expect(railLabels).toContain(ROUTE_LABELS.overview);
     expect(railLabels).toContain(ROUTE_LABELS.git);
+    expect(railLabels).toContain('Plugins');
     for (const label of railLabels) {
       expect(commandLabels.has(label ?? '')).toBe(true);
     }
+  });
+
+  it('places agent selection inside Configure', async () => {
+    await renderSidebar({ name: 'overview' });
+
+    const chooser = container.querySelector<HTMLButtonElement>('.side-agent__button');
+    expect(chooser?.getAttribute('aria-label')).toBe('Configure agent: Claude Code');
+    expect(chooser?.closest('.side-group')?.querySelector('.nav-group')?.textContent).toBe(
+      'Configure',
+    );
   });
 });

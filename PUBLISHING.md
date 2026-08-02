@@ -7,11 +7,17 @@ the runbook. Nothing here has been executed.
 ## Pre-flight (already done)
 
 - `version`: `0.1.0`, `publishConfig.access`: `public`, `license`: MIT, `bin`: `agentconfiging`.
-- Tarball verified: `npm pack --dry-run` → 21 files (`dist/{cli,server,core}`, `dist/web`, `LICENSE`, `README.md`), ~693 kB, no `src`/tests/maps/fixtures.
+- The packaging smoke validates the tarball contract on every release: required
+  CLI/core/server/web/license/readme files, every asset referenced by the web
+  shell, and the embedded offline registry seed must be present; source,
+  tests, fixtures, maps, and secret-bearing file types must be absent. It avoids
+  brittle assertions about hashed asset names, exact file counts, or byte size.
 - `prepublishOnly` runs a fresh `npm run build`; the tag workflow runs the
   complete `npm run release:gate` before invoking publish, including
   `e2e:browser` against Chrome.
-- Optional native deps (`better-sqlite3`, `node-pty`) are in `optionalDependencies` — install and the core CLI succeed without them (proven by `npm run e2e`).
+- Optional native deps (`better-sqlite3`, `node-pty`) are in
+  `optionalDependencies`; `npm run e2e` forces `npm install --omit=optional`,
+  proves both modules are absent, and verifies the CLI/server degradation paths.
 - `npm run e2e` (packaging smoke: pack → clean-dir install → `agentconfiging report` → server serves the bundled UI) **passes**.
 - License/originality audit: `docs/LICENSE-AUDIT.md` (all deps permissive, no copied code).
 
@@ -30,8 +36,10 @@ does this on a version tag:
 
 1. Add the repo secret `NPM_TOKEN` (an npm automation token with publish rights).
 2. Bump `version` in `package.json` if needed and commit.
-3. Tag and push: `git tag v0.1.0 && git push origin v0.1.0`.
-4. The workflow locates Chrome and runs `npm run release:gate` (the same
+3. Tag and push a tag exactly matching `v` plus `package.json.version`, for
+   example: `git tag v0.1.0 && git push origin v0.1.0`.
+4. The workflow first rejects any tag/package-version mismatch, then locates
+   Chrome and runs `npm run release:gate` (the same
    complete gate used by CI, including `e2e:browser` against Chrome), then
    `npm publish --provenance --access public`.
 

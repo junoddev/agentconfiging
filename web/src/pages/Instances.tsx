@@ -20,7 +20,7 @@ import { formatKnownMeta, pruneKnownProjects } from './instances/suggestions.js'
 import './instances.css';
 
 /**
- * Instances — the chooser-adjacent workspace manager (Console page, E13.5).
+ * Folders — the application-context manager (Console page, E13.5).
  * Lists the hosted instances in a `.table-card`, adds a folder, scans
  * recursively for more (scan states as `.pill`s), and unloads / removes
  * instances. All root paths and scan-hit paths are user/filesystem data and are
@@ -204,20 +204,20 @@ function InstancesBody() {
     <main className="layout-main page">
       <div className="page-head">
         <div>
-          <h1>Instances</h1>
+          <h1>Folders</h1>
           <p className="page-sub">
             the workspace folders agentconfig watches — add one, scan for more, unload or remove
           </p>
         </div>
         <span className="meta">
-          {instances.length} instance{instances.length === 1 ? '' : 's'} ·{' '}
+          {instances.length} folder{instances.length === 1 ? '' : 's'} ·{' '}
           {instances.filter((i) => i.loaded).length} loaded
         </span>
       </div>
 
       <section className="page__section">
         {instances.length === 0 ? (
-          <EmptyState instruction="No instances yet. Add or scan a folder below to begin watching." />
+          <EmptyState instruction="No folders yet. Add or scan a folder below to begin watching." />
         ) : (
           <Table headers={['State', 'Name', 'Root', 'Markers', 'Actions']}>
             {instances.map((inst) => {

@@ -36,10 +36,11 @@ The launch UI mirrors the web app's instance management:
 
 `report` and `daemon` never use Ink — they emit plain output for CI and cron.
 
-## Instances (multi-root workspace)
+## Folders
 
-The app manages **instances**: roots whose agent config it has loaded. Nothing is
-scanned until you ask.
+The selected folder is the application's context: every page in the left rail
+describes or acts on that one root. Use the persistent **Folder** control in the
+top bar to switch roots. Nothing is scanned until you ask.
 
 - Launching creates the first instance (the current folder).
 - **Add a folder** loads one instance.
@@ -47,7 +48,7 @@ scanned until you ask.
   discover agent-configured projects underneath, then offers the hits to add.
 - Repos seen in your Claude history are surfaced as add suggestions.
 
-Instances load lazily (the full engine run + file watcher start on first open) and
+Folders load lazily (the full engine run + file watcher start on first open) and
 the list persists in `~/.local/state/agentconfiging/workspace.json`, so the next
 launch restores your workspace. One server process hosts all instances; you switch
 between them from the CLI, the web UI, or the Cmd+K palette.
@@ -56,7 +57,7 @@ between them from the CLI, the web UI, or the Cmd+K palette.
 
 Navigation is a numbered left rail; the numbers double as `Cmd+1..9` shortcuts.
 
-### Inspect
+### Folder
 
 - **Overview / Agents** — each detected runtime with a confidence meter, file
   count, and a waveform derived from its config.
@@ -68,7 +69,12 @@ Navigation is a numbered left rail; the numbers double as `Cmd+1..9` shortcuts.
   `settings.local.json`, conflicting instructions, and more). Findings with a
   machine fix show an **APPLY** button.
 
-### Edit (write-back)
+### Configure (write-back)
+
+Configure has a second, narrower context. Choose **Agent** at the head of the
+Configure section in the sidebar (for example Claude Code or Codex); the pages
+below adapt to that agent's supported configuration. The choice is remembered
+when navigating away, but it does not scope Folder, Activity, or Tools pages.
 
 Visual editors for every config type: `settings.json` (model, permissions, env,
 statusLine, shared vs. local scope), hooks, instruction files, memory, MCP
@@ -91,11 +97,12 @@ seed ships in the package so the catalog works offline on first run. Installs ar
 checksum-verified, diff-previewed, and stamped with provenance frontmatter
 (`installed-by agentconfig from <source>@<version>`).
 
-### Extensions
+### Plugins / Extensions
 
-Open **Extensions** to see the normalized installed-extension inventory grouped by
-provider and scope. This page reports provider capability and availability rather
-than flattening every runtime into a pretend plugin system.
+The Library label adapts to the selected agent: **Plugins** for Claude Code and
+**Extensions** for Codex and other extension-oriented agents. The destination
+shows normalized installed inventory grouped by provider and scope while retaining
+each provider's real capabilities.
 
 - **Claude Code** is the native plugin provider. The Extensions page lists the
   installed inventory by delegating to `claude plugin list --json`; the separate
@@ -124,7 +131,7 @@ defensive parsing, and provider-owned uninstall. Cursor, Continue, Copilot, Aide
 and opencode remain observe-only candidates until their provider contracts and
 trust boundaries are stable enough for safe lifecycle support.
 
-### Sessions & analytics
+### Activity
 
 - **Dashboard** — activity computed from real session history: counts, streaks, an
   activity heatmap, and an achievements catalog.
@@ -136,7 +143,7 @@ trust boundaries are stable enough for safe lifecycle support.
 - **Context health** — config size budgets, largest contributors, and
   optimization suggestions.
 
-### Operate
+### Tools
 
 - **Git** — branch switcher, grouped changes (modified/added/deleted/untracked), a
   conventional-commit helper, and push/pull, scoped to the launched repo and

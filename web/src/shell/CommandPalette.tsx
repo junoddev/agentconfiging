@@ -23,6 +23,7 @@ import {
   type CommandAction,
 } from '../command/commands.js';
 import { EDITOR_ROUTES, type RouteName } from '../routes.js';
+import { integrationInventoryTerm } from '../lib/agentTerminology.js';
 import type { Route } from '../routes.js';
 import { sectionApplies, useAppState } from '../state/index.js';
 import type { Theme } from './theme.js';
@@ -60,8 +61,11 @@ export function CommandPalette({ open, theme, route, onClose, onRun }: CommandPa
   }, [agentScopeKind, currentInstance?.id]);
   const targets = useMemo(() => commandTargetContext(route, contextTarget), [contextTarget, route]);
   const commands = useMemo(
-    () => buildCommands(theme, hiddenRoutes, targets.contextTarget, targets.operateTarget),
-    [theme, hiddenRoutes, targets],
+    () =>
+      buildCommands(theme, hiddenRoutes, targets.contextTarget, targets.operateTarget, {
+        extensions: integrationInventoryTerm(agentScopeKind),
+      }),
+    [theme, hiddenRoutes, targets, agentScopeKind],
   );
   const results = useMemo(() => filterCommands(commands, query), [commands, query]);
 

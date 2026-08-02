@@ -15,6 +15,10 @@ import {
   type SourceScope,
 } from '../components/core/index.js';
 import { routeHash } from '../routes.js';
+import {
+  integrationInventoryTerm,
+  integrationInventoryTermLower,
+} from '../lib/agentTerminology.js';
 import { useAppState } from '../state/index.js';
 import { capabilityLabels, filterExtensions, groupExtensions } from './extensions/logic.js';
 import './extensions.css';
@@ -50,7 +54,9 @@ function providerMessage(provider: ExtensionProvider) {
 }
 
 export function Extensions() {
-  const { client } = useAppState();
+  const { client, agentScopeKind } = useAppState();
+  const inventoryTerm = integrationInventoryTerm(agentScopeKind);
+  const inventoryTermLower = integrationInventoryTermLower(agentScopeKind);
   const [data, setData] = useState<ExtensionInventoryResponse>();
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [query, setQuery] = useState('');
@@ -93,31 +99,33 @@ export function Extensions() {
   return (
     <main className="layout-main page">
       <section className="page__section">
-        <h1 className="title-page">Extensions</h1>
+        <h1 className="title-page">{inventoryTerm}</h1>
         <p className="page-sub">
-          Installed extension inventory across runtimes, normalized by provider and scope. This page
-          is read-only.
+          Installed {inventoryTermLower} for the selected agent, normalized by provider and scope.
+          This page is read-only.
         </p>
       </section>
-      <section className="page__section extensions__marketplace-note">
-        <Notice tone="info">
-          Looking for Claude plugins to browse or install?{' '}
-          <a className="lr-link" href={routeHash({ name: 'marketplace' })}>
-            Open Marketplace
-          </a>{' '}
-          — it remains a separate Claude Code experience.
-        </Notice>
-      </section>
+      {inventoryTerm === 'Plugins' && (
+        <section className="page__section extensions__marketplace-note">
+          <Notice tone="info">
+            Looking for Claude plugins to browse or install?{' '}
+            <a className="lr-link" href={routeHash({ name: 'marketplace' })}>
+              Open Marketplace
+            </a>{' '}
+            — it remains a separate Claude Code experience.
+          </Notice>
+        </section>
+      )}
       {status === 'loading' && (
         <section className="page__section">
-          <p className="meta">Loading extension inventory…</p>
+          <p className="meta">Loading {inventoryTermLower}…</p>
         </section>
       )}
       {status === 'error' && (
         <section className="page__section">
           <EmptyState
-            title="No extension inventory"
-            instruction="The extension inventory could not be loaded. Reopen agentconfig or try again later."
+            title={`No ${inventoryTermLower}`}
+            instruction={`The ${inventoryTermLower} inventory could not be loaded. Reopen agentconfig or try again later.`}
           />
         </section>
       )}
@@ -128,8 +136,8 @@ export function Extensions() {
               <SearchInput
                 value={query}
                 onChange={setQuery}
-                placeholder="Filter extensions…"
-                label="search extensions"
+                placeholder={`Filter ${inventoryTermLower}…`}
+                label={`search ${inventoryTermLower}`}
               />
               <ChipRow
                 options={providerOptions}
@@ -173,8 +181,8 @@ export function Extensions() {
               <EmptyState
                 instruction={
                   query || providerId !== 'all'
-                    ? 'No installed extensions match the current filters.'
-                    : 'No installed extensions were reported.'
+                    ? `No installed ${inventoryTermLower} match the current filters.`
+                    : `No installed ${inventoryTermLower} were reported.`
                 }
               />
             ) : (
@@ -184,10 +192,11 @@ export function Extensions() {
                     <h3>{group.provider.displayName}</h3>
                     {scopeBadge(group.scope)}
                     <span className="meta">
-                      {group.extensions.length} extension{group.extensions.length === 1 ? '' : 's'}
+                      {group.extensions.length} {inventoryTermLower.slice(0, -1)}
+                      {group.extensions.length === 1 ? '' : 's'}
                     </span>
                   </div>
-                  <Table headers={['Extension', 'Version', 'Source', 'State']}>
+                  <Table headers={[inventoryTerm.slice(0, -1), 'Version', 'Source', 'State']}>
                     {group.extensions.map((extension) => (
                       <tr key={`${extension.providerId}-${extension.scope}-${extension.id}`}>
                         <td>

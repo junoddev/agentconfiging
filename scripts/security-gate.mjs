@@ -12,6 +12,7 @@ const incidents = new Map([
   ['agentconfig-np8.7', 1],
   ['upstream-port ReDoS', 1],
   ['agentconfig-0zm.7', 9],
+  ['canary secret leak sweep across server output surfaces', 1],
 ]);
 const files = [
   'src/server/security.test.ts',
@@ -19,6 +20,7 @@ const files = [
   'src/cli/launch.test.ts',
   'src/core/history/claude.test.ts',
   'src/core/registry/client.test.ts',
+  'src/server/canary-sweep.test.ts',
 ];
 const selector = [...incidents.keys()]
   .map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))

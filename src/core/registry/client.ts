@@ -84,6 +84,9 @@ export interface HttpResponse {
   readonly ok: boolean;
   readonly status: number;
   readonly headers: { get(name: string): string | null };
+  /** Streaming body. Production responses always provide this so the byte cap
+   * is enforced before the complete response can be allocated. */
+  readonly body?: AsyncIterable<Uint8Array | string>;
   text(): Promise<string>;
   discard?(): void;
 }
@@ -210,30 +213,66 @@ export function isBlockedRegistryHost(hostname: string): boolean {
 
   const version = net.isIP(host);
   if (version === 4) {
-    const [a = 0, b = 0] = host.split('.').map(Number);
-    return (
-      a === 0 ||
-      a === 10 ||
-      a === 127 ||
-      (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) ||
-      a >= 224
-    );
+    const value = ipv4Value(host);
+    return IPV4_NON_PUBLIC.some(([network, bits]) => inIpv4Cidr(value, network, bits));
   }
   if (version === 6) {
     const mapped = mappedIpv4(host);
     if (mapped !== null) return isBlockedRegistryHost(mapped);
+    const value = ipv6Value(host);
+    // Public IPv6 destinations are global-unicast (2000::/3), excluding the
+    // IANA documentation and special-purpose subnets below.
     return (
-      host === '::' ||
-      host === '::1' ||
-      host.startsWith('fc') ||
-      host.startsWith('fd') ||
-      /^fe[89ab]/.test(host) ||
-      host.startsWith('ff')
+      !inIpv6Cidr(value, ipv6Value('2000::'), 3) ||
+      inIpv6Cidr(value, ipv6Value('2001:db8::'), 32) ||
+      inIpv6Cidr(value, ipv6Value('2001:2::'), 48) ||
+      inIpv6Cidr(value, ipv6Value('2001:10::'), 28)
     );
   }
   return false;
+}
+
+const IPV4_NON_PUBLIC: ReadonlyArray<readonly [number, number]> = [
+  [ipv4Value('0.0.0.0'), 8],
+  [ipv4Value('10.0.0.0'), 8],
+  [ipv4Value('100.64.0.0'), 10],
+  [ipv4Value('127.0.0.0'), 8],
+  [ipv4Value('169.254.0.0'), 16],
+  [ipv4Value('172.16.0.0'), 12],
+  [ipv4Value('192.0.0.0'), 24],
+  [ipv4Value('192.0.2.0'), 24],
+  [ipv4Value('192.88.99.0'), 24],
+  [ipv4Value('192.168.0.0'), 16],
+  [ipv4Value('198.18.0.0'), 15],
+  [ipv4Value('198.51.100.0'), 24],
+  [ipv4Value('203.0.113.0'), 24],
+  [ipv4Value('224.0.0.0'), 3],
+];
+
+function ipv4Value(host: string): number {
+  return host.split('.').reduce((value, octet) => value * 256 + Number(octet), 0) >>> 0;
+}
+
+function inIpv4Cidr(value: number, network: number, bits: number): boolean {
+  const divisor = 2 ** (32 - bits);
+  return Math.floor(value / divisor) === Math.floor(network / divisor);
+}
+
+function ipv6Value(host: string): bigint {
+  const [left = '', right = ''] = host.toLowerCase().split('::');
+  const leftParts = left === '' ? [] : left.split(':');
+  const rightParts = right === '' ? [] : right.split(':');
+  const parts = [
+    ...leftParts,
+    ...Array(8 - leftParts.length - rightParts.length).fill('0'),
+    ...rightParts,
+  ];
+  return parts.reduce((value, part) => (value << 16n) | BigInt(`0x${part}`), 0n);
+}
+
+function inIpv6Cidr(value: bigint, network: bigint, bits: number): boolean {
+  const shift = BigInt(128 - bits);
+  return value >> shift === network >> shift;
 }
 
 /** Decode both dotted and canonical-hex IPv4-mapped IPv6 spellings. */
@@ -305,6 +344,7 @@ const defaultFetch: HttpFetch = (rawUrl, init) =>
               return Array.isArray(value) ? value.join(', ') : (value ?? null);
             },
           },
+          body: res,
           text: () =>
             new Promise<string>((resolveText, rejectText) => {
               if (consumed) return rejectText(new Error('response body already consumed'));
@@ -517,7 +557,10 @@ export class RegistryClient {
     try {
       let currentUrl = url;
       for (let redirects = 0; ; redirects += 1) {
-        const { url: parsed, address } = await this.assertResolvedTarget(currentUrl);
+        const { url: parsed, address } = await this.assertResolvedTarget(
+          currentUrl,
+          controller.signal,
+        );
         const res = await this.fetchFn(currentUrl, {
           signal: controller.signal,
           redirect: 'manual',
@@ -543,6 +586,7 @@ export class RegistryClient {
 
   private async assertResolvedTarget(
     rawUrl: string,
+    signal: AbortSignal,
   ): Promise<{ url: URL; address: string | undefined }> {
     assertFetchableUrl(rawUrl, this.allowInsecureLocalhost);
     const url = new URL(rawUrl);
@@ -553,8 +597,9 @@ export class RegistryClient {
     if (net.isIP(hostname) !== 0) return { url, address: hostname };
     let addresses: readonly string[];
     try {
-      addresses = await this.resolveHost(hostname);
+      addresses = await abortable(this.resolveHost(hostname), signal);
     } catch {
+      if (signal.aborted) throw new RegistryFetchError(`request timed out for ${rawUrl}`);
       throw new RegistryFetchError(`unable to resolve registry host: ${hostname}`);
     }
     if (
@@ -576,9 +621,43 @@ async function readCapped(res: HttpResponse, maxBytes: number, url: string): Pro
       throw new RegistryFetchError(`response for ${url} exceeds ${maxBytes} bytes`);
     }
   }
+  if (res.body !== undefined) {
+    const chunks: Buffer[] = [];
+    let bytes = 0;
+    for await (const chunk of res.body) {
+      const buffer = Buffer.from(chunk);
+      bytes += buffer.byteLength;
+      if (bytes > maxBytes) {
+        res.discard?.();
+        throw new RegistryFetchError(`response for ${url} exceeds ${maxBytes} bytes`);
+      }
+      chunks.push(buffer);
+    }
+    return Buffer.concat(chunks, bytes).toString('utf8');
+  }
+  // Compatibility fallback for injected test transports. The built-in
+  // transport always supplies `body`, and therefore never fully buffers first.
   const body = await res.text();
   if (Buffer.byteLength(body, 'utf8') > maxBytes) {
     throw new RegistryFetchError(`response for ${url} exceeds ${maxBytes} bytes`);
   }
   return body;
+}
+
+function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(new Error('aborted'));
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new Error('aborted'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      },
+    );
+  });
 }

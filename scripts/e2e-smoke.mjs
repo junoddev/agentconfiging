@@ -10,8 +10,8 @@
  *   2. packs the publish tarball    (npm pack)
  *   3. installs it into a CLEAN throwaway consumer package in os.tmpdir
  *      via a REAL `npm install <abs-path-to-tgz>` — exactly as a user would.
- *      Optional native deps may fail to build; npm skips them and the install
- *      MUST still exit 0. That is the non-negotiable guarantee we assert.
+ *      The install forces `--omit=optional`, then proves the native modules are
+ *      absent and the core package still works.
  *   4. runs the installed bin `agentconfiging report <fixture>` and asserts the
  *      stdout is a single valid JSON document with the expected shape, and the
  *      exit code is severity-based (0/1/2).
@@ -34,7 +34,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const NPM = process.platform === 'win32' ? 'npm.cmd' : 'npm';
@@ -104,27 +104,79 @@ async function main() {
   cleanups.push(packDir);
   log('packing tarball (npm pack)...');
   const packRes = run(NPM, ['pack', '--json', '--pack-destination', packDir]);
-  let tgzName;
+  let packMetadata;
   try {
     const parsed = JSON.parse(packRes.stdout);
-    tgzName = parsed[0]?.filename;
+    packMetadata = parsed[0];
   } catch {
     fail(`could not parse \`npm pack --json\` output:\n${packRes.stdout}`);
   }
+  const tgzName = packMetadata?.filename;
   if (!tgzName) fail('npm pack did not report a tarball filename');
   // npm may report a scoped filename with a leading path separator; basename it.
   const tgzPath = path.join(packDir, path.basename(tgzName));
   if (!fs.existsSync(tgzPath)) fail(`packed tarball not found at ${tgzPath}`);
   log(`packed ${path.basename(tgzPath)}`);
 
+  // Assert the publish boundary from npm's own tarball manifest. Keep these
+  // checks structural so hashed Vite assets and harmless size changes do not
+  // make the release gate brittle.
+  const packedFiles = (packMetadata.files ?? []).map((file) => file.path);
+  const requiredFiles = [
+    'package.json',
+    'LICENSE',
+    'README.md',
+    'dist/cli/index.js',
+    'dist/core/index.js',
+    'dist/server/index.js',
+    'dist/web/index.html',
+  ];
+  for (const required of requiredFiles) {
+    if (!packedFiles.includes(required)) fail(`tarball is missing required file: ${required}`);
+  }
+  const forbidden = packedFiles.filter((file) => {
+    const basename = path.posix.basename(file);
+    return (
+      /(^|\/)(src|test|tests|fixtures|node_modules)(\/|$)/.test(file) ||
+      /(?:\.map|\.ts|\.tsx|\.pem|\.key)$/.test(file) ||
+      /^\.env(?:\.|$)/.test(basename) ||
+      ['.npmrc', '.pypirc', 'credentials'].includes(basename)
+    );
+  });
+  if (forbidden.length > 0) fail(`tarball contains forbidden files: ${forbidden.join(', ')}`);
+
+  const webHtml = fs.readFileSync(path.join(REPO_ROOT, 'dist', 'web', 'index.html'), 'utf8');
+  const referencedAssets = [...webHtml.matchAll(/(?:src|href)=["'](\/assets\/[^"']+)["']/g)].map(
+    (match) => `dist/web${match[1]}`,
+  );
+  if (referencedAssets.length === 0) fail('dist/web/index.html references no bundled web assets');
+  // Follow CSS url(...) references too, so fonts/images cannot silently be
+  // omitted while the entry stylesheet remains present.
+  for (let i = 0; i < referencedAssets.length; i += 1) {
+    const asset = referencedAssets[i];
+    if (!packedFiles.includes(asset))
+      fail(`web UI references asset missing from tarball: ${asset}`);
+    if (asset.endsWith('.css')) {
+      const css = fs.readFileSync(path.join(REPO_ROOT, asset), 'utf8');
+      for (const match of css.matchAll(/url\(["']?([^"')]+)["']?\)/g)) {
+        const reference = match[1];
+        if (/^(?:data:|https?:|#)/.test(reference)) continue;
+        const resolved = reference.startsWith('/')
+          ? path.posix.normalize(`dist/web${reference}`)
+          : path.posix.normalize(path.posix.join(path.posix.dirname(asset), reference));
+        if (!referencedAssets.includes(resolved)) referencedAssets.push(resolved);
+      }
+    }
+  }
+  log(`tarball contract OK (${packedFiles.length} files; ${referencedAssets.length} web assets)`);
+
   // 3. Clean-room install into a throwaway consumer package.
   const consumerDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentconfiging-consumer-'));
   cleanups.push(consumerDir);
-  log('creating clean consumer package + installing the tarball...');
+  log('creating clean consumer package + installing tarball with optional deps omitted...');
   run(NPM, ['init', '-y'], { cwd: consumerDir });
-  // A real `npm install <tgz>`. Optional native deps may fail to build; npm
-  // skips failed optional builds and the install must still exit 0.
-  const installRes = run(NPM, ['install', tgzPath, '--no-audit', '--no-fund'], {
+  // A real `npm install <tgz>` with optional dependencies forcibly absent.
+  const installRes = run(NPM, ['install', tgzPath, '--omit=optional', '--no-audit', '--no-fund'], {
     cwd: consumerDir,
     allowNonZero: true,
   });
@@ -145,15 +197,22 @@ async function main() {
     );
   const binLink = path.join(consumerDir, 'node_modules', '.bin', 'agentconfiging');
   if (!fs.existsSync(binLink)) fail('npm did not link the `agentconfiging` bin');
-  // Note whether the optional native modules actually built (either way is OK).
-  const nativePresent = {
-    'better-sqlite3': fs.existsSync(path.join(pkgDir, '..', 'better-sqlite3')),
-    'node-pty': fs.existsSync(path.join(pkgDir, '..', 'node-pty')),
-  };
-  log(
-    `install OK (exit 0). optional native present: ` +
-      `better-sqlite3=${nativePresent['better-sqlite3']}, node-pty=${nativePresent['node-pty']}`,
-  );
+  for (const native of ['better-sqlite3', 'node-pty']) {
+    if (fs.existsSync(path.join(pkgDir, '..', native))) {
+      fail(`npm --omit=optional unexpectedly installed ${native}`);
+    }
+  }
+  log('install OK (exit 0); optional native dependencies are proven absent');
+
+  // The registry seed is bundled into dist/core rather than shipped as a
+  // separate JSON file. Exercise the installed public API offline to prove the
+  // seed survived packaging and remains nonempty and valid.
+  const installedCore = await import(pathToFileURL(path.join(pkgDir, 'dist', 'core', 'index.js')));
+  const seed = installedCore.loadSeed();
+  if (seed.issues.length !== 0 || seed.index.entries.length === 0) {
+    fail(`installed offline registry seed is invalid or empty: ${JSON.stringify(seed.issues)}`);
+  }
+  log(`offline registry seed OK (${seed.index.entries.length} entries)`);
 
   // A tiny repo fixture with a CLAUDE.md so `report` has something to detect.
   const repoFixture = fs.mkdtempSync(path.join(os.tmpdir(), 'agentconfiging-repo-'));
@@ -271,12 +330,16 @@ async function main() {
     if (search.status !== 200) fail(`/api/search returned ${search.status}, expected 200`);
     if (typeof search.body?.available !== 'boolean')
       fail(`/api/search missing boolean available: ${JSON.stringify(search.body)}`);
+    if (search.body.available !== false)
+      fail('/api/search must report available=false when better-sqlite3 is omitted');
     log(`GET /api/search → available=${search.body.available} (better-sqlite3 optional)`);
 
     const pty = await fetchJson(`${origin}/api/pty/status`, token);
     if (pty.status !== 200) fail(`/api/pty/status returned ${pty.status}, expected 200`);
     if (typeof pty.body?.available !== 'boolean')
       fail(`/api/pty/status missing boolean available: ${JSON.stringify(pty.body)}`);
+    if (pty.body.available !== false)
+      fail('/api/pty/status must report available=false when node-pty is omitted');
     log(`GET /api/pty/status → available=${pty.body.available} (node-pty optional)`);
   } finally {
     // Kill the server cleanly.

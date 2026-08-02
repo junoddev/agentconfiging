@@ -20,6 +20,7 @@ import {
   buildReport,
   computeContextCost,
   computeContextHealth,
+  CONTEXT_COST_BUDGET_TOKENS,
   detect,
   scanProject,
   toReportFinding,
@@ -54,6 +55,22 @@ export interface ServedReport {
   stats: ManifestStats;
 }
 
+function contextCostCacheKey(scope: ReportScope, opts: ContextCostOptions): string {
+  const factors = Object.entries(opts.runtimeFudgeFactors ?? {})
+    .filter(([, value]) => value !== undefined)
+    .sort(([a], [b]) => a.localeCompare(b));
+  return `${scope}\0${JSON.stringify({
+    budgetTokens: opts.budgetTokens ?? CONTEXT_COST_BUDGET_TOKENS,
+    runtimeFudgeFactors: factors,
+  })}`;
+}
+
+function deleteContextCostScope(cache: Map<string, ContextCost>, scope: ReportScope): void {
+  for (const key of cache.keys()) {
+    if (key.startsWith(`${scope}\0`)) cache.delete(key);
+  }
+}
+
 export class ReportStore {
   readonly #root: string;
   readonly #version: string;
@@ -66,8 +83,8 @@ export class ReportStore {
    * populated in the single `#build` pass, so it costs no extra scan.
    */
   readonly #contextHealth = new Map<ReportScope, ContextHealth>();
-  /** Per-scope CONTEXT-COST view (agentconfig-ub3.2), cached with report data. */
-  readonly #contextCost = new Map<ReportScope, ContextCost>();
+  /** CONTEXT-COST views keyed by scope and normalized effective options. */
+  readonly #contextCost = new Map<string, ContextCost>();
   /**
    * Per-scope map of finding id → fix payload. SERVER-INTERNAL by design: it
    * holds the `fix.edits[].patch` (complete replacement file content, possibly
@@ -137,12 +154,13 @@ export class ReportStore {
     scope: ReportScope,
     opts: { fresh?: boolean } & ContextCostOptions = {},
   ): ContextCost {
+    const key = contextCostCacheKey(scope, opts);
     if (!opts.fresh) {
-      const hit = this.#contextCost.get(scope);
+      const hit = this.#contextCost.get(key);
       if (hit) return hit;
     }
     this.#build(scope, opts);
-    return this.#contextCost.get(scope) as ContextCost;
+    return this.#contextCost.get(key) as ContextCost;
   }
 
   /** Drop cached reports + fixes (one scope, or all). Watcher-bead hook. */
@@ -151,7 +169,7 @@ export class ReportStore {
       this.#cache.delete(scope);
       this.#fixes.delete(scope);
       this.#contextHealth.delete(scope);
-      this.#contextCost.delete(scope);
+      deleteContextCostScope(this.#contextCost, scope);
     } else {
       this.#cache.clear();
       this.#fixes.clear();
@@ -183,7 +201,13 @@ export class ReportStore {
     this.#cache.set(scope, report);
     this.#fixes.set(scope, fixes);
     this.#contextHealth.set(scope, computeContextHealth(manifest));
-    this.#contextCost.set(scope, computeContextCost(manifest, agents, contextCostOptions));
+    // A build rescans the project, so option variants derived from the prior
+    // manifest must not survive as apparently valid cache hits.
+    deleteContextCostScope(this.#contextCost, scope);
+    this.#contextCost.set(
+      contextCostCacheKey(scope, contextCostOptions),
+      computeContextCost(manifest, agents, contextCostOptions),
+    );
     return report;
   }
 }

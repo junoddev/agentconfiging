@@ -105,6 +105,13 @@ const ZERO_TOKENS: UsageTokenTotals = {
   totalTokens: 0,
 };
 
+/** Largest absolute epoch-millisecond value accepted by ECMAScript TimeClip. */
+const TIME_CLIP_BOUND_MS = 8.64e15;
+
+function isTimeClipSafe(ms: number): boolean {
+  return Number.isFinite(ms) && Math.abs(ms) <= TIME_CLIP_BOUND_MS;
+}
+
 function emptyCost(): UsageCostSummary {
   return {
     status: 'unknown',
@@ -133,7 +140,7 @@ function parseIsoMs(timestamp: string | undefined): number | undefined {
 
 /** Epoch-ms for a prompt-history numeric timestamp, or undefined if unusable. */
 function parseEpochMs(timestamp: number | undefined): number | undefined {
-  if (timestamp === undefined || !Number.isFinite(timestamp)) return undefined;
+  if (timestamp === undefined || !isTimeClipSafe(timestamp)) return undefined;
   return timestamp;
 }
 
@@ -391,7 +398,8 @@ export function computeStats(
   promptHistory?: PromptHistory,
   opts: ComputeStatsOptions = {},
 ): DashboardStats {
-  const now = opts.now ?? Date.now();
+  const requestedNow = opts.now ?? Date.now();
+  const now = isTimeClipSafe(requestedNow) ? requestedNow : Date.now();
   const heatmapDays = opts.heatmapDays ?? DEFAULT_HEATMAP_DAYS;
   const today = dayIndex(now);
 

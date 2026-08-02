@@ -76,29 +76,27 @@ export interface CommandTargetContext {
 }
 
 /**
- * Pick the targets a command list may carry from the current route. Configure
- * and Library consume chooser context. Workspace and Runtime can retain an
- * explicit parsed target in memory for a later Configure/Library hop. Operate
- * targets are only preserved when the current route is already explicitly
- * targeted Operate.
+ * Pick the folder context a command list may carry from the current route.
+ * Configure/Library also consume its agent field. Operate keeps an explicit
+ * page target when present, otherwise it opens against the current folder.
  */
 export function commandTargetContext(
   sourceRoute: Route | undefined,
   chooserTarget?: NavigationTarget,
 ): CommandTargetContext {
   const chooser = normalizeNavigationTarget(chooserTarget);
-  if (sourceRoute === undefined) return { contextTarget: chooser };
+  if (sourceRoute === undefined) return { contextTarget: chooser, operateTarget: chooser };
 
   const explicitTarget = normalizeNavigationTarget(sourceRoute.target);
   switch (navigationMode(sourceRoute)) {
     case 'workspace':
     case 'runtime':
-      return { contextTarget: explicitTarget ?? chooser };
+      return { contextTarget: explicitTarget ?? chooser, operateTarget: chooser };
     case 'operate':
       return { contextTarget: chooser, operateTarget: explicitTarget };
     case 'configure':
     case 'library':
-      return { contextTarget: chooser };
+      return { contextTarget: chooser, operateTarget: chooser };
   }
 }
 
@@ -135,20 +133,22 @@ export function buildCommands(
   hiddenRoutes?: ReadonlySet<RouteName>,
   contextTarget?: NavigationTarget,
   operateTarget?: NavigationTarget,
+  labelOverrides?: Partial<Record<RouteName, string>>,
 ): Command[] {
+  const folderTarget = operateTarget ?? contextTarget;
   const nav: Command[] = RAIL_ORDER.filter((name) => !hiddenRoutes?.has(name)).map((name) => ({
     id: `nav:${name}`,
-    label: railLabel(name),
-    hint: navHash(name, contextTarget, operateTarget),
-    action: { type: 'navigate', hash: navHash(name, contextTarget, operateTarget) },
+    label: labelOverrides?.[name] ?? railLabel(name),
+    hint: navHash(name, contextTarget, folderTarget),
+    action: { type: 'navigate', hash: navHash(name, contextTarget, folderTarget) },
   }));
   // The internal gallery is de-emphasized (sidebar bottom) — navigable, but
   // outside Cmd+1..9.
   nav.push({
     id: 'nav:gallery',
     label: railLabel('gallery'),
-    hint: navHash('gallery', contextTarget, operateTarget),
-    action: { type: 'navigate', hash: navHash('gallery', contextTarget, operateTarget) },
+    hint: navHash('gallery', contextTarget, folderTarget),
+    action: { type: 'navigate', hash: navHash('gallery', contextTarget, folderTarget) },
   });
 
   const actions: Command[] = [

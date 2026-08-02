@@ -10,10 +10,17 @@
  */
 
 import { sourceBadgeText } from '../components/core/index.js';
+import { useEffect, useRef, useState } from 'react';
 import { ROUTE_LABELS, routeHash, type Route, type RouteName } from '../routes.js';
 import { navigationMode, targetForRoute, type NavigationTarget } from '../navigation.js';
+import { integrationInventoryTerm } from '../lib/agentTerminology.js';
 import { isGlobalEntryError } from '../api/types.js';
-import { sectionApplies, useAppState, type ConfigSection } from '../state/index.js';
+import {
+  displayNameForKind,
+  sectionApplies,
+  useAppState,
+  type ConfigSection,
+} from '../state/index.js';
 import { useConfigureCounts, type ConfigureCountKey } from './useConfigureCounts.js';
 
 /** A no-param route name (every nav target; `agent/:kind` has no nav slot). */
@@ -40,7 +47,7 @@ interface NavGroup {
 /** Grouping per E13.3 — mirrors RAIL_ORDER (command/commands.ts). */
 const GROUPS: NavGroup[] = [
   {
-    group: 'Workspace',
+    group: 'Folder',
     items: [
       { name: 'overview', glyph: '◈' },
       { name: 'agents', glyph: '⊙', count: 'agents' },
@@ -72,7 +79,7 @@ const GROUPS: NavGroup[] = [
     ],
   },
   {
-    group: 'Runtime',
+    group: 'Activity',
     items: [
       { name: 'dashboard', glyph: '◔' },
       { name: 'sessions', glyph: '❯' },
@@ -81,7 +88,7 @@ const GROUPS: NavGroup[] = [
     ],
   },
   {
-    group: 'Operate',
+    group: 'Tools',
     items: [
       { name: 'git', glyph: '⎇' },
       { name: 'terminal', glyph: '❒' },
@@ -115,9 +122,36 @@ function destinationTarget(
 }
 
 export function Sidebar({ route }: { route: Route }) {
-  const { report, instances, globalReport, currentInstance, agentScopeKind } = useAppState();
+  const {
+    report,
+    instances,
+    globalReport,
+    currentInstance,
+    availableAgents,
+    activeAgent,
+    agentScopeKind,
+    selectAgent,
+  } = useAppState();
+  const [agentMenuOpen, setAgentMenuOpen] = useState(false);
+  const agentChooserRef = useRef<HTMLDivElement>(null);
   const active = activeSection(route);
   const configureCounts = useConfigureCounts();
+
+  useEffect(() => {
+    if (!agentMenuOpen) return;
+    const close = (event: MouseEvent) => {
+      if (!agentChooserRef.current?.contains(event.target as Node)) setAgentMenuOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setAgentMenuOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', escape);
+    };
+  }, [agentMenuOpen]);
 
   const counts: Record<NonNullable<NavItem['count']>, number | undefined> = {
     findings: report?.findings.length,
@@ -144,7 +178,7 @@ export function Sidebar({ route }: { route: Route }) {
       sourceMode === 'workspace' || sourceMode === 'runtime'
         ? (route.target ?? chooserTarget)
         : chooserTarget;
-    const operateTarget = sourceMode === 'operate' ? route.target : undefined;
+    const operateTarget = sourceMode === 'operate' ? route.target : chooserTarget;
     const destination = { name } as Route;
     const target = destinationTarget(destination, contextTarget, operateTarget);
     return (
@@ -157,7 +191,7 @@ export function Sidebar({ route }: { route: Route }) {
         <span className="glyph" aria-hidden="true">
           {glyph}
         </span>
-        {ROUTE_LABELS[name]}
+        {name === 'extensions' ? integrationInventoryTerm(agentScopeKind) : ROUTE_LABELS[name]}
         {n !== undefined && <span className="count">{n}</span>}
       </a>
     );
@@ -175,6 +209,49 @@ export function Sidebar({ route }: { route: Route }) {
         return (
           <div key={group} className="side-group">
             <div className="nav-group">{group}</div>
+            {group === 'Configure' && (
+              <div className="side-agent" ref={agentChooserRef}>
+                <button
+                  type="button"
+                  className="side-agent__button"
+                  aria-haspopup="menu"
+                  aria-expanded={agentMenuOpen}
+                  aria-label={`Configure agent: ${activeAgent ? displayNameForKind(activeAgent.kind) : '—'}`}
+                  onClick={() => setAgentMenuOpen((open) => !open)}
+                >
+                  <span className="side-agent__label">Agent</span>
+                  <span className="side-agent__value">
+                    {activeAgent ? displayNameForKind(activeAgent.kind) : 'No agent'}
+                  </span>
+                  <span aria-hidden="true">▾</span>
+                </button>
+                {agentMenuOpen && (
+                  <div className="side-agent__menu" role="menu" aria-label="Configure agent">
+                    {availableAgents.length === 0 ? (
+                      <div className="ch-item" aria-disabled="true">
+                        No agents detected
+                      </div>
+                    ) : (
+                      availableAgents.map((agent) => (
+                        <button
+                          key={agent.kind}
+                          type="button"
+                          role="menuitem"
+                          className={`ch-item${agent.kind === activeAgent?.kind ? ' active' : ''}`}
+                          onClick={() => {
+                            selectAgent(agent.kind);
+                            setAgentMenuOpen(false);
+                          }}
+                        >
+                          <span>{displayNameForKind(agent.kind)}</span>
+                          <span className="meta">{agent.confidence}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             {visible.map(navItem)}
           </div>
         );
