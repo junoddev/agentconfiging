@@ -34,9 +34,10 @@
     "build": "npm run clean:tsup && tsup && vite build web",
     "prepublishOnly": "npm run build",
     "test": "vitest run",
+    "test:security": "node scripts/security-gate.mjs",
     "e2e": "node scripts/e2e-smoke.mjs",
     "e2e:browser": "node scripts/e2e-browser.mjs",
-    "release:gate": "npm run lint && npm run typecheck && npm test && npm run build && npm run e2e && npm run e2e:browser",
+    "release:gate": "npm run lint && npm run typecheck && npm run test:security && npm test && npm run build && npm run e2e && npm run e2e:browser",
     "lint": "eslint . && prettier --check .",
     "typecheck": "tsc --noEmit"
   },

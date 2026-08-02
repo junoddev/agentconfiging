@@ -39,11 +39,9 @@
  *   - Timeouts. Every fetch is bounded by an AbortController timeout so a slow
  *     or hanging endpoint cannot stall the client.
  *   - Bounded fetch surface: only the configured registry url and entry urls
- *     from a validated index (themselves capped + timed). NOTE: a compromised
- *     registry could point an entry url at an internal host (metadata IP, LAN,
- *     localhost) — a blind GET. Exfil is not possible: a payload is used only
- *     if its body hashes to the entry's declared sha256. Accepted risk for a
- *     local dev tool; an internal-host block is a documented follow-up (0zm.7).
+ *     from a validated index (themselves capped + timed). Literal loopback,
+ *     private, link-local, unspecified, and multicast IP hosts are refused so
+ *     a compromised registry cannot turn payload fetching into an SSRF probe.
  *   - Content-addressed payload cache. Payloads are cached under their sha256
  *     (a safe, self-verifying cache key); a cached payload whose bytes no
  *     longer hash to its key is ignored and re-fetched.
@@ -52,6 +50,10 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
+import net from 'node:net';
+import dns from 'node:dns/promises';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 
 import type { RegistryEntry, RegistryFile, RegistryIndex } from './schema.js';
 import { parseRegistryIndex } from './validate.js';
@@ -83,10 +85,17 @@ export interface HttpResponse {
   readonly status: number;
   readonly headers: { get(name: string): string | null };
   text(): Promise<string>;
+  discard?(): void;
 }
 
 /** Injectable fetch — `globalThis.fetch` satisfies this by structure. */
-export type HttpFetch = (url: string, init: { signal: AbortSignal }) => Promise<HttpResponse>;
+export type HttpFetch = (
+  url: string,
+  init: { signal: AbortSignal; redirect: 'manual'; resolvedAddress?: string },
+) => Promise<HttpResponse>;
+
+/** DNS seam used immediately before each connection attempt. */
+export type HostResolver = (hostname: string) => Promise<readonly string[]>;
 
 /** Injectable filesystem seam — only the three operations the cache needs. */
 export interface RegistryFs {
@@ -121,6 +130,8 @@ export interface RegistryClientOptions {
   cacheDir?: string;
   /** Fetch seam. Defaults to global fetch. */
   fetch?: HttpFetch;
+  /** DNS seam. All returned addresses must be public before fetch is called. */
+  resolveHost?: HostResolver;
   /** Filesystem seam. Defaults to node:fs/promises. */
   fs?: RegistryFs;
   /** Clock seam (epoch ms). Defaults to Date.now. */
@@ -185,9 +196,56 @@ export function assertFetchableUrl(rawUrl: string, allowInsecureLocalhost: boole
   } catch {
     throw new RegistryFetchError(`invalid url: ${rawUrl}`);
   }
-  if (url.protocol === 'https:') return;
   if (url.protocol === 'http:' && allowInsecureLocalhost && isLocalhost(url.hostname)) return;
+  if (isBlockedRegistryHost(url.hostname)) {
+    throw new RegistryFetchError(`refusing private or local url: ${rawUrl}`);
+  }
+  if (url.protocol === 'https:') return;
   throw new RegistryFetchError(`refusing non-https url: ${rawUrl}`);
+}
+
+export function isBlockedRegistryHost(hostname: string): boolean {
+  const host = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (host === 'localhost' || host.endsWith('.localhost')) return true;
+
+  const version = net.isIP(host);
+  if (version === 4) {
+    const [a = 0, b = 0] = host.split('.').map(Number);
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      a >= 224
+    );
+  }
+  if (version === 6) {
+    const mapped = mappedIpv4(host);
+    if (mapped !== null) return isBlockedRegistryHost(mapped);
+    return (
+      host === '::' ||
+      host === '::1' ||
+      host.startsWith('fc') ||
+      host.startsWith('fd') ||
+      /^fe[89ab]/.test(host) ||
+      host.startsWith('ff')
+    );
+  }
+  return false;
+}
+
+/** Decode both dotted and canonical-hex IPv4-mapped IPv6 spellings. */
+function mappedIpv4(host: string): string | null {
+  const dotted = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(host);
+  const dottedAddress = dotted?.[1];
+  if (dottedAddress !== undefined && net.isIP(dottedAddress) === 4) return dottedAddress;
+  const hex = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(host);
+  if (!hex) return null;
+  const high = Number.parseInt(hex[1]!, 16);
+  const low = Number.parseInt(hex[2]!, 16);
+  return `${high >>> 8}.${high & 0xff}.${low >>> 8}.${low & 0xff}`;
 }
 
 function isLocalhost(host: string): boolean {
@@ -216,7 +274,61 @@ const defaultFs: RegistryFs = {
   },
 };
 
-const defaultFetch: HttpFetch = (url, init) => fetch(url, init);
+const defaultFetch: HttpFetch = (rawUrl, init) =>
+  new Promise((resolve, reject) => {
+    const url = new URL(rawUrl);
+    const address = init.resolvedAddress;
+    const request = url.protocol === 'https:' ? httpsRequest : httpRequest;
+    const req = request(
+      url,
+      {
+        method: 'GET',
+        signal: init.signal,
+        // Pin the connection to the address validated immediately above. TLS
+        // still authenticates the original URL hostname via SNI/Host.
+        ...(address === undefined
+          ? {}
+          : {
+              lookup: (_hostname, _options, callback) =>
+                callback(null, address, net.isIP(address) as 4 | 6),
+            }),
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        let consumed = false;
+        resolve({
+          ok: (res.statusCode ?? 0) >= 200 && (res.statusCode ?? 0) < 300,
+          status: res.statusCode ?? 0,
+          headers: {
+            get: (name) => {
+              const value = res.headers[name.toLowerCase()];
+              return Array.isArray(value) ? value.join(', ') : (value ?? null);
+            },
+          },
+          text: () =>
+            new Promise<string>((resolveText, rejectText) => {
+              if (consumed) return rejectText(new Error('response body already consumed'));
+              consumed = true;
+              res.on('data', (chunk: Buffer | string) => chunks.push(Buffer.from(chunk)));
+              res.on('end', () => resolveText(Buffer.concat(chunks).toString('utf8')));
+              res.on('error', rejectText);
+            }),
+          discard: () => {
+            consumed = true;
+            res.resume();
+          },
+        });
+      },
+    );
+    req.on('error', reject);
+    req.end();
+  });
+const defaultResolver: HostResolver = async (hostname) => {
+  const results = await dns.lookup(hostname, { all: true, verbatim: true });
+  return results.map(({ address }) => address);
+};
+
+export const REGISTRY_MAX_REDIRECTS = 5;
 
 const SHA256_HEX = /^[0-9a-f]{64}$/;
 
@@ -224,6 +336,7 @@ export class RegistryClient {
   private readonly registryUrl: string;
   private readonly cacheDir: string;
   private readonly fetchFn: HttpFetch;
+  private readonly resolveHost: HostResolver;
   private readonly fs: RegistryFs;
   private readonly now: () => number;
   private readonly ttlMs: number;
@@ -236,6 +349,7 @@ export class RegistryClient {
     this.registryUrl = options.registryUrl ?? DEFAULT_REGISTRY_URL;
     this.cacheDir = options.cacheDir ?? resolveRegistryCacheDir(process.env, os.homedir());
     this.fetchFn = options.fetch ?? defaultFetch;
+    this.resolveHost = options.resolveHost ?? defaultResolver;
     this.fs = options.fs ?? defaultFs;
     this.now = options.now ?? Date.now;
     this.ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
@@ -396,18 +510,60 @@ export class RegistryClient {
     }
   }
 
-  /** HTTPS GET with scheme guard, timeout, and a byte cap on the body. */
+  /** HTTPS GET with DNS guard, manually validated redirects, timeout, and byte cap. */
   private async httpGet(url: string, maxBytes: number): Promise<string> {
-    assertFetchableUrl(url, this.allowInsecureLocalhost);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const res = await this.fetchFn(url, { signal: controller.signal });
-      if (!res.ok) throw new RegistryFetchError(`HTTP ${res.status} for ${url}`);
-      return await readCapped(res, maxBytes, url);
+      let currentUrl = url;
+      for (let redirects = 0; ; redirects += 1) {
+        const { url: parsed, address } = await this.assertResolvedTarget(currentUrl);
+        const res = await this.fetchFn(currentUrl, {
+          signal: controller.signal,
+          redirect: 'manual',
+          resolvedAddress: address,
+        });
+        const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null;
+        if (location !== null) {
+          if (redirects >= REGISTRY_MAX_REDIRECTS) {
+            res.discard?.();
+            throw new RegistryFetchError(`too many redirects for ${url}`);
+          }
+          res.discard?.();
+          currentUrl = new URL(location, parsed).toString();
+          continue;
+        }
+        if (!res.ok) throw new RegistryFetchError(`HTTP ${res.status} for ${currentUrl}`);
+        return await readCapped(res, maxBytes, currentUrl);
+      }
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  private async assertResolvedTarget(
+    rawUrl: string,
+  ): Promise<{ url: URL; address: string | undefined }> {
+    assertFetchableUrl(rawUrl, this.allowInsecureLocalhost);
+    const url = new URL(rawUrl);
+    if (url.protocol === 'http:' && this.allowInsecureLocalhost && isLocalhost(url.hostname)) {
+      return { url, address: undefined };
+    }
+    const hostname = url.hostname.replace(/^\[|\]$/g, '');
+    if (net.isIP(hostname) !== 0) return { url, address: hostname };
+    let addresses: readonly string[];
+    try {
+      addresses = await this.resolveHost(hostname);
+    } catch {
+      throw new RegistryFetchError(`unable to resolve registry host: ${hostname}`);
+    }
+    if (
+      addresses.length === 0 ||
+      addresses.some((address) => net.isIP(address) === 0 || isBlockedRegistryHost(address))
+    ) {
+      throw new RegistryFetchError(`refusing private or local address for ${hostname}`);
+    }
+    return { url, address: addresses[0] };
   }
 }
 

@@ -113,7 +113,9 @@ describe('runLaunch (plain, non-TTY)', () => {
     expect(onDisk).toContain(`OPEN ${URL}`);
   });
 
-  it('redacts the session token from the disk log but keeps it in terminal output', async () => {
+  // Incident agentconfig-gxo.1: the browser URL necessarily carries the token,
+  // but persisted logs must never retain that URL credential.
+  it('agentconfig-gxo.1 token-in-URL leak: disk output strips the hostile credential', async () => {
     const tokened = `${URL}/#token=SEKRET`;
     const h = makeHarness({
       serverFactory: async () => ({ url: tokened, port: 4242, token: 'SEKRET', close: vi.fn() }),

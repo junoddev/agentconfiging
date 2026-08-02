@@ -31,12 +31,15 @@ export {
   DEFAULT_TIMEOUT_MS,
   DEFAULT_MAX_INDEX_BYTES,
   DEFAULT_MAX_FILE_BYTES,
+  REGISTRY_MAX_REDIRECTS,
+  isBlockedRegistryHost,
 } from './client.js';
 export type {
   RegistryClientOptions,
   RegistryFs,
   HttpFetch,
   HttpResponse,
+  HostResolver,
   CatalogResult,
   OverlaySource,
   ResolvedFile,

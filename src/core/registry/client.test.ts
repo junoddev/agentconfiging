@@ -15,6 +15,7 @@ import {
   assertFetchableUrl,
   resolveRegistryCacheDir,
   type HttpFetch,
+  type HostResolver,
   type HttpResponse,
   type RegistryFs,
 } from './client.js';
@@ -86,6 +87,8 @@ function client(opts: {
   ttlMs?: number;
   timeoutMs?: number;
   maxFileBytes?: number;
+  resolveHost?: HostResolver;
+  allowInsecureLocalhost?: boolean;
 }): { c: RegistryClient; files: Map<string, string> } {
   const { fs, files } = memFs(opts.files);
   const c = new RegistryClient({
@@ -97,6 +100,8 @@ function client(opts: {
     ttlMs: opts.ttlMs,
     timeoutMs: opts.timeoutMs,
     maxFileBytes: opts.maxFileBytes,
+    resolveHost: opts.resolveHost ?? (async () => ['203.0.113.10']),
+    allowInsecureLocalhost: opts.allowInsecureLocalhost,
   });
   return { c, files };
 }
@@ -352,6 +357,130 @@ describe('assertFetchableUrl', () => {
   it('allows http to localhost only when opted in', () => {
     expect(() => assertFetchableUrl('http://localhost:8080/x', true)).not.toThrow();
     expect(() => assertFetchableUrl('http://evil.example/x', true)).toThrow(RegistryFetchError);
+  });
+
+  it('allows public IPv4-mapped IPv6 and blocks private mapped IPv4', () => {
+    expect(() => assertFetchableUrl('https://[::ffff:8.8.8.8]/x', false)).not.toThrow();
+    expect(() => assertFetchableUrl('https://[::ffff:192.168.1.2]/x', false)).toThrow(
+      RegistryFetchError,
+    );
+  });
+
+  // Incident agentconfig-0zm.7: a malicious registry entry must not turn the
+  // payload downloader into a blind request to loopback, LAN, or cloud metadata.
+  it.each([
+    'https://127.0.0.1/admin',
+    'https://10.0.0.8/internal',
+    'https://192.168.1.9/private',
+    'https://169.254.169.254/latest/meta-data/',
+    'https://[::1]/admin',
+    'https://[::ffff:127.0.0.1]/admin',
+  ])(
+    'agentconfig-0zm.7 registry SSRF: refuses hostile payload URL %s before fetch',
+    async (url) => {
+      let calls = 0;
+      const fetchFn: HttpFetch = async () => {
+        calls += 1;
+        return httpResponse('internal secret');
+      };
+      const malicious = entry({
+        files: [{ path: 'a', url, sha256: sha256Hex('internal secret') }],
+      });
+      const { c } = client({ fetch: fetchFn });
+
+      await expect(c.fetchEntryFiles(malicious)).rejects.toBeInstanceOf(RegistryFetchError);
+      expect(calls).toBe(0);
+    },
+  );
+
+  it('agentconfig-0zm.7 registry SSRF DNS: refuses a private resolution before fetch', async () => {
+    let calls = 0;
+    const fetchFn: HttpFetch = async () => {
+      calls += 1;
+      return httpResponse('internal secret');
+    };
+    const malicious = entry({
+      files: [
+        {
+          path: 'a',
+          url: 'https://attacker.example/payload',
+          sha256: sha256Hex('internal secret'),
+        },
+      ],
+    });
+    const { c } = client({ fetch: fetchFn, resolveHost: async () => ['169.254.169.254'] });
+
+    await expect(c.fetchEntryFiles(malicious)).rejects.toBeInstanceOf(RegistryFetchError);
+    expect(calls).toBe(0);
+  });
+
+  it('agentconfig-0zm.7 registry SSRF redirect: validates a private next hop before fetch', async () => {
+    const calls: string[] = [];
+    const fetchFn: HttpFetch = async (url, init) => {
+      calls.push(url);
+      expect(init.redirect).toBe('manual');
+      return httpResponse('', {
+        ok: false,
+        status: 302,
+        headers: { location: 'https://169.254.169.254/latest/meta-data/' },
+      });
+    };
+    const malicious = entry({
+      files: [
+        {
+          path: 'a',
+          url: 'https://public.example/payload',
+          sha256: sha256Hex('unused'),
+        },
+      ],
+    });
+    const { c } = client({ fetch: fetchFn });
+
+    await expect(c.fetchEntryFiles(malicious)).rejects.toBeInstanceOf(RegistryFetchError);
+    expect(calls).toEqual(['https://public.example/payload']);
+  });
+
+  it('agentconfig-0zm.7 registry SSRF DNS: checks the registry index host before fetch', async () => {
+    let calls = 0;
+    const { c } = client({
+      fetch: async () => {
+        calls += 1;
+        return httpResponse(indexJson([]));
+      },
+      resolveHost: async () => ['10.0.0.1'],
+    });
+
+    const result = await c.loadCatalog();
+    expect(result.overlaySource).toBe('none');
+    expect(calls).toBe(0);
+  });
+
+  it('preserves opted-in localhost HTTP without DNS resolution', async () => {
+    const payload = 'local payload';
+    let resolutions = 0;
+    const local = entry({
+      files: [
+        {
+          path: 'a',
+          url: 'http://localhost:8080/payload',
+          sha256: sha256Hex(payload),
+        },
+      ],
+    });
+    const { c } = client({
+      fetch: async (_url, init) => {
+        expect(init.redirect).toBe('manual');
+        return httpResponse(payload);
+      },
+      resolveHost: async () => {
+        resolutions += 1;
+        return ['127.0.0.1'];
+      },
+      allowInsecureLocalhost: true,
+    });
+
+    await expect(c.fetchEntryFiles(local)).resolves.toEqual([{ path: 'a', content: payload }]);
+    expect(resolutions).toBe(0);
   });
 });
 

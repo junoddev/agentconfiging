@@ -152,7 +152,7 @@ exists** and **what to double-check** before strangers run it.
 | Static-file hardening | `src/server/app.ts` | Percent-decoded `..` rejection (both separators), realpath canonicalization so symlinks can't escape `distDir` |
 | WS auth | `src/server/ws.ts` | Token via `Sec-WebSocket-Protocol` (fragment never sent to server); no frame written to unauthorized sockets |
 | Secret redaction | `src/core/redact/` (`patterns.ts`, `redact.ts` + tests) | Server-side redaction before content hits the wire (per README); coverage expanded in commit `bf2dc7e` |
-| SSRF denylist | `src/server/pipeline/runtimes.ts` (`isBlockedHttpHost`) | Private-range denylist; redirects followed **manually** and re-gated on every hop, bounded by `HTTP_MAX_REDIRECTS` |
+| SSRF denylist | `src/server/pipeline/runtimes.ts` and `src/core/registry/client.ts` | Private-range denylist; registry hosts are DNS-checked immediately before each request; redirects are followed **manually**, re-gated on every hop, and bounded |
 | Pipeline exec gating | `src/server/pipeline/runtimes.ts` (`runBashDisabled`) | Bash nodes refuse to run unless launched interactively — headless daemon never executes author-supplied shell |
 | Child env hygiene | `src/server/pipeline/runtimes.ts` | Session token never exported to children; denylist of token-shaped env vars stripped (`STRIPPED_ENV_KEYS`) |
 | Git exec hardening | `src/server/pipeline/runtimes.ts` | Enumerated read-only subcommand allowlist, strict arg charset, `..` refused, arg-array exec (no shell) |
@@ -178,6 +178,14 @@ Current release gate:
 
 - `npm run release:gate` is the one command for lint, typecheck, unit tests,
   build, packed-install e2e, and real-browser CDP e2e.
+- `npm run test:security` is the independently runnable adversarial regression
+  gate and is also invoked by `release:gate`. It reproduces the gxo.3 dangling
+  symlink/ENOENT write, 0zm.4 reserved-namespace poisoning, gxo.1 token URL leak,
+  np8.7 fix.patch secret carriage, upstream-port ReDoS payload, and 0zm.7
+  registry SSRF incidents, including private DNS answers and internal redirect
+  targets. Its manifest asserts the exact executed count for every incident so
+  selector drift or deleted cases fail the command. Keep it mandatory while
+  71h.11 write-path hardening follow-ups remain open.
 - `ci.yml` runs that command on Node 20.x/22.x and Ubuntu/macOS for pushes and
   pull requests. Chrome setup is explicit and must succeed.
 - `publish.yml` invokes the identical command before npm publish, on Node 22 and

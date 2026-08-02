@@ -468,10 +468,11 @@ describe('T4 traversal + symlink escape: write / delete / read API', () => {
     expect(fs.existsSync(path.join(escapeDir, 'new.md'))).toBe(false);
   });
 
-  // The CRITICAL dangling-symlink write-through escape (fixed in gxo.3):
+  // Incident agentconfig-gxo.3 (with agentconfig-71h.11 follow-ups): the
+  // CRITICAL dangling-symlink write-through escape.
   // realpathSync throws ENOENT on a dangling link, so a naive resolver would
   // treat the leaf as a to-be-created tail and FOLLOW it out of scope on write.
-  it('DANGLING symlink leaf → out-of-scope path: 403, target NOT created', async () => {
+  it('agentconfig-gxo.3 dangling symlink/ENOENT write fails closed: 403, target NOT created', async () => {
     fs.mkdirSync(path.join(base, 'evil-outside'), { recursive: true });
     const target = path.join(base, 'evil-outside', 'PWNED.md');
     fs.symlinkSync(target, path.join(projectRoot, '.claude', 'pwn.md'));
@@ -1074,7 +1075,9 @@ describe('T9 global report: scope=global over a FIXTURE home, content-free', () 
     return { home, settings, app };
   }
 
-  it('serialized response carries localOnly:true and NEVER the planted secret or patch keys', async () => {
+  // Incident agentconfig-np8.7: fix.patch once carried the complete source
+  // file, including credentials, into a serialized report.
+  it('agentconfig-np8.7 fix.patch secret carriage: wire response omits secret and patch keys', async () => {
     const { app } = makeGlobalFixture();
     const res = await get(app, '/api/report?scope=global', AUTH);
     expect(res.status).toBe(200);

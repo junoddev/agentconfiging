@@ -473,7 +473,9 @@ describe('parseClaudeSession — persisted-output hardening', () => {
     expect(diagnostics.rejectedSpillPaths).toBe(0);
   });
 
-  it('parses megabytes of repeated persisted-output markers in linear time', () => {
+  // Upstream-port ReDoS incident: reproduce the marker flood that previously
+  // drove the lazy regex superlinearly; assert useful output within a hard cap.
+  it('upstream-port ReDoS payload: repeated markers complete in bounded time', () => {
     // ~5.4MB of nothing but markers: the old lazy regex took >30s on 2MB.
     const hostile = '<persisted-output>'.repeat(300_000);
     const line = spillLine(hostile, 's1');

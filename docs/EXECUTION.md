@@ -88,8 +88,12 @@ that command and the matching CI matrix are green.
    `agentconfiging report` works on a real repo; E4 only when the read-only UI
    demos end-to-end; etc.
 5. Security-sensitive beads (gxo.2/3/5, anything touching writes or the PTY)
-   additionally require the security test suite green and a review agent pass —
-   no exceptions.
+   additionally require `npm run test:security` green and a review agent pass —
+   no exceptions. This manifest-checked gate reproduces prior hostile inputs
+   (not internal guard calls), including registry DNS/private-address and
+   redirect SSRF attempts, and fails if a named incident or expected case count
+   disappears. It is required while the agentconfig-71h.11 write-hardening
+   follow-ups remain open.
 
 ## Git policy (granted for execution)
 
