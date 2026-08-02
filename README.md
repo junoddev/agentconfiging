@@ -188,6 +188,9 @@ provenance before writing files.
 ## Requirements
 
 - **Node.js >= 20**
+- **Google Chrome or Chromium** is required only for the real-browser e2e gate:
+  `npm run e2e:browser`. Set `CHROME_PATH=/path/to/chrome` when it is not in a
+  standard install location.
 - Two native modules are **optional** and degrade gracefully when absent:
   - `better-sqlite3` — powers full-text session search. Without it, search is
     unavailable; everything else works.

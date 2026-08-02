@@ -73,10 +73,14 @@ file ownership per in-flight agent; on conflict, serialize.
 1. `npm test` — all green, including the bead's new tests. Engine work is
    fixture-driven: tests come from `fixtures/`, not mocks.
 2. `npm run lint && npm run typecheck` — clean.
-3. Epic demo gates (SPEC.md §6) are release valves: E1 closes only when
+3. `npm run e2e:browser` — when a bead touches the launch/server/web surface,
+   run the real built server and `dist/web` bundle in headless Chrome via CDP.
+   Requires Google Chrome or Chromium on `PATH`/standard install path, or set
+   `CHROME_PATH=/path/to/chrome`.
+4. Epic demo gates (SPEC.md §6) are release valves: E1 closes only when
    `agentconfiging report` works on a real repo; E4 only when the read-only UI
    demos end-to-end; etc.
-4. Security-sensitive beads (gxo.2/3/5, anything touching writes or the PTY)
+5. Security-sensitive beads (gxo.2/3/5, anything touching writes or the PTY)
    additionally require the security test suite green and a review agent pass —
    no exceptions.
 

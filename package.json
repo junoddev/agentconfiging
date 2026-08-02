@@ -27,6 +27,7 @@
     "prepublishOnly": "npm run build",
     "test": "vitest run",
     "e2e": "node scripts/e2e-smoke.mjs",
+    "e2e:browser": "node scripts/e2e-browser.mjs",
     "lint": "eslint . && prettier --check .",
     "typecheck": "tsc --noEmit"
   },
