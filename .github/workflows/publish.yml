@@ -20,15 +20,18 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: 24.x
+          node-version: 22.x
           registry-url: 'https://registry.npmjs.org'
           cache: npm
       - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
-      - run: npm run e2e # the npx-from-tarball smoke gate
+      - name: Locate Chrome for the headless browser gate
+        shell: bash
+        run: |
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || true)"
+          test -x "$chrome" || { echo "Chrome is required but was not found" >&2; exit 1; }
+          echo "CHROME_PATH=$chrome" >> "$GITHUB_ENV"
+          "$chrome" --version
+      - run: npm run release:gate
       - run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

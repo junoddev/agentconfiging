@@ -16,7 +16,7 @@ This is a planning document; nothing in it has been executed.
 | Git tags | **None** (`git tag` is empty) |
 | Remote | `https://github.com/junoddev/agentconfiging.git` |
 | License | MIT (root `LICENSE`, Copyright (c) 2026 Aaron Junod; matches `package.json`) |
-| Node support | `engines.node >= 20` |
+| Node support | `engines.node >= 20.19` |
 | Bin | `agentconfiging` → `dist/cli/index.js` |
 | Files whitelist | `"files": ["dist"]` (plus npm-implicit LICENSE/README/package.json) |
 
@@ -45,10 +45,14 @@ claims check out against the repo:
 
 ### Gaps found during this assessment
 
-- **`package.json` is missing `repository`, `bugs`, `homepage`, `keywords`, and `author`.** The missing `repository` field is not cosmetic: `npm publish --provenance` **fails** when `repository.url` is absent or does not match the CI repo. As written, the provenance workflow in `publish.yml` will error on first run.
+- **`package.json` now includes `repository`, `bugs`, and `homepage`.** The
+  repository URL matches the GitHub remote, so package metadata no longer blocks
+  `npm publish --provenance`. `author` and `keywords` are still missing.
 - No `SECURITY.md`, no `CHANGELOG.md`, no `CONTRIBUTING.md`, no `.github/ISSUE_TEMPLATE/`.
-- CI (`.github/workflows/ci.yml`) runs on `ubuntu-latest` only (Node 20.x/22.x) and does **not** run `npm run e2e` — the packaging smoke gate only runs in the publish workflow.
-- No macOS/Windows CI coverage despite two native optional deps.
+- CI (`.github/workflows/ci.yml`) runs the complete release gate on Node 20.x
+  and 22.x across `ubuntu-latest` and `macos-latest`.
+- Windows remains outside the claimed matrix; its optional-native-dependency and
+  path behavior is best-effort until a Windows job is added.
 
 ---
 
@@ -74,15 +78,12 @@ Policy after launch (document in README or CONTRIBUTING):
 
 ```bash
 npm ci                # from lockfile, clean node_modules
-npm run lint          # eslint + prettier --check
-npm run typecheck     # tsc --noEmit
-npm test              # vitest run
-npm run build         # tsup + vite build web
-npm run e2e           # pack → clean install → report → served UI
+npm run release:gate  # lint → typecheck → test → build → packaging e2e → browser e2e
 ```
 
-- [ ] All six pass locally on the exact commit to be tagged.
-- [ ] CI green on `main` for that commit (Node 20.x and 22.x).
+- [ ] The release gate passes locally on the exact commit to be tagged. It uses
+  npm scripts/direct binaries, not an editor, RTK, or proxy wrapper.
+- [ ] CI green on `main` for that commit (Node 20.x and 22.x on Linux and macOS).
 - [ ] Merge or explicitly defer the `code-review-fixes` branch — do not tag a release while review fixes sit unmerged.
 
 ### 3.2 Package contents verification
@@ -100,25 +101,28 @@ The e2e script covers pack→install→report. Before launch, additionally test 
 - [ ] In a real repo with Claude Code config: full launch, inspector renders, terminal (PTY) works, a write shows a diff preview.
 - [ ] With optional deps failing to build (simulate: `npm install --omit=optional` of the tarball): `launch` and `report` still work; features needing `node-pty`/`better-sqlite3` degrade with a clear message rather than crash.
 - [ ] Cold npx cache: `npx --ignore-existing`-style fresh fetch after publish (`npx agentconfiging@latest report`) — this is the post-publish smoke in PUBLISHING.md; keep it.
-- [ ] Node 20 (minimum) and Node 22/24 (current) at least once each.
+- [ ] Node 20.19 (minimum) and Node 22 (current supported line) at least once each.
 
 ### 3.4 Cross-platform notes
 
-- **macOS** — primary dev platform; covered by local testing. Verify browser auto-open uses `open` correctly.
-- **Linux** — CI platform; run one manual `npx` launch on Linux (headless: verify it prints the URL and doesn't hang when no browser can open).
+- **macOS and Linux** — every push and pull request runs the full gate on both
+  Node lines. GitHub-hosted runner Chrome is located explicitly, its version is
+  printed, and absence fails the job before `e2e:browser`; there is no skip path.
 - **Windows** — **currently untested anywhere.** Risks specific to this codebase:
   - `node-pty` on Windows needs prebuilds (or windows-build-tools); it's optional, so the terminal must degrade gracefully — verify the degradation path on Windows, not just the absence path on macOS.
   - Path handling: the static-file traversal guard already handles `\` separators (good sign of intent); verify scanner/global-scope paths (`~/.claude` → `%USERPROFILE%`) resolve on Windows.
   - `127.0.0.1` binding and browser open (`start` vs `open` vs `xdg-open`).
-  - Recommendation: add `windows-latest` and `macos-latest` to the CI matrix (build + test at minimum, e2e if feasible) **before** launch, or explicitly state Windows support status in the README ("best-effort") if deferring.
+  - Windows remains an explicit limitation: add `windows-latest` after the CDP
+    launcher and optional-native-dependency behavior are verified there.
 
 ---
 
 ## 4. npm Publishing Hygiene
 
-- [ ] **Fix `package.json` metadata (launch-blocking for provenance):**
-  - `repository`: `{ "type": "git", "url": "git+https://github.com/junoddev/agentconfiging.git" }` — required for `npm publish --provenance`.
+- [x] **Repository metadata required for provenance is present:**
+  - `repository`: `{ "type": "git", "url": "git+https://github.com/junoddev/agentconfiging.git" }`.
   - `bugs`: `https://github.com/junoddev/agentconfiging/issues`; `homepage`: repo README URL.
+- [ ] **Add the remaining optional package metadata:**
   - `author`: `Aaron Junod`.
   - `keywords`: e.g. `["ai", "agents", "claude-code", "cursor", "copilot", "codex", "agent-config", "mcp", "claude", "developer-tools", "cli", "config"]` — this is the primary lever for npm search discoverability.
 - [ ] **Provenance**: publish only via the tag-driven workflow (`publish.yml` already passes `--provenance` and requests `id-token: write`). Never local-publish the launch release — provenance can't be added retroactively.
@@ -170,20 +174,24 @@ exists** and **what to double-check** before strangers run it.
 
 ## 6. CI/CD Recommendations
 
-Already in place and good:
+Current release gate:
 
-- `ci.yml`: lint/typecheck/test/build on push + PR, Node 20.x/22.x, Ubuntu.
-- `publish.yml`: tag-driven (`v*.*.*`), full gate chain including e2e, OIDC provenance publish, inert until `NPM_TOKEN` exists.
+- `npm run release:gate` is the one command for lint, typecheck, unit tests,
+  build, packed-install e2e, and real-browser CDP e2e.
+- `ci.yml` runs that command on Node 20.x/22.x and Ubuntu/macOS for pushes and
+  pull requests. Chrome setup is explicit and must succeed.
+- `publish.yml` invokes the identical command before npm publish, on Node 22 and
+  Ubuntu with the same explicit Chrome check.
 
-Recommended changes:
+Recommended follow-ups:
 
-1. **Add `npm run e2e` to `ci.yml`** — today the packaging smoke only runs at publish time, which is the worst moment to discover a packaging regression. (Launch-blocking: cheap, high value.)
-2. **Extend the CI matrix to `macos-latest` and `windows-latest`** (build + test; e2e where practical). At minimum do this once manually pre-launch and add to CI post-launch.
-3. **GitHub Release automation**: extend `publish.yml` (or add a job) so a `v*` tag also creates a GitHub Release with generated notes (`gh release create "$TAG" --generate-notes` or `softprops/action-gh-release`). Keeps npm version, git tag, and release notes atomic.
-4. **Changelog discipline**: adopt Keep a Changelog format in `CHANGELOG.md`; the publish workflow can lift the tag's section into the GitHub Release body. Full release-please/changesets automation is overkill for a single-package repo at 0.x — revisit if release cadence grows.
-5. **Pin workflow actions by SHA** (supply-chain hygiene for a security-conscious tool): `actions/checkout@<sha>`, `actions/setup-node@<sha>`.
-6. **Switch `NPM_TOKEN` to npm Trusted Publishing (OIDC)** when convenient — removes the long-lived secret; the workflow already has `id-token: write`.
-7. Optional post-launch: a scheduled weekly CI run to catch upstream/dependency breakage between releases; Dependabot or Renovate for dependency PRs.
+1. **Add Windows coverage** once Chrome location and native optional dependency
+   behavior are proven there; Windows is not part of the current support claim.
+2. **GitHub Release automation**: extend `publish.yml` (or add a job) so a `v*` tag also creates a GitHub Release with generated notes (`gh release create "$TAG" --generate-notes` or `softprops/action-gh-release`). Keeps npm version, git tag, and release notes atomic.
+3. **Changelog discipline**: adopt Keep a Changelog format in `CHANGELOG.md`; the publish workflow can lift the tag's section into the GitHub Release body. Full release-please/changesets automation is overkill for a single-package repo at 0.x — revisit if release cadence grows.
+4. **Pin workflow actions by SHA** (supply-chain hygiene for a security-conscious tool): `actions/checkout@<sha>`, `actions/setup-node@<sha>`.
+5. **Switch `NPM_TOKEN` to npm Trusted Publishing (OIDC)** when convenient — removes the long-lived secret; the workflow already has `id-token: write`.
+6. Optional post-launch: a scheduled weekly CI run to catch upstream/dependency breakage between releases; Dependabot or Renovate for dependency PRs.
 
 ---
 
@@ -204,20 +212,22 @@ None of these exist yet; all are plain-file additions:
 
 ### Launch-blocking (do before `git tag v0.1.0`)
 
-1. [ ] **Add `repository` (+ `bugs`, `homepage`, `author`, `keywords`) to `package.json`** — provenance publish fails without `repository`; keywords gate discoverability. (§4)
+1. [ ] **Add `author` and `keywords` to `package.json`** — repository, bugs,
+   and homepage metadata are present, and provenance is unblocked; keywords
+   improve npm discoverability. (§4)
 2. [ ] **Decide the npm name** (unscoped `agentconfiging` vs `@capabletooling/agentconfiging`, bead `agentconfig-fy8.3`) and set `NPM_TOKEN` (or Trusted Publishing) on the repo. (§4)
 3. [ ] **Merge or resolve `code-review-fixes`**; tag only a commit that is green on `main`. (§3.1)
 4. [ ] **Security double-check pass** (§5): redaction fixture sweep incl. diff/WS paths, token-never-logged + PTY env scrub check, SSRF denylist edge cases (IPv6/mapped/link-local/metadata) and registry-client coverage, checksum enforcement on installs, daemon posture.
 5. [ ] **Add `SECURITY.md`** and enable private vulnerability reporting. (§7)
-6. [ ] **Full gate run + pack verification** on the release commit: lint/typecheck/test/build/e2e, `npm pack --dry-run` contents review. (§3.1–3.2)
+6. [ ] **Full gate run + pack verification** on the release commit: `npm run release:gate`, `npm pack --dry-run` contents review. (§3.1–3.2)
 7. [ ] **Manual npx cold-start matrix**: empty dir, real repo, `--omit=optional` degradation, Node 20 + 22; at least one Linux run and one Windows attempt (or an explicit Windows-support statement in README). (§3.3–3.4)
-8. [ ] **Add `npm run e2e` to `ci.yml`.** (§6)
+8. [ ] **Confirm the first full CI matrix run is green once a GitHub remote exists.** (§6)
 9. [ ] **Seed `CHANGELOG.md` with the 0.1.0 entry**; fix any relative image links in README for npm rendering. (§4, §7)
 10. [ ] **Publish via the tag → CI → provenance path** (never local for the launch), then post-publish smoke: `npx agentconfiging@latest report` in a scratch repo; create the GitHub Release.
 
 ### Post-launch (fast follow, first 2–4 weeks)
 
-- [ ] macOS + Windows CI matrix; pin actions by SHA. (§6)
+- [ ] Windows CI matrix; pin actions by SHA. (§6)
 - [ ] GitHub Release automation from tags; changelog-to-release-notes wiring. (§6)
 - [ ] Issue templates + config.yml. (§7)
 - [ ] `CONTRIBUTING.md`. (§7)

@@ -70,6 +70,11 @@ file ownership per in-flight agent; on conflict, serialize.
 
 ## Quality gates (before closing any bead)
 
+`npm run release:gate` is the single release valve. It runs, without editor or
+RTK proxy wrappers, lint, typecheck, unit tests, build, the packed-install e2e,
+and the headless-Chrome browser e2e. A release commit is publishable only when
+that command and the matching CI matrix are green.
+
 1. `npm test` — all green, including the bead's new tests. Engine work is
    fixture-driven: tests come from `fixtures/`, not mocks.
 2. `npm run lint && npm run typecheck` — clean.
@@ -77,6 +82,8 @@ file ownership per in-flight agent; on conflict, serialize.
    run the real built server and `dist/web` bundle in headless Chrome via CDP.
    Requires Google Chrome or Chromium on `PATH`/standard install path, or set
    `CHROME_PATH=/path/to/chrome`.
+   CI explicitly resolves Chrome, prints its version, and fails if it is absent;
+   the browser gate never silently skips.
 4. Epic demo gates (SPEC.md §6) are release valves: E1 closes only when
    `agentconfiging report` works on a real repo; E4 only when the read-only UI
    demos end-to-end; etc.

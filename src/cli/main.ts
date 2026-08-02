@@ -105,6 +105,20 @@ export async function runCli(
       code = await daemon({ once: opts.once === true }, { io });
     });
 
+  // Commander 14 treats an unknown root command as an excess argument because
+  // the root command has a default action. Preserve the clearer command name in
+  // the diagnostic while remaining on the Node-20-compatible Commander line.
+  const rootBooleanOptions = new Set(['--no-open', '--detach']);
+  const firstArg = argv.find((arg) => !rootBooleanOptions.has(arg));
+  if (
+    firstArg !== undefined &&
+    !firstArg.startsWith('-') &&
+    !['launch', 'report', 'daemon'].includes(firstArg)
+  ) {
+    io.stderr(`error: unknown command '${firstArg}'\n\n${program.helpInformation()}`);
+    return EX_USAGE;
+  }
+
   try {
     await program.parseAsync([...argv], { from: 'user' });
   } catch (err) {

@@ -187,7 +187,7 @@ provenance before writing files.
 
 ## Requirements
 
-- **Node.js >= 20**
+- **Node.js >= 20.19** (CI covers current Node 20.x and 22.x on Linux and macOS)
 - **Google Chrome or Chromium** is required only for the real-browser e2e gate:
   `npm run e2e:browser`. Set `CHROME_PATH=/path/to/chrome` when it is not in a
   standard install location.

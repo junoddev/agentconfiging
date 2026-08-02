@@ -8,7 +8,9 @@ the runbook. Nothing here has been executed.
 
 - `version`: `0.1.0`, `publishConfig.access`: `public`, `license`: MIT, `bin`: `agentconfiging`.
 - Tarball verified: `npm pack --dry-run` → 21 files (`dist/{cli,server,core}`, `dist/web`, `LICENSE`, `README.md`), ~693 kB, no `src`/tests/maps/fixtures.
-- `prepublishOnly` runs a fresh `npm run build`.
+- `prepublishOnly` runs a fresh `npm run build`; the tag workflow runs the
+  complete `npm run release:gate` before invoking publish, including
+  `e2e:browser` against Chrome.
 - Optional native deps (`better-sqlite3`, `node-pty`) are in `optionalDependencies` — install and the core CLI succeed without them (proven by `npm run e2e`).
 - `npm run e2e` (packaging smoke: pack → clean-dir install → `agentconfiging report` → server serves the bundled UI) **passes**.
 - License/originality audit: `docs/LICENSE-AUDIT.md` (all deps permissive, no copied code).
@@ -29,13 +31,15 @@ does this on a version tag:
 1. Add the repo secret `NPM_TOKEN` (an npm automation token with publish rights).
 2. Bump `version` in `package.json` if needed and commit.
 3. Tag and push: `git tag v0.1.0 && git push origin v0.1.0`.
-4. The workflow runs lint/typecheck/test/build/e2e, then `npm publish --provenance --access public`.
+4. The workflow locates Chrome and runs `npm run release:gate` (the same
+   complete gate used by CI, including `e2e:browser` against Chrome), then
+   `npm publish --provenance --access public`.
 
 ## Alternative: manual local publish (no provenance)
 
 ```bash
 npm login                # authenticate the publishing account
-npm run build && npm run e2e   # final local gate
+npm run release:gate     # complete gate, including e2e:browser (requires Chrome/CHROME_PATH)
 npm publish --dry-run    # verify contents one more time
 npm publish              # ← the irreversible step; publishConfig sets access:public
 ```

@@ -3,9 +3,17 @@
   "version": "0.1.0",
   "description": "Local control center for AI agent configuration. `npx agentconfiging` opens a web UI over the agent setup in your repo.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/junoddev/agentconfiging.git"
+  },
+  "bugs": {
+    "url": "https://github.com/junoddev/agentconfiging/issues"
+  },
+  "homepage": "https://github.com/junoddev/agentconfiging#readme",
   "type": "module",
   "engines": {
-    "node": ">=24.15.0"
+    "node": ">=20.19.0"
   },
   "bin": {
     "agentconfiging": "dist/cli/index.js"
@@ -28,6 +36,7 @@
     "test": "vitest run",
     "e2e": "node scripts/e2e-smoke.mjs",
     "e2e:browser": "node scripts/e2e-browser.mjs",
+    "release:gate": "npm run lint && npm run typecheck && npm test && npm run build && npm run e2e && npm run e2e:browser",
     "lint": "eslint . && prettier --check .",
     "typecheck": "tsc --noEmit"
   },
@@ -38,10 +47,10 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
-    "concurrently": "^10.0.4",
+    "concurrently": "^9.2.1",
     "eslint": "^10.8.0",
     "eslint-config-prettier": "^10.1.8",
-    "jsdom": "^30.0.1",
+    "jsdom": "^27.0.0",
     "prettier": "^3.9.6",
     "react-dom": "^19.2.8",
     "tsup": "^8.5.1",
@@ -56,15 +65,15 @@
     "@xterm/xterm": "^6.0.0",
     "@xyflow/react": "^12.11.2",
     "chokidar": "^5.0.0",
-    "commander": "^15.0.0",
+    "commander": "^14.0.0",
     "hono": "^4.12.32",
-    "ink": "^7.1.1",
+    "ink": "^6.0.0",
     "react": "^19.2.8",
     "smol-toml": "^1.7.1",
     "yaml": "^2.9.0"
   },
   "optionalDependencies": {
-    "better-sqlite3": "^13.0.1",
+    "better-sqlite3": "^12.0.0",
     "node-pty": "^1.1.0"
   },
   "publishConfig": {

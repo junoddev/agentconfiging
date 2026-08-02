@@ -6,10 +6,13 @@ on:
 
 jobs:
   ci:
-    runs-on: ubuntu-latest
+    name: Node ${{ matrix.node-version }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        node-version: [24.x]
+        os: [ubuntu-latest, macos-latest]
+        node-version: [20.x, 22.x]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -17,7 +20,15 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: npm
       - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
+      - name: Locate Chrome for the headless browser gate
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            chrome="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+          else
+            chrome="$(command -v google-chrome || command -v google-chrome-stable || true)"
+          fi
+          test -x "$chrome" || { echo "Chrome is required but was not found" >&2; exit 1; }
+          echo "CHROME_PATH=$chrome" >> "$GITHUB_ENV"
+          "$chrome" --version
+      - run: npm run release:gate

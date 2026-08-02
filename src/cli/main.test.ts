@@ -48,6 +48,18 @@ describe('runCli usage errors (EX_USAGE = 64, stderr only)', () => {
     expect(launch).not.toHaveBeenCalled();
   });
 
+  it('diagnoses an unknown command after recognized root options', async () => {
+    const launch = vi.fn(async () => 0);
+    const { code, stdout, stderr } = await cli(['--no-open', '--detach', 'frobnicate'], {
+      launch,
+    });
+    expect(code).toBe(EX_USAGE);
+    expect(stdout).toBe('');
+    expect(stderr).toContain("unknown command 'frobnicate'");
+    expect(stderr).toContain('Usage:');
+    expect(launch).not.toHaveBeenCalled();
+  });
+
   it('unknown report flag exits 64, distinct from the warnings-found exit 1', async () => {
     const { code, stdout, stderr } = await cli(['report', '--nope']);
     expect(code).toBe(EX_USAGE);
