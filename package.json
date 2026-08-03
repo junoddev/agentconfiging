@@ -10,7 +10,16 @@
   "bugs": {
     "url": "https://github.com/junoddev/agentconfiging/issues"
   },
-  "homepage": "https://github.com/junoddev/agentconfiging#readme",
+  "homepage": "https://agentconfig.ing",
+  "keywords": [
+    "ai-agents",
+    "agent-config",
+    "claude-code",
+    "codex",
+    "cursor",
+    "mcp",
+    "developer-tools"
+  ],
   "type": "module",
   "engines": {
     "node": ">=20.19.0"

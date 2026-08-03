@@ -12,6 +12,8 @@ export default tseslint.config(
       '.beads/',
       'coverage/',
       '.qa-screenshots/',
+      'site/.astro/',
+      'site/dist/',
     ],
   },
   js.configs.recommended,

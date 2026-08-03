@@ -1,0 +1,147 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const github = 'https://github.com/junoddev/agentconfiging';
+const docs = `${github}/blob/main/docs/USAGE.md`;
+const faqs = [
+  ['Does anything leave my machine?', 'No. The product binds to localhost, uses a per-session token, and has no account, telemetry, or hosted component.'],
+  ['Do I need an account or API key?', 'No. Run the command in a repository. There is no signup and no product API key.'],
+  ['What runtimes does it detect?', 'Claude Code, Cursor, GitHub Copilot, Codex, Continue, Aider, Gemini CLI, and opencode. Seven additional instruction formats are available as sync targets.'],
+  ['Is it safe to let it write config?', 'Writes are path-guarded and dry-run first. You review a unified diff before committing, and deletes go to trash.'],
+  ['Why might search or the terminal be unavailable?', 'Those two features use optional native modules. The core inspector, editors, sync, catalog, and report workflow still work without them.'],
+  ['Can I use it in CI?', 'Yes. agentconfiging report emits structured JSON and returns severity-based exit codes.'],
+  ['What does this site collect?', 'Nothing. It has no analytics scripts, cookies, forms, accounts, or server-side code.'],
+];
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'SoftwareApplication', name: 'agentconfiging', applicationCategory: 'DeveloperApplication',
+      operatingSystem: 'macOS, Linux, Windows', url: 'https://agentconfig.ing', codeRepository: github,
+      license: 'https://opensource.org/license/mit', offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    },
+    { '@type': 'FAQPage', mainEntity: faqs.map(([name, text]) => ({ '@type': 'Question', name, acceptedAnswer: { '@type': 'Answer', text } })) },
+  ],
+};
+---
+
+<BaseLayout>
+  <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+  <header class="topbar">
+    <div class="shell topbar-inner">
+      <a class="brand" href="/">agentconfig<span class="brand-dot">.</span>ing</a>
+      <nav class="nav" aria-label="Primary">
+        <a href="#features">Features</a><a href="#security">Security</a><a href="#ci">CI</a><a href="#faq">FAQ</a>
+      </nav>
+      <button class="icon-button" id="theme-toggle" type="button" aria-label="Toggle color theme">Paper / Ink</button>
+    </div>
+  </header>
+  <main>
+    <div class="shell hero" id="hero">
+      <p class="eyebrow">Local control center for AI agent configuration</p>
+      <h1>Your AI agents have config. Now it has a control center.</h1>
+      <p class="lede">Run one command in any repo to inspect every detected runtime, find real configuration problems, and apply fixes through a diff you review. Nothing leaves your machine.</p>
+      <div class="command-row">
+        <div class="command" aria-label="Command to run"><span class="prompt">$</span><span>npx agentconfiging</span></div>
+        <button class="btn btn-primary" id="copy-command" type="button" data-command="npx agentconfiging">Copy command</button>
+      </div>
+      <div class="hero-actions"><a class="btn btn-secondary" href={github}>View on GitHub</a><a class="btn btn-secondary" href={docs}>Read the docs</a></div>
+      <p class="reassurance"><span class="live"></span>Runs on your machine · no account · nothing uploaded · MIT</p>
+    </div>
+
+    <section id="demo"><div class="shell">
+      <div class="section-head"><p class="eyebrow">Detected now</p><h2>One view over the configuration you already have.</h2></div>
+      <div class="console" aria-label="Example agentconfiging scan output">
+        <div class="console-bar"><span class="live"></span>agentconfiging / project overview</div>
+        <div class="console-body">
+          <div class="console-line"><span>CLAUDE</span><span>CLAUDE.md · settings.json · 4 skills</span><span class="ok">DETECTED</span></div>
+          <div class="console-line"><span>CODEX</span><span>AGENTS.md · config.toml · 2 rules</span><span class="ok">DETECTED</span></div>
+          <div class="console-line"><span>CURSOR</span><span>.cursor/rules · mcp.json</span><span class="ok">DETECTED</span></div>
+          <div class="console-line"><span>FINDINGS</span><span>broken import · rules drift · secret redacted</span><span>3 REVIEW</span></div>
+        </div>
+      </div>
+    </div></section>
+
+    <section id="how-it-works"><div class="shell">
+      <div class="section-head"><p class="eyebrow">How it works</p><h2>Run. Inspect. Fix.</h2></div>
+      <div class="grid">
+        <article class="card"><span class="card-index">01 / RUN</span><h3>Open locally</h3><p>The CLI starts on a random localhost port with a per-session bearer token.</p></article>
+        <article class="card"><span class="card-index">02 / INSPECT</span><h3>See the whole repo</h3><p>Detected runtimes, parsed artifacts, MCP servers, instructions, hooks, and findings in one UI.</p></article>
+        <article class="card"><span class="card-index">03 / FIX</span><h3>Review every write</h3><p>Machine-fixable findings produce an explicit diff before anything changes on disk.</p></article>
+      </div>
+    </div></section>
+
+    <section id="features"><div class="shell">
+      <div class="section-head"><p class="eyebrow">Feature map</p><h2>The same mental model from first visit to daily use.</h2></div>
+      <div class="grid">
+        <article class="card"><span class="card-index">INSPECT</span><h3>Find what matters</h3><p>Browse every artifact and run analyzers for broken imports, stale rules, risky settings, and more.</p></article>
+        <article class="card"><span class="card-index">EDIT</span><h3>Change with context</h3><p>Edit instructions, hooks, MCP servers, skills, rules, and settings with a dry-run diff.</p></article>
+        <article class="card"><span class="card-index">SYNC</span><h3>Keep one source</h3><p>Generate runtime instruction formats from a chosen source and turn drift into a visible finding.</p></article>
+        <article class="card"><span class="card-index">CATALOG</span><h3>Install traceably</h3><p>Use an offline-first catalog with checksums, provenance, and reviewable changes.</p></article>
+        <article class="card"><span class="card-index">SESSIONS</span><h3>Read local history</h3><p>Understand activity and context health from redacted histories already on your machine.</p></article>
+        <article class="card"><span class="card-index">OPERATE</span><h3>Stay in the loop</h3><p>Work through git, terminals, and visual pipelines without losing sight of the underlying files.</p></article>
+      </div>
+    </div></section>
+
+    <section id="runtimes"><div class="shell">
+      <div class="section-head"><p class="eyebrow">Runtime coverage</p><h2>Eight detected. Seven more instruction targets.</h2></div>
+      <div class="runtime-grid">
+        {['Claude Code','Cursor','GitHub Copilot','Codex','Continue','Aider','Gemini CLI','opencode'].map((name) => <div class="pill primary">{name}</div>)}
+        {['Cline','Windsurf','Zed','Amazon Q','Junie','Roo','Qodo'].map((name) => <div class="pill">{name}</div>)}
+      </div>
+    </div></section>
+
+    <section id="security"><div class="shell">
+      <div class="section-head"><p class="eyebrow">Security model</p><h2>Private by architecture, not by policy.</h2></div>
+      <div class="security">
+        <div class="notice"><h3>Nothing leaves your machine.</h3><p>No hosted backend. No telemetry. No account. Secrets are redacted server-side before config content reaches the browser.</p></div>
+        <ul class="checklist"><li>127.0.0.1 on a random port</li><li>Per-session bearer token</li><li>Canonical-path write guards</li><li>Dry-run diffs before writes</li><li>Deletes move to trash</li><li>PTY disabled in daemon mode</li></ul>
+      </div>
+    </div></section>
+
+    <section id="ci"><div class="shell">
+      <div class="section-head"><p class="eyebrow">Report for CI</p><h2>Configuration quality as an exit code.</h2></div>
+      <div class="ci">
+        <pre><code><span class="ok">$</span> npx agentconfiging report --pretty
+&#123;
+  "findings": [...],
+  "stats": &#123; ... &#125;,
+  "localOnly": false
+&#125;</code></pre>
+        <div class="code-table" aria-label="Report exit codes"><div><b>0</b><span>no warning or error</span></div><div><b>1</b><span>warning found</span></div><div><b>2</b><span>error found</span></div><div><b>3</b><span>engine failure</span></div><div><b>64</b><span>usage error</span></div></div>
+      </div>
+    </div></section>
+
+    <section id="faq"><div class="shell">
+      <div class="section-head"><p class="eyebrow">FAQ</p><h2>Before you run it.</h2></div>
+      <div class="faq">{faqs.map(([question, answer]) => <details><summary>{question}</summary><p>{answer}</p></details>)}</div>
+    </div></section>
+  </main>
+  <footer><div class="shell footer"><a class="brand" href="/">agentconfig<span class="brand-dot">.</span>ing</a><a href={github}>GitHub</a><a href="https://www.npmjs.com/package/agentconfiging">npm</a><a href={docs}>Docs</a><span>MIT</span></div></footer>
+
+  <script>
+    const copy = document.querySelector<HTMLButtonElement>('#copy-command');
+    copy?.addEventListener('click', async () => {
+      const command = copy.dataset.command || 'npx agentconfiging';
+      try {
+        await navigator.clipboard.writeText(command);
+      } catch {
+        const fallback = document.createElement('textarea');
+        fallback.value = command;
+        fallback.style.position = 'fixed';
+        fallback.style.opacity = '0';
+        document.body.append(fallback);
+        fallback.select();
+        document.execCommand('copy');
+        fallback.remove();
+      }
+      copy.textContent = 'Copied';
+      window.setTimeout(() => { copy.textContent = 'Copy command'; }, 1800);
+    });
+    document.querySelector('#theme-toggle')?.addEventListener('click', () => {
+      const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      document.documentElement.dataset.theme = next;
+      try { localStorage.setItem('agentconfiging-theme', next); } catch {}
+    });
+  </script>
+</BaseLayout>

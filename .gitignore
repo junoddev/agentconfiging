@@ -8,6 +8,8 @@
 # Node / build output
 node_modules/
 dist/
+site/.astro/
+.wrangler/
 coverage/
 *.tsbuildinfo
 
