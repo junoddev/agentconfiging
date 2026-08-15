@@ -151,6 +151,15 @@ describe('runCli launch dispatch', () => {
     expect(calls).toEqual([{ open: false, detach: false }]);
   });
 
+  it('--accept-all opts the launch into all-interface binding', async () => {
+    const launch = vi.fn(async () => 0);
+    await cli(['launch', '--accept-all'], { launch });
+    expect(launch).toHaveBeenCalledWith(
+      { open: true, detach: false, acceptAll: true },
+      expect.anything(),
+    );
+  });
+
   it('propagates the launch exit code', async () => {
     const { code } = await cli([], { launch: async () => 1 });
     expect(code).toBe(1);

@@ -89,6 +89,8 @@ export interface AppConfig {
    * Host check (fail-closed).
    */
   port: () => number;
+  /** Explicit unsafe mode: accept arbitrary Host and Origin values. */
+  acceptAll?: boolean;
   /** Directory the static app shell is served from (dist/web). */
   distDir: string;
   /**
@@ -308,7 +310,7 @@ export function createApp(config: AppConfig): Hono {
   // Host allowlist on EVERY request (DNS-rebinding defense).
   app.use('*', async (c, next) => {
     const host = c.req.header('host');
-    if (!host || !allowedHosts().has(host.toLowerCase())) {
+    if (!config.acceptAll && (!host || !allowedHosts().has(host.toLowerCase()))) {
       return jsonError(403, 'forbidden');
     }
     await next();
@@ -317,7 +319,7 @@ export function createApp(config: AppConfig): Hono {
   // /api/*: Origin/CSRF gate + bearer token; responses are never cached.
   app.use('/api/*', async (c, next) => {
     const origin = c.req.header('origin');
-    if (origin !== undefined && !allowedOrigins().has(origin.toLowerCase())) {
+    if (!config.acceptAll && origin !== undefined && !allowedOrigins().has(origin.toLowerCase())) {
       return jsonError(403, 'forbidden');
     }
     // State-changing methods must PROVE same-origin (CSRF): a valid Origin

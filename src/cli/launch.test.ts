@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AppProps } from './app.js';
 import {
   buildOpenCommand,
+  sampleUrl,
   runLaunch,
   type LaunchDeps,
   type LaunchOptions,
@@ -29,7 +30,7 @@ interface Harness {
   deps: LaunchDeps;
   stdout: () => string;
   stderr: () => string;
-  serverCalls: { root: string }[];
+  serverCalls: { root: string; acceptAll?: boolean }[];
   spawnCalls: { cmd: string; args: readonly string[] }[];
   close: ReturnType<typeof vi.fn>;
   logDir: string;
@@ -42,7 +43,7 @@ interface Harness {
 function makeHarness(overrides: Partial<LaunchDeps> = {}): Harness {
   const out: string[] = [];
   const err: string[] = [];
-  const serverCalls: { root: string }[] = [];
+  const serverCalls: { root: string; acceptAll?: boolean }[] = [];
   const spawnCalls: { cmd: string; args: readonly string[] }[] = [];
   const close = vi.fn(async () => undefined);
   const logDir = makeTempDir();
@@ -58,7 +59,7 @@ function makeHarness(overrides: Partial<LaunchDeps> = {}): Harness {
       stderr: (chunk) => void err.push(chunk),
     },
     serverFactory: async (opts) => {
-      serverCalls.push({ root: opts.root });
+      serverCalls.push({ root: opts.root, ...(opts.acceptAll ? { acceptAll: true } : {}) });
       serverInstances = opts.instances;
       return handle;
     },
@@ -145,6 +146,24 @@ describe('runLaunch (plain, non-TTY)', () => {
     await runLaunch({ open: false, detach: false }, h.deps);
     expect(h.spawnCalls).toEqual([]);
     expect(h.stdout()).toContain(URL);
+  });
+
+  it('--accept-all prints a sample URL for every discovered host', async () => {
+    const h = makeHarness({
+      discoverHosts: async () => ['workstation.local', '192.0.2.10', '2001:db8::1'],
+    });
+    await runLaunch({ open: false, detach: false, acceptAll: true }, h.deps);
+    expect(h.serverCalls).toEqual([{ root: h.cwd, acceptAll: true }]);
+    expect(h.stdout()).toContain('ACCEPT ALL · exposed on every network interface');
+    expect(h.stdout()).toContain('http://workstation.local:4242/#token=tok');
+    expect(h.stdout()).toContain('http://192.0.2.10:4242/#token=tok');
+    expect(h.stdout()).toContain('http://[2001:db8::1]:4242/#token=tok');
+    const onDisk = fs.readFileSync(path.join(h.logDir, '2026-07-26T12-00-00.log'), 'utf-8');
+    expect(onDisk).not.toContain('token=');
+  });
+
+  it('formats IPv6 sample URLs with brackets', () => {
+    expect(sampleUrl('2001:db8::1', 4242, 'tok')).toBe('http://[2001:db8::1]:4242/#token=tok');
   });
 
   it('a failing engine run degrades to a warning, not a crash', async () => {

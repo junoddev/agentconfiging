@@ -151,7 +151,10 @@ Nothing is scanned until asked.
 A localhost server with filesystem write access and a PTY must defend against the
 browser ecosystem (DNS rebinding, CSRF from random web pages):
 
-- Bind `127.0.0.1` only, random ephemeral port.
+- Bind `127.0.0.1` by default, random ephemeral port. The explicit unsafe
+  `--accept-all` launch mode binds `0.0.0.0`, accepts arbitrary Host/Origin
+  values, and advertises token-bearing sample URLs for locally discovered
+  hostnames and addresses; bearer-token authentication remains mandatory.
 - Per-session bearer token generated at launch, embedded in the opened URL;
   every API/WS request must present it. Strict `Origin`/`Host` checks; no CORS.
 - Writes restricted to known config paths (project root + agent home dirs);

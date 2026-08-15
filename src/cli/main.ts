@@ -31,7 +31,8 @@ export interface CliDeps {
 function addLaunchOptions(command: Command): Command {
   return command
     .option('--no-open', 'do not open the browser (URL is still printed)')
-    .option('--detach', 'quitting the UI leaves the server running');
+    .option('--detach', 'quitting the UI leaves the server running')
+    .option('--accept-all', 'listen on all interfaces and accept any hostname (unsafe)');
 }
 
 export async function runCli(
@@ -45,12 +46,17 @@ export async function runCli(
 
   // Root options are parsed greedily even when they appear after the
   // `launch` subcommand name, so merge root + subcommand option bags.
-  const runLaunchAction = async (opts: { open?: boolean; detach?: boolean }): Promise<void> => {
-    const rootOpts = program.opts<{ open?: boolean; detach?: boolean }>();
+  const runLaunchAction = async (opts: {
+    open?: boolean;
+    detach?: boolean;
+    acceptAll?: boolean;
+  }): Promise<void> => {
+    const rootOpts = program.opts<{ open?: boolean; detach?: boolean; acceptAll?: boolean }>();
     code = await launch(
       {
         open: rootOpts.open !== false && opts.open !== false,
         detach: rootOpts.detach === true || opts.detach === true,
+        ...(rootOpts.acceptAll === true || opts.acceptAll === true ? { acceptAll: true } : {}),
       },
       io,
     );
@@ -108,7 +114,7 @@ export async function runCli(
   // Commander 14 treats an unknown root command as an excess argument because
   // the root command has a default action. Preserve the clearer command name in
   // the diagnostic while remaining on the Node-20-compatible Commander line.
-  const rootBooleanOptions = new Set(['--no-open', '--detach']);
+  const rootBooleanOptions = new Set(['--no-open', '--detach', '--accept-all']);
   const firstArg = argv.find((arg) => !rootBooleanOptions.has(arg));
   if (
     firstArg !== undefined &&

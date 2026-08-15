@@ -109,7 +109,11 @@ never be uploaded.
 A localhost server with filesystem write access and a terminal has to defend
 against the browser ecosystem. The model is deliberately conservative:
 
-- **Local only.** Binds `127.0.0.1` on a random ephemeral port. No accounts, no
+- **Local by default.** Binds `127.0.0.1` on a random ephemeral port. Pass
+  `--accept-all` to explicitly bind `0.0.0.0`, accept any Host/Origin, and print
+  token-bearing sample URLs for discovered local hostnames and addresses. This
+  exposes the write-capable control center to your network; bearer-token
+  authentication remains required. No accounts, no
   telemetry, no upload — nothing leaves the machine.
 - **Per-session token.** A bearer token is generated at launch and embedded in
   the opened URL; every API and WebSocket request must present it. Strict

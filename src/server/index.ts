@@ -39,9 +39,9 @@ import { WsHub, handleUpgrade } from './ws.js';
 import { PtyManager, handlePtyUpgrade } from './pty.js';
 import { defaultTrashDir } from './trash.js';
 import type { WriteScope } from './pathguard.js';
-import { LOOPBACK_HOST, resolveServerOptions } from './options.js';
+import { ALL_INTERFACES_HOST, LOOPBACK_HOST, resolveServerOptions } from './options.js';
 
-export { LOOPBACK_HOST, resolveServerOptions } from './options.js';
+export { ALL_INTERFACES_HOST, LOOPBACK_HOST, resolveServerOptions } from './options.js';
 export type { ServerOptions } from './options.js';
 export { createApp } from './app.js';
 export type { AppConfig } from './app.js';
@@ -283,6 +283,8 @@ export interface StartServerOptions {
   instances?: readonly string[];
   /** Bind host — loopback only; anything but 127.0.0.1 is rejected. */
   host?: string;
+  /** Bind all interfaces and accept arbitrary Host/Origin values. */
+  acceptAll?: boolean;
   /** Port to bind; default 0 (OS-assigned random ephemeral port). */
   port?: number;
   /** Static app-shell directory; default <package>/dist/web. */
@@ -358,10 +360,14 @@ function buildWriteScopes(root: string): WriteScope[] {
 }
 
 export async function startServer(opts: StartServerOptions): Promise<RunningServer> {
-  if (opts.host !== undefined && opts.host !== LOOPBACK_HOST) {
+  const acceptedHost = opts.acceptAll ? ALL_INTERFACES_HOST : LOOPBACK_HOST;
+  if (opts.host !== undefined && opts.host !== acceptedHost) {
     throw new Error(`refusing to bind non-loopback host ${opts.host}; only ${LOOPBACK_HOST}`);
   }
-  const options = resolveServerOptions(opts.port === undefined ? {} : { port: opts.port });
+  const options = resolveServerOptions({
+    ...(opts.port === undefined ? {} : { port: opts.port }),
+    acceptAll: opts.acceptAll,
+  });
   const distDir = opts.distDir ?? fileURLToPath(new URL('../../dist/web', import.meta.url));
   const version = packageVersion();
 
@@ -402,6 +408,7 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
   const app = createApp({
     tokenHash,
     port: () => boundPort,
+    acceptAll: opts.acceptAll,
     distDir,
     registry,
     version,
@@ -441,6 +448,7 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
       void handlePtyUpgrade(req, socket, head, {
         tokenHash,
         port: () => boundPort,
+        acceptAll: opts.acceptAll,
         manager: ptyManager,
         registry,
         path: '/api/pty',
@@ -450,6 +458,7 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
     handleUpgrade(req, socket, head, {
       tokenHash,
       port: () => boundPort,
+      acceptAll: opts.acceptAll,
       hub: wsHub,
       path: '/api/ws',
     });

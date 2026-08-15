@@ -58,6 +58,27 @@ describe('startServer contract', () => {
     await expect(startServer({ root: base, host: '0.0.0.0' })).rejects.toThrow(/loopback/);
   });
 
+  it('accept-all explicitly permits binding all interfaces and arbitrary hostnames', async () => {
+    const server = await startServer({
+      root: base,
+      acceptAll: true,
+      host: '0.0.0.0',
+      distDir: dist,
+    });
+    try {
+      const response = await fetch(`http://127.0.0.1:${server.port}/api/health`, {
+        headers: {
+          authorization: `Bearer ${server.token}`,
+          host: 'any-host.example',
+          origin: 'http://any-host.example',
+        },
+      });
+      expect(response.status).toBe(200);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('OS-assigned ports are random-ish: two concurrent servers differ', async () => {
     const [a, b] = await Promise.all([start(), start()]);
     expect(a.port).not.toBe(b.port);

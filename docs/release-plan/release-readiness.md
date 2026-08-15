@@ -152,7 +152,7 @@ exists** and **what to double-check** before strangers run it.
 | Control | Where | Notes |
 |---|---|---|
 | Per-session bearer token, every `/api` request | `src/server/app.ts` | SHA-256 + `timingSafeEqual`; app holds only the hash; token travels in URL fragment then Authorization header; **no** `?token=` fallback |
-| Host allowlist (DNS-rebinding defense) | `src/server/app.ts` | Host must be exactly `127.0.0.1:<port>` / `localhost:<port>`, else 403 |
+| Host allowlist (DNS-rebinding defense) | `src/server/app.ts` | By default Host must be exactly `127.0.0.1:<port>` / `localhost:<port>`, else 403; the explicit unsafe `--accept-all` mode relaxes Host/Origin checks but retains bearer auth |
 | Origin/CSRF gate | `src/server/app.ts` | Origin allowlist on all `/api`; state-changing methods must prove same-origin (Origin or `Sec-Fetch-Site: same-origin`); no CORS headers ever |
 | Security headers | `src/server/app.ts` | `nosniff`, `X-Frame-Options: DENY`, CSP `frame-ancestors 'none'`, `Referrer-Policy: no-referrer` |
 | Static-file hardening | `src/server/app.ts` | Percent-decoded `..` rejection (both separators), realpath canonicalization so symlinks can't escape `distDir` |

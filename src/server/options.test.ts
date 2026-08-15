@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LOOPBACK_HOST, resolveServerOptions } from './options.js';
+import { ALL_INTERFACES_HOST, LOOPBACK_HOST, resolveServerOptions } from './options.js';
 
 describe('resolveServerOptions', () => {
   it('defaults to loopback with a random (OS-assigned) port', () => {
@@ -8,6 +8,13 @@ describe('resolveServerOptions', () => {
 
   it('accepts an explicit port but never changes the host', () => {
     expect(resolveServerOptions({ port: 4321 })).toEqual({ host: '127.0.0.1', port: 4321 });
+  });
+
+  it('binds all IPv4 interfaces only when explicitly requested', () => {
+    expect(resolveServerOptions({ acceptAll: true })).toEqual({
+      host: ALL_INTERFACES_HOST,
+      port: 0,
+    });
   });
 
   it('rejects out-of-range or non-integer ports', () => {

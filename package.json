@@ -1,6 +1,6 @@
 {
   "name": "agentconfiging",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Local control center for AI agent configuration. `npx agentconfiging` opens a web UI over the agent setup in your repo.",
   "license": "MIT",
   "repository": {
