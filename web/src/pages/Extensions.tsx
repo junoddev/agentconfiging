@@ -125,7 +125,7 @@ export function Extensions() {
         <section className="page__section">
           <EmptyState
             title={`No ${inventoryTermLower}`}
-            instruction={`The ${inventoryTermLower} inventory could not be loaded. Reopen agentconfig or try again later.`}
+            instruction={`The ${inventoryTermLower} inventory could not be loaded. Reopen agentconfig.ing or try again later.`}
           />
         </section>
       )}

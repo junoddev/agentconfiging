@@ -498,7 +498,7 @@ export interface CatalogEntryMeta {
 
 /**
  * One installed entry's provenance record for the resolved instance
- * (src/server/provenance.ts, `InstallRecord`). Present for entries agentconfig
+ * (src/server/provenance.ts, `InstallRecord`). Present for entries agentconfig.ing
  * installed; drives the INSTALL vs REMOVE affordance and the installed badge.
  */
 export interface InstalledRecord {

@@ -392,7 +392,7 @@ export function Terminal({
         <section className="page__section">
           <Notice>
             {status === 'error'
-              ? 'terminal unavailable — reopen agentconfig from the CLI'
+              ? 'terminal unavailable — reopen agentconfig.ing from the CLI'
               : (status.reason ?? 'terminal unavailable')}
           </Notice>
         </section>

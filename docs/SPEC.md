@@ -1,4 +1,4 @@
-# agentconfig — Product & Architecture Spec (v1)
+# agentconfig.ing — Product & Architecture Spec (v1)
 
 Status: agreed direction, 2026-07-26. Companion doc: [DESIGN.md](./DESIGN.md).
 
@@ -188,7 +188,7 @@ currently growing) gets the pulse treatment.
 - Also surface the **Claude Code plugin marketplace** (browse, search, install
   counts, one-click install via the `claude` CLI or direct file writes).
 - Install = diff preview → write files → provenance recorded
-  (`installed-by agentconfig from <source>@<version>` frontmatter), so upgrade/
+  (`installed-by agentconfig.ing from <source>@<version>` frontmatter), so upgrade/
   removal are traceable. Checksums verified; registry content is untrusted input.
 
 ## 5. Feature set — the control center
@@ -208,7 +208,7 @@ The complete v1 feature set. "Epic" points into §6.
 | 9 | Plugins & registry | Browse/search the Claude Code plugin marketplace (install counts, one-click install, installed list with version/scope/date) alongside our own registry (§4.5). | E6 |
 | 10 | Git panel | Branch switcher, grouped changes (modified/added/deleted/untracked), conventional-commit helper, push/pull, commit timeline; scoped to the launched repo; refreshes via the watcher, not polling. | E8 |
 | 11 | Embedded terminal | node-pty + xterm.js over authenticated WS; multi-tab, sessions persist across navigation; tabs can launch any detected runtime's CLI, not just `claude`; full ANSI rendering. | E8 |
-| 12 | Pipelines | Visual workflow builder (React Flow): 14 node types (prompt, bash, github-action, http, transform, delay, input, output, git, filter, read-file, write-file, notification, json-extract), `{{input}}`/`{{NodeName}}` templating, async execution with live node status, run history + replay, cron + preset scheduling; scheduler lives in `agentconfig daemon` since npx sessions are ephemeral. | E9 |
+| 12 | Pipelines | Visual workflow builder (React Flow): 14 node types (prompt, bash, github-action, http, transform, delay, input, output, git, filter, read-file, write-file, notification, json-extract), `{{input}}`/`{{NodeName}}` templating, async execution with live node status, run history + replay, cron + preset scheduling; scheduler lives in `agentconfiging daemon` since npx sessions are ephemeral. | E9 |
 | 13 | Session replay | Browse and step through past sessions from the JSONL adapters (§3); tags, markdown export, paginated large sessions, live-session detection with signal pulse; subagent (sidechain) entries rendered distinctly. | E7 |
 | 14 | Templates gallery | 30+ starter configurations across skills/agents/rules/hooks/MCP, shipped as `template`-tagged registry entries; quick-add reachable from every relevant editor page. | E6 |
 | 16 | Context health | Config size budgets, largest context contributors, optimization suggestions; storage maintenance. | E7 |
@@ -216,7 +216,7 @@ The complete v1 feature set. "Epic" points into §6.
 | 18 | Command palette | Cmd+K fuzzy palette: jump to any page, toggle theme, run actions; keyboard nav; Cmd+1..9 page shortcuts shared with rail numbering. | E10 |
 | 19 | Keybindings editor | Visual editor for `~/.claude/keybindings.json`: combos, commands, conditions, chord support, reset to defaults. | E5 |
 | 20 | Onboarding & theming | First-run guided setup, persisted Paper/Ink theme preference, about dialog. | E10 |
-| 21 | Freshness & always-on | `npx` always runs the latest release; update-notifier for global installs; `agentconfig daemon` covers always-running needs (schedulers) with no desktop app required. | E11 |
+| 21 | Freshness & always-on | `npx` always runs the latest release; update-notifier for global installs; `agentconfiging daemon` covers always-running needs (schedulers) with no desktop app required. | E11 |
 | 22 | Instruction sync | Designate a source-of-truth instruction file/directory; regenerate every other runtime's instruction files from it (diff-previewed like all writes); per-runtime sync-status indicators; one-click resolve on instruction-drift findings. Long-tail runtime formats (Cline, Windsurf, Zed, Amazon Q, Junie, Roo, Qodo) supported as sync targets even where full detection isn't built. | E5 |
 | 23 | Instance management | Lazy multi-root workspace (§4.2): launch in one folder, add folders individually, or recursively discover agent-configured projects under a directory; instances load on first open and persist across launches; switch instances from CLI, web UI, and command palette. | E2, E4 |
 | 24 | Ink CLI | Interactive terminal UI (Ink): instance list with status, live log pane, add/scan actions mirroring the web UI's instance management; all logs also written to `~/.local/state/agentconfiging/logs/`. `report` stays plain JSON for CI. | E2 |
@@ -224,7 +224,7 @@ The complete v1 feature set. "Epic" points into §6.
 ## 6. Milestones / Epics
 
 - **E0 Scaffold** — repo layout, toolchain (tsup, vite, vitest, eslint+prettier), CI, fixture corpus harvested from real repos.
-- **E1 Core engine** — scanner, manifest, parsers, detectors, analyzers, report, fix model, history readers. *Demo: `agentconfig report` prints full JSON for any repo.*
+- **E1 Core engine** — scanner, manifest, parsers, detectors, analyzers, report, fix model, history readers. *Demo: `agentconfiging report` prints full JSON for any repo.*
 - **E2 Runtime** — CLI entry, server, security model, WS live updates, watcher. *Demo: npx opens a live-updating raw report.*
 - **E3 Signal Grid** — design tokens, type, components, motion primitives, component gallery page, light/dark. *Demo: gallery.*
 - **E4 Inspector** — overview dashboard shell, per-agent detail, artifact browser, findings list. *Demo: the product, read-only.*
