@@ -206,7 +206,7 @@ function InstancesBody() {
         <div>
           <h1>Folders</h1>
           <p className="page-sub">
-            the workspace folders agentconfig watches — add one, scan for more, unload or remove
+            the workspace folders agentconfig.ing watches — add one, scan for more, unload or remove
           </p>
         </div>
         <span className="meta">

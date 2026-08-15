@@ -215,7 +215,7 @@ export function App() {
               {unauthorized ? (
                 <main className="layout-main page">
                   <section className="page__section">
-                    <EmptyState instruction="reopen agentconfig from the CLI — session token missing" />
+                    <EmptyState instruction="reopen agentconfig.ing from the CLI — session token missing" />
                   </section>
                 </main>
               ) : (

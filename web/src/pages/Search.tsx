@@ -186,7 +186,7 @@ function SearchPanel() {
         <section className="page__section">
           <EmptyState
             title="No session"
-            instruction="session token missing — reopen agentconfig from the CLI"
+            instruction="session token missing — reopen agentconfig.ing from the CLI"
           />
         </section>
       )}

@@ -1,8 +1,8 @@
-# agentconfig design system — "Console"
+# agentconfig.ing design system — "Console"
 
 A terminal-adjacent system-utility language (adopted from `opendesign/DESIGN.md`
 and its reference console mockup in `opendesign/` — the mockup's own branding is
-replaced by **agentconfig** everywhere in the app).
+replaced by **agentconfig.ing** everywhere in the app).
 Posture: information per square inch, not vibes. Data-dense, mono-detailed, one green accent,
 hairline borders everywhere. Dark is the native mode (the tool is launched from a terminal);
 light is a first-class inverse, not an afterthought.
@@ -146,10 +146,10 @@ Class names are the contract — reuse them, don't reinvent.
 - **Toast**: inverted (`--fg` bg / `--bg` text), mono 12px, bottom-right, 2.2s, confirms every mutating action.
 - **Pager** (`.pager`): meta "Showing x–y of n" left; Prev / `Page x / y` / Next right. Page size select adjacent to the search that feeds it.
 
-**Scope mapping.** agentconfig's data model uses `project` and `global` scopes (the Console
+**Scope mapping.** agentconfig.ing's data model uses `project` and `global` scopes (the Console
 mockup calls the machine-wide scope "user"). Badge classes and colors:
 
-| agentconfig scope | Badge | Treatment | Meaning |
+| agentconfig.ing scope | Badge | Treatment | Meaning |
 |---|---|---|---|
 | `project` | `.scope.s-project` | accent-soft bg / accent text | repo-level config (`./.claude`, `AGENTS.md`, `.mcp.json`) |
 | `global` | `.scope.s-global` | outlined neutral (surface + hairline, muted text) | this machine's home-dir config (`~/.claude`, `~/.codex`, …) |
@@ -189,7 +189,7 @@ Micro only. 0.12–0.15s `ease` on background/color/border; 0.05s translateY pre
   surface, not a universal plugin manager. Use **plugins** for Claude Code,
   **extensions** for providers that use that term (such as the planned Gemini
   adapter), and **configuration artifacts** for Codex's `AGENTS.md`, rules, and
-  config. Keep the Agentconfig Catalog distinct from provider-owned packages.
+  config. Keep the agentconfig.ing Catalog distinct from provider-owned packages.
 - **Capability states:** provider cards must distinguish `supported`, `detected`,
   `unavailable`, `unsupported`, and `error`. A missing provider CLI is an
   unavailable dependency; a provider without a lifecycle contract is unsupported.
@@ -212,7 +212,7 @@ on resting elements, no raw hex outside the token block, no invented metrics.
 
 Console translated to the terminal: same voice, same restraint.
 
-- **Layout**: header line (`AGENTCONFIG · <n> instances · <url>`), instance list
+- **Layout**: header line (`AGENTCONFIG.ING · <n> instances · <url>`), instance list
   (name, agent count, finding count, `●` loaded / `○` lazy), and a log pane.
   Completed log lines render via Ink `<Static>`; only the bottom status region re-renders.
 - **Color**: terminal-safe mapping of the tokens — accent green, warn yellow,

@@ -1,6 +1,6 @@
 /**
  * Top bar (opendesign/DESIGN.md §4): 49px, `--surface`, bottom hairline.
- * Left = brand block (mono accent sigil + "agentconfig" + version from
+ * Left = brand block (mono accent sigil + "agentconfig.ing" + version from
  * GET /api/health — a dashless nothing until the probe resolves). Center =
  * persistent folder context. The folder is the application boundary, so its
  * chooser is present on every page. Agent context lives in Sidebar's Configure
@@ -98,7 +98,7 @@ export function TopBar({ route, theme, onToggleTheme, onAbout, onToggleNav }: To
         <span className="sigil" aria-hidden="true">
           ▞▚
         </span>
-        <span className="name">agentconfig</span>
+        <span className="name">agentconfig.ing</span>
         {/* Server-provided data — rendered as a text node, never HTML. */}
         {version !== undefined && <span className="ver">v{version}</span>}
       </div>
@@ -158,8 +158,8 @@ export function TopBar({ route, theme, onToggleTheme, onAbout, onToggleNav }: To
       <button
         type="button"
         className="icon-btn"
-        aria-label="About agentconfig"
-        title="About agentconfig"
+        aria-label="About agentconfig.ing"
+        title="About agentconfig.ing"
         onClick={onAbout}
       >
         ?

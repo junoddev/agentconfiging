@@ -110,7 +110,7 @@ export function formatInstanceRow(instance: Instance): string {
   return `● ${instance.name} · ${agents} · ${findings}`;
 }
 
-/** Header line per DESIGN §8: `AGENTCONFIG · <n> INSTANCES · <url>`. */
+/** Header line per DESIGN §8: `AGENTCONFIG.ING · <n> INSTANCES · <url>`. */
 export function formatHeader(instanceCount: number, url: string): string {
-  return `AGENTCONFIG · ${plural(instanceCount, 'INSTANCE')} · ${url}`;
+  return `AGENTCONFIG.ING · ${plural(instanceCount, 'INSTANCE')} · ${url}`;
 }

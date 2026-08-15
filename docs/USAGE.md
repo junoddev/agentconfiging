@@ -95,7 +95,7 @@ Browse an installable registry (subagents, skills, commands, MCP servers, hooks,
 plus runtime-setup templates) and the Claude Code plugin marketplace. A 40-entry
 seed ships in the package so the catalog works offline on first run. Installs are
 checksum-verified, diff-previewed, and stamped with provenance frontmatter
-(`installed-by agentconfig from <source>@<version>`).
+(`installed-by agentconfig.ing from <source>@<version>`).
 
 ### Plugins / Extensions
 
@@ -119,8 +119,8 @@ each provider's real capabilities.
 
 Terminology follows the runtime where possible: Claude **plugins**, Gemini
 **extensions**, and Codex **configuration artifacts**. “Extension” is the
-normalized inventory label only. The Agentconfig Catalog is separate: its
-skills, agents, commands, MCP servers, and hooks are Agentconfig-managed files,
+normalized inventory label only. The agentconfig.ing Catalog is separate: its
+skills, agents, commands, MCP servers, and hooks are agentconfig.ing-managed files,
 with checksum, diff, and provenance safeguards; they do not become provider-owned
 plugins.
 

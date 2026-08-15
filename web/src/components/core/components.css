@@ -100,7 +100,7 @@
   color: var(--accent);
 }
 
-/* agentconfig's "global" scope wears the Console "user" treatment
+/* agentconfig.ing's "global" scope wears the Console "user" treatment
    (outlined neutral) but keeps its GLOBAL label + path detail. */
 .s-user,
 .s-global {

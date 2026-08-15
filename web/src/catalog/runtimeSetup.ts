@@ -3,7 +3,7 @@
  * runtime setup is INSTALLING a `runtime-template` catalog entry — the guarded
  * install path already exists (0zm.4); this module only DERIVES the guided
  * picker's model: which known runtimes have a real starter template, which files
- * each would scaffold, and whether a runtime is already set up (agentconfig
+ * each would scaffold, and whether a runtime is already set up (agentconfig.ing
  * installed it) or merely detected in the project. DOM-free and React-free so the
  * load-bearing derivation is unit-testable; RuntimeScaffold.tsx is a thin render.
  *
@@ -18,7 +18,7 @@ import type { CatalogEntryMeta, DetectedAgent, InstalledRecord } from '../api/ty
 export const RUNTIME_TEMPLATE_KIND = 'runtime-template';
 
 /**
- * One runtime agentconfig knows about. This is a DISPLAY list — the web app
+ * One runtime agentconfig.ing knows about. This is a DISPLAY list — the web app
  * cannot import src/, so it mirrors the runtime knowledge in
  * `src/core/runtimes/table.ts` (display names + identifying slugs + detector
  * kinds), NOT any template content. A runtime with a matching runtime-template
@@ -36,7 +36,7 @@ export interface KnownRuntime {
 }
 
 /**
- * The runtimes agentconfig recognises (mirrors src/core/runtimes/table.ts: the 8
+ * The runtimes agentconfig.ing recognises (mirrors src/core/runtimes/table.ts: the 8
  * first-class runtimes + the long-tail sync targets). Only cursor/codex/gemini
  * have a seed runtime-template today; the rest surface as "coming soon" until a
  * template ships, and light up automatically once a matching entry appears in the
@@ -78,7 +78,7 @@ export const KNOWN_RUNTIMES: readonly KnownRuntime[] = [
 /**
  * A materialised runtime-setup row. `entry` present ⇒ a real installable template
  * (drives the dry-run → commit flow); absent ⇒ "coming soon". `scaffolded` means
- * agentconfig installed the template on this instance (⇒ REMOVE); `detected`
+ * agentconfig.ing installed the template on this instance (⇒ REMOVE); `detected`
  * means the runtime is otherwise present in the project report.
  */
 export interface RuntimeSetup {
@@ -89,9 +89,9 @@ export interface RuntimeSetup {
   entry?: CatalogEntryMeta;
   /** Project-relative files the template would scaffold (empty when coming soon). */
   files: string[];
-  /** agentconfig installed this template on the resolved instance. */
+  /** agentconfig.ing installed this template on the resolved instance. */
   scaffolded: boolean;
-  /** The runtime is present in the project report (may pre-date agentconfig). */
+  /** The runtime is present in the project report (may pre-date agentconfig.ing). */
   detected: boolean;
   /** The install provenance record, when scaffolded. */
   installedRecord?: InstalledRecord;

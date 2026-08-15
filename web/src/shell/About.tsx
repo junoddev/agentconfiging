@@ -48,7 +48,7 @@ export function About({ onClose }: AboutProps) {
   return (
     <Dialog
       open
-      title="About agentconfig"
+      title="About agentconfig.ing"
       onClose={onClose}
       footer={<Button label="Close" onClick={onClose} />}
     >
