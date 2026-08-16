@@ -62,6 +62,8 @@ export const RAIL_ORDER: RouteName[] = [
   'git',
   'terminal',
   'pipelines',
+  // REFERENCE (kept after the numbered legacy rail so Cmd+1..9 remains stable)
+  'profiles',
 ];
 
 /** Display label for a route — reads the routes.ts label seam so the palette

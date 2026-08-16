@@ -17,11 +17,11 @@ import {
 const EXPECTED_NAV = new Set([...RAIL_ORDER, 'gallery']);
 
 describe('RAIL_ORDER', () => {
-  it('covers the 24 sidebar pages, overview first', () => {
-    expect(RAIL_ORDER).toHaveLength(24);
+  it('covers the 25 sidebar pages, overview first', () => {
+    expect(RAIL_ORDER).toHaveLength(25);
     expect(RAIL_ORDER[0]).toBe('overview');
-    expect(RAIL_ORDER[RAIL_ORDER.length - 1]).toBe('pipelines');
-    expect(new Set(RAIL_ORDER).size).toBe(24); // no dupes
+    expect(RAIL_ORDER[RAIL_ORDER.length - 1]).toBe('profiles');
+    expect(new Set(RAIL_ORDER).size).toBe(25); // no dupes
   });
 
   it('groups WORKSPACE first (instances before artifacts), then CONFIGURE', () => {
@@ -158,7 +158,7 @@ describe('railShortcutHash — Cmd+1..9 → route', () => {
 
   it('returns undefined out of range', () => {
     expect(railShortcutHash(0)).toBeUndefined();
-    expect(railShortcutHash(25)).toBeUndefined();
+    expect(railShortcutHash(26)).toBeUndefined();
   });
 });
 

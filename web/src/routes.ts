@@ -16,6 +16,7 @@ export type { NavigationTarget } from './navigation.js';
 export type RouteName =
   | 'overview'
   | 'agents'
+  | 'profiles'
   | 'agent'
   | 'findings'
   | 'artifacts'
@@ -54,6 +55,7 @@ export type Route =
 export const ROUTE_LABELS: Record<RouteName, string> = {
   overview: 'Overview',
   agents: 'Agents',
+  profiles: 'Profiles',
   agent: 'Agent detail',
   findings: 'Findings',
   artifacts: 'Artifacts',
@@ -161,6 +163,7 @@ export function parseRoute(hash: string): Route {
   if (path === '' || path === '/') return withTarget({ name: 'overview' });
   if (path === '/gallery' || path.startsWith('/gallery/')) return withTarget({ name: 'gallery' });
   if (path === '/agents') return withTarget({ name: 'agents' });
+  if (path === '/profiles') return withTarget({ name: 'profiles' });
   if (path === '/findings') return withTarget({ name: 'findings' });
   if (path === '/artifacts') return withTarget({ name: 'artifacts' });
   if (path === '/instances') return withTarget({ name: 'instances' });

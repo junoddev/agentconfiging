@@ -592,6 +592,16 @@ function routeRecipes(h: Harness): Record<string, RouteRecipe> {
   const ok = [200] as const;
   return {
     'GET /api/health': { description: 'health metadata', path: '', expectedStatuses: ok },
+    'GET /api/profiles': {
+      description: 'content-safe upstream profile summaries',
+      path: '',
+      expectedStatuses: ok,
+    },
+    'GET /api/profiles/:id': {
+      description: 'content-safe upstream profile detail',
+      path: '/api/profiles/codex',
+      expectedStatuses: ok,
+    },
     'GET /api/instances': { description: 'instance inventory', path: '', expectedStatuses: ok },
     'POST /api/instances': {
       description: 'deduped instance add',

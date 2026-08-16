@@ -79,6 +79,7 @@ import type { RuntimeMap } from './pipeline/index.js';
 import { PtyManager } from './pty.js';
 import type { WriteScope } from './pathguard.js';
 import { jsonError } from './http.js';
+import { registerProfileRoutes } from './profile-routes.js';
 
 export interface AppConfig {
   /** SHA-256 digest of the session bearer token — the app never sees the raw token. */
@@ -176,6 +177,8 @@ export interface AppConfig {
    * of depending on whether the optional native module is built in the env.
    */
   searchLoader?: SqliteLoader;
+  /** Profile ids with reviewable candidate drift. Bodies and diagnostics never cross the API. */
+  pendingProfileDriftIds?: ReadonlySet<string>;
 }
 
 const MIME: Record<string, string> = {
@@ -340,6 +343,7 @@ export function createApp(config: AppConfig): Hono {
   });
 
   app.get('/api/health', (c) => c.json({ ok: true, version: config.version }));
+  registerProfileRoutes(app, config.pendingProfileDriftIds);
 
   const registry = config.registry;
 

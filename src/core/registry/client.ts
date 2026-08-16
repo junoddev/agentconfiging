@@ -94,7 +94,12 @@ export interface HttpResponse {
 /** Injectable fetch — `globalThis.fetch` satisfies this by structure. */
 export type HttpFetch = (
   url: string,
-  init: { signal: AbortSignal; redirect: 'manual'; resolvedAddress?: string },
+  init: {
+    signal: AbortSignal;
+    redirect: 'manual';
+    resolvedAddress?: string;
+    headers?: Record<string, string>;
+  },
 ) => Promise<HttpResponse>;
 
 /** DNS seam used immediately before each connection attempt. */
@@ -313,7 +318,7 @@ const defaultFs: RegistryFs = {
   },
 };
 
-const defaultFetch: HttpFetch = (rawUrl, init) =>
+export const defaultPinnedHttpFetch: HttpFetch = (rawUrl, init) =>
   new Promise((resolve, reject) => {
     const url = new URL(rawUrl);
     const address = init.resolvedAddress;
@@ -323,13 +328,21 @@ const defaultFetch: HttpFetch = (rawUrl, init) =>
       {
         method: 'GET',
         signal: init.signal,
+        headers: init.headers,
         // Pin the connection to the address validated immediately above. TLS
         // still authenticates the original URL hostname via SNI/Host.
         ...(address === undefined
           ? {}
           : {
               lookup: (_hostname, _options, callback) =>
-                callback(null, address, net.isIP(address) as 4 | 6),
+                typeof _options === 'object' && _options.all
+                  ? (
+                      callback as unknown as (
+                        error: null,
+                        addresses: Array<{ address: string; family: 4 | 6 }>,
+                      ) => void
+                    )(null, [{ address, family: net.isIP(address) as 4 | 6 }])
+                  : callback(null, address, net.isIP(address) as 4 | 6),
             }),
       },
       (res) => {
@@ -363,7 +376,7 @@ const defaultFetch: HttpFetch = (rawUrl, init) =>
     req.on('error', reject);
     req.end();
   });
-const defaultResolver: HostResolver = async (hostname) => {
+export const defaultHostResolver: HostResolver = async (hostname) => {
   const results = await dns.lookup(hostname, { all: true, verbatim: true });
   return results.map(({ address }) => address);
 };
@@ -388,8 +401,8 @@ export class RegistryClient {
   constructor(options: RegistryClientOptions = {}) {
     this.registryUrl = options.registryUrl ?? DEFAULT_REGISTRY_URL;
     this.cacheDir = options.cacheDir ?? resolveRegistryCacheDir(process.env, os.homedir());
-    this.fetchFn = options.fetch ?? defaultFetch;
-    this.resolveHost = options.resolveHost ?? defaultResolver;
+    this.fetchFn = options.fetch ?? defaultPinnedHttpFetch;
+    this.resolveHost = options.resolveHost ?? defaultHostResolver;
     this.fs = options.fs ?? defaultFs;
     this.now = options.now ?? Date.now;
     this.ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;

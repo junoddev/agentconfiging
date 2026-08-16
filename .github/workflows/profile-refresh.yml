@@ -1,0 +1,211 @@
+name: Agent profile refresh
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Refresh depth
+        type: choice
+        options: [daily, weekly, monthly]
+        default: weekly
+      agent:
+        description: Canonical agent profile id, or all
+        type: string
+        default: all
+      source:
+        description: Exact canonical source id (requires one agent)
+        type: string
+        required: false
+      force:
+        description: Ignore the source cache
+        type: boolean
+        default: false
+      dry_run:
+        description: Audit and upload artifacts without creating a PR
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: profile-refresh-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      agents: ${{ steps.plan.outputs.agents }}
+      mode: ${{ steps.plan.outputs.mode }}
+      source: ${{ steps.plan.outputs.source }}
+      force: ${{ steps.plan.outputs.force }}
+      dry-run: ${{ steps.plan.outputs.dry-run }}
+      full-audit: ${{ steps.plan.outputs.full-audit }}
+      canonical-agents: ${{ steps.plan.outputs.canonical-agents }}
+      canonical-profile-hashes: ${{ steps.plan.outputs.canonical-profile-hashes }}
+      canonical-source-hashes: ${{ steps.plan.outputs.canonical-source-hashes }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22.x
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - id: plan
+        name: Validate selectors and build the runtime matrix
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          REFRESH_MODE: ${{ inputs.mode }}
+          REFRESH_AGENT: ${{ inputs.agent }}
+          REFRESH_SOURCE: ${{ inputs.source }}
+          REFRESH_FORCE: ${{ inputs.force }}
+          REFRESH_DRY_RUN: ${{ inputs.dry_run }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          plan="$(node scripts/profile-refresh-plan.mjs)"
+          mode="$(jq -r .mode <<<"$plan")"
+          agent="$(jq -r .agent <<<"$plan")"
+          source="$(jq -r .source <<<"$plan")"
+          roster="$(npm run --silent profiles:list | jq -c '[.[].id]')"
+          profile_hashes='{}'
+          source_hashes='{}'
+          while IFS= read -r id; do
+            canonical="$(npm run --silent profiles:show -- "$id")"
+            digest="sha256:$(npm run --silent profiles:show -- "$id" | shasum -a 256 | awk '{print $1}')"
+            profile_hashes="$(jq -c --arg id "$id" --arg hash "$digest" '. + {($id): $hash}' <<<"$profile_hashes")"
+            per_source="$(jq -c '.[0].sources | map({key: .id, value: (.latestSuccessfulRetrieval.contentHash // null)}) | from_entries' <<<"$canonical")"
+            source_hashes="$(jq -c --arg id "$id" --argjson sources "$per_source" '. + {($id): $sources}' <<<"$source_hashes")"
+          done < <(jq -r '.[]' <<<"$roster")
+          if [[ "$agent" == all ]]; then
+            agents="$roster"
+          else
+            npm run --silent profiles:list | jq -e --arg id "$agent" 'any(.[]; .id == $id)' >/dev/null
+            agents="$(jq -cn --arg id "$agent" '[$id]')"
+          fi
+          echo "agents=$agents" >> "$GITHUB_OUTPUT"
+          echo "canonical-agents=$roster" >> "$GITHUB_OUTPUT"
+          echo "canonical-profile-hashes=$profile_hashes" >> "$GITHUB_OUTPUT"
+          echo "canonical-source-hashes=$source_hashes" >> "$GITHUB_OUTPUT"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "source=$source" >> "$GITHUB_OUTPUT"
+          echo "full-audit=$(jq -r .fullAudit <<<"$plan")" >> "$GITHUB_OUTPUT"
+          echo "force=${REFRESH_FORCE:-false}" >> "$GITHUB_OUTPUT"
+          echo "dry-run=${REFRESH_DRY_RUN:-false}" >> "$GITHUB_OUTPUT"
+
+  audit:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        agent: ${{ fromJSON(needs.plan.outputs.agents) }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22.x
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Restore evidence cache
+        if: needs.plan.outputs.mode != 'monthly' && needs.plan.outputs.force != 'true'
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .cache/profile-audit
+          key: profile-audit-${{ matrix.agent }}-${{ hashFiles('src/core/profiles/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: profile-audit-${{ matrix.agent }}-
+      - name: Audit ${{ matrix.agent }}
+        env:
+          MODE: ${{ needs.plan.outputs.mode }}
+          SOURCE: ${{ needs.plan.outputs.source }}
+          FORCE: ${{ needs.plan.outputs.force }}
+          DRY_RUN: ${{ needs.plan.outputs.dry-run }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(--agent '${{ matrix.agent }}' --mode "$MODE" --output 'profile-refresh-output/${{ matrix.agent }}' --cache '.cache/profile-audit/${{ matrix.agent }}')
+          [[ -z "$SOURCE" ]] || args+=(--source "$SOURCE")
+          [[ "$FORCE" != true ]] || args+=(--force)
+          [[ "$DRY_RUN" != true ]] || args+=(--dry-run)
+          npm run --silent profiles:refresh -- "${args[@]}"
+      - name: Persist refreshed evidence cache
+        if: always()
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .cache/profile-audit
+          key: profile-audit-${{ matrix.agent }}-${{ hashFiles('src/core/profiles/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Upload evidence and candidates
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: profile-refresh-${{ matrix.agent }}
+          path: profile-refresh-output/${{ matrix.agent }}
+          if-no-files-found: warn
+          retention-days: 14
+
+  review:
+    needs: [plan, audit]
+    if: always() && needs.plan.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Download isolated runtime outputs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: profile-refresh-*
+          path: profile-refresh-artifacts
+          merge-multiple: false
+      - id: policy
+        name: Build review and risk manifest
+        env:
+          EXPECTED_AGENTS: ${{ needs.plan.outputs.agents }}
+          FULL_AUDIT: ${{ needs.plan.outputs.full-audit }}
+          CANONICAL_AGENTS: ${{ needs.plan.outputs.canonical-agents }}
+          CANONICAL_PROFILE_HASHES: ${{ needs.plan.outputs.canonical-profile-hashes }}
+          CANONICAL_SOURCE_HASHES: ${{ needs.plan.outputs.canonical-source-hashes }}
+        run: node scripts/profile-refresh-policy.mjs profile-refresh-artifacts profile-updates profile-refresh-summary
+      - name: Upload combined review bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: profile-refresh-review
+          path: |
+            profile-refresh-summary
+            profile-updates
+          retention-days: 14
+      - name: Create or update the review PR
+        if: needs.plan.outputs.dry-run != 'true' && steps.policy.outputs.can-mutate-review == 'true'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: automation/profile-refresh
+          delete-branch: true
+          add-paths: profile-updates
+          commit-message: 'chore(profiles): refresh upstream candidates'
+          title: 'chore(profiles): review upstream profile candidates'
+          body: |
+            Scheduled upstream profile audit. This PR contains candidate evidence only and never changes canonical profiles.
+
+            Human review is required. Inspect `profile-updates/manifest.json`; removals and path/layout, settings, permissions, defaults, security, or deprecation changes are classified high risk. This workflow does not auto-merge or promote candidates.
+          labels: profile-refresh,needs-human-review
+      - name: Close a stale review PR after a complete clean full audit
+        if: needs.plan.outputs.dry-run != 'true' && steps.policy.outputs.can-close-stale == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          number="$(gh pr list --head automation/profile-refresh --state open --json number --jq '.[0].number // empty')"
+          if [[ -n "$number" ]]; then
+            gh pr close "$number" --comment 'Closing after a complete successful weekly/monthly audit found no candidates.'
+          fi
+          git push origin --delete automation/profile-refresh 2>/dev/null || true
