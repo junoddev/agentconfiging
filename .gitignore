@@ -12,6 +12,7 @@ site/.astro/
 .wrangler/
 coverage/
 *.tsbuildinfo
+profile-refresh-output/
 
 # QA scratch
 .qa-screenshots/

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import process from 'node:process';
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import {
   buildManifest,
   classifyCandidate,
@@ -10,6 +12,39 @@ import {
   materializeReview,
 } from './profile-refresh-policy.mjs';
 import { makePlan, scheduledMode } from './profile-refresh-plan.mjs';
+
+describe('profile refresh runner', () => {
+  it('invokes the locally installed tsx through supported npm exec syntax', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'profile-refresh-runner-'));
+    const result = spawnSync(
+      process.execPath,
+      [
+        'scripts/profile-refresh.mjs',
+        '--agent',
+        'not-a-canonical-profile',
+        '--mode',
+        'weekly',
+        '--dry-run',
+        '--output',
+        path.join(root, 'output'),
+        '--cache',
+        path.join(root, 'cache'),
+      ],
+      { cwd: process.cwd(), encoding: 'utf8' },
+    );
+
+    expect(result.status).not.toBe(0);
+    expect(fs.readFileSync(path.join(root, 'output', 'result.json'), 'utf8')).not.toContain(
+      'Unknown command: "tsx"',
+    );
+    expect(
+      JSON.parse(fs.readFileSync(path.join(root, 'output', 'run.json'), 'utf8')),
+    ).toMatchObject({
+      profileId: 'not-a-canonical-profile',
+      complete: false,
+    });
+  });
+});
 
 describe('profile refresh planning', () => {
   it('selects monthly before weekly and otherwise daily', () => {
