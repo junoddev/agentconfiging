@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import AgentChanges from '../components/AgentChanges.astro';
 
 const github = 'https://github.com/junoddev/agentconfiging';
 const docs = `${github}/blob/main/docs/USAGE.md`;
@@ -31,7 +32,7 @@ const jsonLd = {
     <div class="shell topbar-inner">
       <a class="brand" href="/">agentconfig<span class="brand-dot">.</span>ing</a>
       <nav class="nav" aria-label="Primary">
-        <a href="#features">Features</a><a href="#security">Security</a><a href="#ci">CI</a><a href="#faq">FAQ</a>
+        <a href="#features">Features</a><a href="#changes">Agent changes</a><a href="#security">Security</a><a href="#faq">FAQ</a>
       </nav>
       <button class="icon-button" id="theme-toggle" type="button" aria-label="Toggle color theme">Paper / Ink</button>
     </div>
@@ -91,6 +92,13 @@ const jsonLd = {
       </div>
     </div></section>
 
+    <section id="changes"><div class="shell">
+      <div class="section-head"><p class="eyebrow">Agent changes over time</p><h2>Upstream behavior moves. The history stays visible.</h2></div>
+      <p class="section-intro">Content-safe before-and-after summaries from official profile refreshes. Observed changes stay pending until human review promotes them.</p>
+      <AgentChanges limit={2} />
+      <a class="text-link" href="/changelog">View the full agent profile changelog →</a>
+    </div></section>
+
     <section id="security"><div class="shell">
       <div class="section-head"><p class="eyebrow">Security model</p><h2>Private by architecture, not by policy.</h2></div>
       <div class="security">
@@ -117,7 +125,7 @@ const jsonLd = {
       <div class="faq">{faqs.map(([question, answer]) => <details><summary>{question}</summary><p>{answer}</p></details>)}</div>
     </div></section>
   </main>
-  <footer><div class="shell footer"><a class="brand" href="/">agentconfig<span class="brand-dot">.</span>ing</a><a href={github}>GitHub</a><a href="https://www.npmjs.com/package/agentconfiging">npm</a><a href={docs}>Docs</a><span>MIT</span></div></footer>
+  <footer><div class="shell footer"><a class="brand" href="/">agentconfig<span class="brand-dot">.</span>ing</a><a href="/changelog">Changelog</a><a href={github}>GitHub</a><a href="https://www.npmjs.com/package/agentconfiging">npm</a><a href={docs}>Docs</a><span>MIT</span></div></footer>
 
   <script>
     const copy = document.querySelector<HTMLButtonElement>('#copy-command');

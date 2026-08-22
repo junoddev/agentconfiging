@@ -55,6 +55,7 @@ export type OperateTargetResolution =
 const ROUTE_MODES: Record<Exclude<RouteName, 'agent'>, NavigationMode> = {
   overview: 'workspace',
   agents: 'workspace',
+  profiles: 'workspace',
   findings: 'workspace',
   artifacts: 'workspace',
   instances: 'workspace',

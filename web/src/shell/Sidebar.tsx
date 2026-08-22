@@ -95,6 +95,10 @@ const GROUPS: NavGroup[] = [
       { name: 'pipelines', glyph: '⋙' },
     ],
   },
+  {
+    group: 'Reference',
+    items: [{ name: 'profiles', glyph: '◉' }],
+  },
 ];
 
 /** Which nav item owns the active route (agent detail lights up AGENTS). */

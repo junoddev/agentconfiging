@@ -3,6 +3,7 @@ import { EmptyState, ToastProvider } from './components/core/index.js';
 import { GalleryPage } from './gallery/GalleryPage.js';
 import { AgentDetail } from './pages/AgentDetail.js';
 import { Agents } from './pages/Agents.js';
+import { Profiles } from './pages/Profiles.js';
 import { Artifacts } from './pages/Artifacts.js';
 import { Findings } from './pages/Findings.js';
 import { Instances } from './pages/Instances.js';
@@ -64,6 +65,8 @@ function renderRoute(route: Route) {
       return <Overview />;
     case 'agents':
       return <Agents />;
+    case 'profiles':
+      return <Profiles />;
     case 'agent':
       return <AgentDetail kind={route.kind} />;
     case 'findings':

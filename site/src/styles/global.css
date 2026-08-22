@@ -257,6 +257,90 @@ h2 {
   grid-template-columns: repeat(5, 1fr);
   gap: 8px;
 }
+.section-intro {
+  max-width: 720px;
+  margin: -18px 0 32px calc((100% - 32px) / 3);
+  color: var(--muted);
+}
+.change-timeline {
+  border-top: 1px solid var(--border);
+}
+.change-entry {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 32px;
+  padding: 30px 0;
+  border-bottom: 1px solid var(--border);
+}
+.change-meta {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 7px;
+  color: var(--muted);
+  font: 11px var(--font-mono);
+}
+.change-status {
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.change-status--observed {
+  color: var(--warn);
+  border-color: color-mix(in oklch, var(--warn) 45%, var(--border));
+}
+.change-status--promoted {
+  color: var(--accent);
+  border-color: color-mix(in oklch, var(--accent) 45%, var(--border));
+}
+.change-body h3 {
+  margin: 0 0 8px;
+  font-size: 22px;
+}
+.change-body > p {
+  margin: 0 0 20px;
+  color: var(--muted);
+}
+.change-diff {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+.change-diff div {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.change-diff dt {
+  margin-bottom: 7px;
+  color: var(--muted);
+  font: 10px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.change-diff dd {
+  margin: 0;
+}
+.change-source,
+.text-link {
+  color: var(--accent);
+  font: 12px var(--font-mono);
+  text-underline-offset: 3px;
+}
+.text-link {
+  display: inline-block;
+  margin-top: 24px;
+}
+.changelog-hero {
+  padding: 120px 0 72px;
+}
+.changelog-hero h1 {
+  font-size: clamp(42px, 6vw, 72px);
+}
 .pill {
   padding: 12px;
   border: 1px solid var(--border);
@@ -382,9 +466,14 @@ details p {
   .command-row,
   .section-head,
   .security,
-  .ci {
+  .ci,
+  .change-entry,
+  .change-diff {
     display: grid;
     grid-template-columns: 1fr;
+  }
+  .section-intro {
+    margin: -18px 0 28px;
   }
   .grid,
   .runtime-grid,

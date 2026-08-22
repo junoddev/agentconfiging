@@ -10,6 +10,7 @@
  */
 
 import { parseFrontmatter } from './frontmatter.js';
+import { CLAUDE_CATALOG } from '../profiles/claude.js';
 import { parseJsonRecord } from './json.js';
 import { failed, parsed, problem, type ParseProblem, type ParseResult } from './result.js';
 import {
@@ -233,14 +234,10 @@ export interface ClaudeSettings {
   unknownKeys: string[];
 }
 
-const KNOWN_SETTINGS_KEYS = new Set([
-  'model',
-  'env',
-  'statusLine',
-  'permissions',
-  'hooks',
-  'enableAllProjectMcpServers',
-]);
+/** Legacy parser metadata, projected from the canonical Claude Code profile. */
+export const KNOWN_SETTINGS_KEYS: ReadonlySet<string> = new Set(
+  CLAUDE_CATALOG.settings.map((setting) => setting.key),
+);
 
 export function parseClaudeSettings(content: string): ParseResult<ClaudeSettings> {
   const root = parseJsonRecord(content);

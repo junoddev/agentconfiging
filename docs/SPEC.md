@@ -126,6 +126,315 @@ web/           Vite + React + TS single-page app. Custom CSS design tokens
   Dashboard, Session Replay). Read-only, resilient to unknown line
   types.
 
+#### 4.1.1 Agent profiles: upstream runtime knowledge
+
+An **`AgentProfile`** is the versioned, evidence-backed description of an agent
+runtime's upstream configuration contract. It answers questions such as “which
+files and settings does this version of Codex understand?” It does **not** say
+that the runtime is installed in the current workspace and it does not contain
+the user's configuration values.
+
+This gives three deliberately separate concepts:
+
+| Concept | Describes | Produced/owned by | Example |
+|---|---|---|---|
+| `AgentProfile` | What an upstream runtime supports | Canonical profile registry, after review | Codex reads `AGENTS.md`; `config.toml` has a `model` key |
+| `DetectedAgent` | Evidence found in one local scan | Detector execution | `.codex/config.toml` was found; confidence is `high` |
+| Install provenance | Which catalog operation wrote a local artifact | Registry install flow | skill installed from source X at version Y |
+
+The word **confidence** is scoped accordingly. Profile fact confidence measures
+the strength of upstream evidence (`verified`, `corroborated`, `inferred`, or
+`unknown`). `DetectedAgent.confidence` remains the unrelated `low | medium |
+high` count-signals heuristic. Install provenance is a receipt, not confidence.
+
+##### Profile roster and coverage
+
+The initial roster is the 15 runtimes already represented by the runtime
+knowledge table. Eight are **first-class** (detector plus profile): Aider, Claude
+Code, OpenAI Codex, Continue, GitHub Copilot, Cursor, Gemini CLI, and opencode.
+Seven are initially **profile/sync-only**: Amazon Q Developer, Cline, JetBrains
+Junie, Qodo, Roo Code, Windsurf, and Zed. A profile records coverage for each
+capability area as `full`, `partial`, `unknown`, or `unsupported`; absence of a
+fact never means that the upstream runtime lacks the capability.
+
+Adding a roster entry requires a stable kebab-case id, display name, vendor,
+product/release sources, at least one official configuration source, an owner,
+and explicit coverage. For first-class runtimes the id must equal the detector
+id. Renames preserve the old id as an alias; ids are not recycled.
+
+##### Contract and revisioning
+
+A canonical profile contains:
+
+- identity: stable id, aliases, display name, vendor, product family, and support
+  tier;
+- sources: stable source ids, authoritative URLs or CLI/schema probes, source
+  kind, retrieval policy, and latest successful retrieval metadata;
+- artifacts: paths, format, project/global scope, precedence/load behavior, and
+  platform applicability;
+- capabilities: settings (key path, type, default, enum), models, tools, hooks,
+  commands, instructions/rules, skills, MCP, extensions, and history surfaces;
+- lifecycle: `current`, `legacy`, `deprecated`, or `removed`, with replacement
+  and version bounds when known;
+- evidence and applicability on every factual leaf; and
+- coverage, freshness status, and audit metadata.
+
+`schemaVersion` versions the shape and interpretation of profile documents. It
+changes only when readers need migration logic. `profileRevision` is a
+monotonically increasing integer for the canonical content of one runtime; it
+increments whenever promoted facts, evidence, or maintainer policy change.
+`observedProductVersion` and per-fact applicability describe the vendor product
+and never substitute for either revision. Generated candidates retain
+`basedOnProfileRevision` so stale proposals cannot overwrite newer canonical
+work.
+
+Every factual leaf is an object rather than an unexplained scalar. Its common
+envelope is:
+
+```ts
+type ProfileFact<T> = {
+  factId: string;
+  value: T;
+  lifecycle: 'current' | 'legacy' | 'deprecated' | 'removed';
+  replacementFactId?: string;
+  applicability: {
+    since?: string;
+    until?: string;
+    channels?: ('stable' | 'beta' | 'nightly')[];
+    platforms?: ('darwin' | 'linux' | 'windows')[];
+    interfaces?: ('cli' | 'ide' | 'desktop' | 'web')[];
+    observedFrom?: string;
+    observedUntil?: string;
+  };
+  evidence: Array<{
+    sourceId: string;
+    locator: string; // heading, JSON pointer, CLI probe, or release-note anchor
+    checkedAt: string;
+    contentHash?: string;
+  }>;
+  confidence: 'verified' | 'corroborated' | 'inferred' | 'unknown';
+  lastChangedAt?: string;
+};
+```
+
+`factId` is an immutable, runtime-local, kebab-case identifier assigned when a
+fact is first promoted (for example `instruction-project-claude-md`). It is
+independent of array position and of every mutable field, including `value`,
+path, lifecycle, and applicability. Extractors match candidates to existing
+facts by `factId`; changing a value preserves the id, while splitting one fact
+creates new ids and retires the original. Deleted ids are tombstoned and never
+reused. Canonical arrays are normalized by `factId`, then evidence by
+`sourceId`/`locator`, so source or extraction order cannot create a diff.
+
+`verified` requires a current official source or vendor-distributed schema/CLI
+probe. `corroborated` requires consistent independent evidence when no adequate
+official source exists. `inferred` is useful for review but cannot authorize a
+destructive migration or a claim that a feature was removed. `unknown` records
+the gap explicitly. Conflicting sources remain separate evidence records and
+produce an audit warning; extraction must not silently choose one.
+
+Evidence uses canonical wire formats. `checkedAt`, `lastChangedAt`, retrieval,
+and promotion times are UTC RFC 3339 timestamps with seconds and `Z` (for
+example `2026-07-26T00:00:00Z`). `contentHash` is lowercase
+`sha256:<64-hex-digits>` over the exact retrieved bytes before parsing. A
+`locator` is source-kind-specific and stable: an RFC 6901 JSON Pointer for
+JSON/schema, a normalized URL fragment for HTML/Markdown headings, or
+`command:<argv>#<output-section>` for a pinned CLI probe. Empty or line-number-
+only locators are invalid. Source ids and fact ids are lowercase kebab-case.
+
+##### Lifecycle and applicability semantics
+
+Lifecycle values describe vendor support, not our coverage:
+
+- `current`: documented and supported for at least one declared applicability;
+- `legacy`: still supported, but superseded for new configuration;
+- `deprecated`: vendor says it remains accepted temporarily and should be
+  migrated; a replacement is required when the vendor names one; and
+- `removed`: affirmatively unsupported for the declared versions, retained as a
+  tombstone so diagnostics can explain old configuration.
+
+Normal transitions are `current -> legacy -> deprecated -> removed`, but vendor
+evidence may skip stages. Any transition requires affirmative evidence; moving
+back to `current` or `legacy` is a restoration and requires new authoritative
+support evidence. `replacementFactId`, when present, is a `factId` in the same
+profile (or `runtime-id/fact-id` across profiles), must resolve, must not itself
+be `removed`, and is forbidden when the vendor gives no replacement. `since` is
+the first inclusive supporting product version and `until` is the last
+inclusive supporting version; an open bound means unknown/unbounded, never the
+current profile revision. Version strings must be exact vendor versions and are
+compared with the source's declared version scheme (`semver`, `calver`, or
+`opaque`); opaque versions support equality only.
+
+Applicability is conjunctive across dimensions and disjunctive within a list:
+a fact matches only when version **and** channel **and** platform **and**
+interface match. An omitted dimension means all values; an explicitly empty
+list is invalid. Stable is not implied by beta/nightly, `cli` is not implied by
+`ide`, and aliases are normalized by a maintainer-owned enum before matching.
+For rolling products without addressable releases, sources declare
+`versionScheme: rolling`; every fact supported by that source must omit version
+bounds and carry a UTC observation window (`observedFrom` required and inclusive,
+`observedUntil` optional and exclusive) in `applicability`. Both use the same
+canonical RFC 3339 format as other timestamps, and `observedUntil` must be later
+than `observedFrom`. Facts backed by versioned sources must omit both observation
+fields. Such rolling facts describe observed behavior, not historical version
+support. Overlapping facts for the same capability/applicability are invalid
+unless their values are identical.
+
+##### Maintainer scaffold versus discovered facts
+
+Some useful runtime-table fields are product policy, not discoverable upstream
+facts. `scaffoldPath`, `scaffoldTemplate`, preferred write target, detector
+mapping, support tier, profile owner, source allowlist, and freshness overrides
+are **maintainer-owned scaffold fields**. Scheduled extraction may report that
+they appear inconsistent, but may not rewrite them. Upstream facts such as
+documented paths, formats, precedence, setting keys, defaults, hook events, and
+model lifecycle belong in evidence-backed profile facts. Consumers derive the
+existing runtime instruction table and other catalogs from the promoted profile
+plus its maintainer scaffold; executable parsers and detectors remain code.
+
+##### Freshness SLOs
+
+Freshness is computed per source and rolled up per capability; the oldest
+required source determines the profile status. A source declares the capability
+areas it covers and `required: true | false`; every capability with coverage
+`full` or `partial` must have at least one required source. Maintainers designate
+required sources based on authority and completeness; extractors cannot change
+that choice. When multiple required sources cover a capability, precedence is
+vendor schema/CLI inventory, then official configuration reference, then
+official release notes; lower-precedence sources may add evidence but cannot
+silently override a conflict. The capability rollup is the worst state among
+its required sources (`fresh < stale < expired < unavailable`), and the profile
+rollup is the worst capability state, excluding capabilities explicitly marked
+`unsupported`. An optional-source failure is reported but does not degrade the
+rollup.
+
+Default maximum age since the
+last successful substantive check is 7 days for release feeds/vendor schemas,
+14 days for configuration references and model/tool/hook catalogs, and 30 days
+for stable instruction-path documentation. Maintainers may only tighten these
+defaults or document a runtime-specific exception. At 100% of the maximum age a
+source is `stale`; at 200% it is `expired`. A failed or blocked fetch is
+`unavailable`, not evidence of removal, and never advances `checkedAt`.
+
+Cheap metadata checks may run daily, full authoritative-source extraction runs
+weekly, and a clean-cache deep audit runs monthly. A metadata response only
+advances the retrieval timestamp; it advances a fact's `checkedAt` only when the
+source content or an equivalent immutable artifact was actually revalidated.
+
+##### Candidates, review, and promotion
+
+Canonical profiles are read-only inputs to scheduled jobs. Fetchers store
+bounded, hashed evidence; deterministic extractors and optional bounded model
+extraction write a separate **candidate** containing the base revision, source
+snapshot ids, semantic diff, validation result, and extraction diagnostics.
+Automation never edits canonical files directly.
+
+Promotion requires schema validation, deterministic normalization, a semantic
+diff, tests for affected projections, and human review. A reviewer must verify
+new or changed claims against their cited evidence, resolve source conflicts,
+and explicitly approve lifecycle transitions. `removed` requires affirmative
+authoritative evidence: an official removal statement, or a successful query of
+a vendor-declared comprehensive versioned inventory that explicitly reports the
+fact unsupported. Repeated absence, even across successful audits, is never
+enough; fetch failure, 404, parsing failure, or omission from a non-comprehensive
+source is also insufficient. Security-
+sensitive defaults, write paths, permission semantics, and executable hooks
+require two independent maintainer approvals. Each approval record contains
+`approverId`, `approvedAt`, `candidateId`, `candidateHash`,
+`basedOnProfileRevision`, `decision` (`approve` or `reject`), and optional
+`comment`; duplicate approver ids count once, and any rejection blocks
+promotion until superseded by a new candidate. Promotion is atomic, increments
+`profileRevision`, records all approval records plus promoter id/time and the
+resulting canonical hash, and rejects a candidate whose base revision or hash is
+no longer current.
+
+##### Worked profile slices
+
+These abbreviated examples show the boundary; they are illustrative profile
+slices, not the seed data implemented by the next task:
+
+```yaml
+id: claude-code
+schemaVersion: 1
+profileRevision: 1
+sources:
+  - id: claude-memory-docs
+    kind: official-docs
+    url: https://docs.anthropic.com/en/docs/claude-code/memory
+    required: true
+    covers: [instructionArtifacts]
+    versionScheme: rolling
+  - id: claude-hooks-docs
+    kind: official-docs
+    url: https://docs.anthropic.com/en/docs/claude-code/hooks
+    required: true
+    covers: [hookEvents]
+    versionScheme: rolling
+maintainer:
+  supportTier: first-class
+  detectorId: claude-code
+  owner: runtime-maintainers
+  scaffoldPath: CLAUDE.md
+facts:
+  instructionArtifacts:
+    - factId: instruction-project-claude-md
+      value: { path: CLAUDE.md, format: markdown, scope: project }
+      lifecycle: current
+      applicability: { interfaces: [cli], observedFrom: "2026-07-26T00:00:00Z" }
+      evidence:
+        - { sourceId: claude-memory-docs, locator: "#claude-md", checkedAt: "2026-07-26T00:00:00Z" }
+      confidence: verified
+  hookEvents:
+    - factId: hook-event-pre-tool-use
+      value: PreToolUse
+      lifecycle: current
+      applicability: { interfaces: [cli], observedFrom: "2026-07-26T00:00:00Z" }
+      evidence:
+        - { sourceId: claude-hooks-docs, locator: "#pretooluse", checkedAt: "2026-07-26T00:00:00Z" }
+      confidence: verified
+```
+
+```yaml
+id: codex
+schemaVersion: 1
+profileRevision: 1
+sources:
+  - id: codex-instructions-docs
+    kind: official-docs
+    url: https://developers.openai.com/codex/guides/agents-md
+    required: true
+    covers: [instructionArtifacts]
+    versionScheme: rolling
+  - id: codex-config-reference
+    kind: official-docs
+    url: https://developers.openai.com/codex/config-reference
+    required: true
+    covers: [settings]
+    versionScheme: rolling
+maintainer:
+  supportTier: first-class
+  detectorId: codex
+  owner: runtime-maintainers
+  scaffoldPath: AGENTS.md
+facts:
+  instructionArtifacts:
+    - factId: instruction-project-agents-md
+      value: { path: AGENTS.md, format: markdown, scope: project }
+      lifecycle: current
+      applicability: { interfaces: [cli, ide], observedFrom: "2026-07-26T00:00:00Z" }
+      evidence:
+        - { sourceId: codex-instructions-docs, locator: "#agents-md", checkedAt: "2026-07-26T00:00:00Z" }
+      confidence: verified
+  settings:
+    - factId: setting-model
+      value: { path: model, type: string, artifact: "~/.codex/config.toml" }
+      lifecycle: current
+      applicability: { interfaces: [cli], observedFrom: "2026-07-26T00:00:00Z" }
+      evidence:
+        - { sourceId: codex-config-reference, locator: "#model", checkedAt: "2026-07-26T00:00:00Z" }
+      confidence: verified
+```
+
 ### 4.2 Workspace model — lazy instances
 
 The app manages **instances**: roots (folders) whose agent config it has loaded.

@@ -10,9 +10,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { BASELINE_RUNTIME_FORMATS } from '../core/profiles/baseline.js';
 import { createApp } from './app.js';
 import { InstanceRegistry } from './registry.js';
-import type { WriteScope } from './pathguard.js';
+import { resolveWriteTarget, type WriteScope } from './pathguard.js';
 
 const PORT = 8788;
 const HOST = `127.0.0.1:${PORT}`;
@@ -67,6 +68,28 @@ function app() {
     trashDir,
   });
 }
+
+describe('profile-projected sync write allowlist', () => {
+  it('admits every historical concrete runtime target and no reserved namespace', () => {
+    build();
+    for (const runtime of BASELINE_RUNTIME_FORMATS) {
+      const paths = [
+        runtime.scaffoldPath,
+        ...runtime.instructionPaths.filter((candidate) => !candidate.endsWith('/')),
+      ];
+      for (const candidate of paths) {
+        expect(resolveWriteTarget(candidate, scopes), `${runtime.id}: ${candidate}`).toMatchObject({
+          ok: true,
+          relPath: candidate,
+        });
+      }
+    }
+    expect(resolveWriteTarget('.agentconfig/profile.json', scopes)).toEqual({
+      ok: false,
+      status: 403,
+    });
+  });
+});
 
 function post(
   pathname: string,

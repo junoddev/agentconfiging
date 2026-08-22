@@ -44,6 +44,7 @@ import type {
   KnownProjectsResponse,
   MarketplaceResponse,
   PtyStatusResponse,
+  ProfilesResponse,
   RemoveResponse,
   Report,
   ScanResponse,
@@ -168,6 +169,11 @@ export class ApiClient {
   /** GET a health probe (also token-gated). */
   getHealth(): Promise<HealthResponse> {
     return this.#get<HealthResponse>('/api/health');
+  }
+
+  /** Public, content-safe upstream knowledge summaries (never local detection data). */
+  getProfiles(): Promise<ProfilesResponse> {
+    return this.#get<ProfilesResponse>('/api/profiles');
   }
 
   /** GET a single in-scope config file's REDACTED content + mark spans (secrets

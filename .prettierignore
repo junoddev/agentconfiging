@@ -1,6 +1,7 @@
 node_modules/
 dist/
 coverage/
+profile-refresh-output/
 docs/
 # Imported Console reference (read-only source of truth — never reformat)
 opendesign/

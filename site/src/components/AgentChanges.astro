@@ -1,0 +1,40 @@
+---
+import { agentChanges } from '../data/agent-changes';
+
+interface Props {
+  limit?: number;
+}
+
+const { limit } = Astro.props;
+const changes = limit === undefined ? agentChanges : agentChanges.slice(0, limit);
+---
+
+<div class="change-timeline">
+  {changes.map((change) => (
+    <article class="change-entry" id={change.id}>
+      <div class="change-meta">
+        <time datetime={change.observedAt}>
+          {new Date(change.observedAt).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            timeZone: 'UTC',
+          })}
+        </time>
+        <span>{change.agentName}</span>
+        <span class={`change-status change-status--${change.status}`}>
+          {change.status === 'observed' ? 'Pending review' : 'Promoted'}
+        </span>
+      </div>
+      <div class="change-body">
+        <h3>{change.title}</h3>
+        <p>{change.summary}</p>
+        <dl class="change-diff">
+          <div><dt>Before</dt><dd>{change.before}</dd></div>
+          <div><dt>After</dt><dd>{change.after}</dd></div>
+        </dl>
+        <a class="change-source" href={change.sourceUrl} rel="noreferrer">Official source ↗</a>
+      </div>
+    </article>
+  ))}
+</div>

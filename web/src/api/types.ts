@@ -1273,3 +1273,34 @@ export interface ScheduleResponse {
   schedule: PipelineSchedule | null;
   nextRun: number | null;
 }
+
+export type ProfileCapability =
+  | 'instructionArtifacts'
+  | 'settings'
+  | 'models'
+  | 'tools'
+  | 'hookEvents'
+  | 'commands'
+  | 'skills'
+  | 'mcp'
+  | 'extensions'
+  | 'history';
+export type ProfileCoverage = 'full' | 'partial' | 'unknown' | 'unsupported';
+export type ProfileFreshness = 'fresh' | 'stale' | 'expired' | 'unavailable';
+export interface ProfileSummary {
+  id: string;
+  displayName: string;
+  vendor: string;
+  productFamily: string;
+  profileRevision: number;
+  supportTier: 'first-class' | 'profile-sync-only';
+  coverage: Record<ProfileCapability, ProfileCoverage>;
+  freshness: Record<ProfileCapability, ProfileFreshness>;
+  confidence: 'verified' | 'corroborated' | 'inferred' | 'unknown';
+  lastSuccessfulCheck?: string;
+  pendingDrift: boolean;
+  sources: Array<{ id: string; kind: string; url?: string }>;
+}
+export interface ProfilesResponse {
+  profiles: ProfileSummary[];
+}
