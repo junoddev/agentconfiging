@@ -1,0 +1,2060 @@
+[
+  {
+    "aliases": [],
+    "coverage": {
+      "commands": "unknown",
+      "extensions": "unknown",
+      "history": "unknown",
+      "hookEvents": "unknown",
+      "instructionArtifacts": "partial",
+      "mcp": "unknown",
+      "models": "unknown",
+      "settings": "unknown",
+      "skills": "unknown",
+      "tools": "unknown"
+    },
+    "displayName": "Claude Code",
+    "facts": {
+      "commands": [],
+      "extensions": [],
+      "history": [],
+      "hookEvents": [
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "hook-notification",
+          "lifecycle": "current",
+          "value": {
+            "description": "the agent emits a notification (e.g. awaiting input)",
+            "matcherApplies": false,
+            "name": "Notification"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "hook-posttooluse",
+          "lifecycle": "current",
+          "value": {
+            "description": "after a tool returns a result",
+            "matcherApplies": true,
+            "name": "PostToolUse"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "hook-precompact",
+          "lifecycle": "current",
+          "value": {
+            "description": "before the context window is compacted",
+            "matcherApplies": false,
+            "name": "PreCompact"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "hook-pretooluse",
+          "lifecycle": "current",
+          "value": {
+            "description": "before a tool runs — can block or gate the call",
+            "matcherApplies": true,
+            "name": "PreToolUse"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "hook-sessionend",
+          "lifecycle": "current",
+          "value": {
+            "description": "a session ends",
+            "matcherApplies": false,
+            "name": "SessionEnd"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "hook-sessionstart",
+          "lifecycle": "current",
+          "value": {
+            "description": "a session begins or resumes",
+            "matcherApplies": false,
+            "name": "SessionStart"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "hook-stop",
+          "lifecycle": "current",
+          "value": {
+            "description": "the main agent finishes responding",
+            "matcherApplies": false,
+            "name": "Stop"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "hook-subagentstop",
+          "lifecycle": "current",
+          "value": {
+            "description": "a spawned subagent finishes responding",
+            "matcherApplies": false,
+            "name": "SubagentStop"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "hook-userpromptsubmit",
+          "lifecycle": "current",
+          "value": {
+            "description": "the user submits a prompt, before the model sees it",
+            "matcherApplies": false,
+            "name": "UserPromptSubmit"
+          }
+        }
+      ],
+      "instructionArtifacts": [
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "verified",
+          "evidence": [
+            {
+              "checkedAt": "2026-08-22T10:32:40Z",
+              "contentHash": "sha256:afd613e0212fccb1fe7028a1a1bef077645aa938516da421ffd3e623c71a6eaf",
+              "locator": "#instructions",
+              "sourceId": "claude-code-instruction-docs"
+            }
+          ],
+          "factId": "instruction-global-01-home-claude-claude-md",
+          "lastChangedAt": "2026-07-26T00:00:00Z",
+          "lifecycle": "current",
+          "value": {
+            "format": "markdown",
+            "layout": "single-file",
+            "loadBehavior": "Nested CLAUDE.md files in subdirectories are also loaded on demand.",
+            "path": "~/.claude/CLAUDE.md",
+            "scope": "global"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "verified",
+          "evidence": [
+            {
+              "checkedAt": "2026-08-22T10:32:40Z",
+              "contentHash": "sha256:afd613e0212fccb1fe7028a1a1bef077645aa938516da421ffd3e623c71a6eaf",
+              "locator": "#instructions",
+              "sourceId": "claude-code-instruction-docs"
+            }
+          ],
+          "factId": "instruction-project-01-claude-md",
+          "lastChangedAt": "2026-07-26T00:00:00Z",
+          "lifecycle": "current",
+          "value": {
+            "format": "markdown",
+            "layout": "single-file",
+            "loadBehavior": "Nested CLAUDE.md files in subdirectories are also loaded on demand.",
+            "path": "CLAUDE.md",
+            "scope": "project"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-08-22T10:32:40Z"
+          },
+          "confidence": "verified",
+          "evidence": [
+            {
+              "checkedAt": "2026-08-22T10:32:40Z",
+              "contentHash": "sha256:afd613e0212fccb1fe7028a1a1bef077645aa938516da421ffd3e623c71a6eaf",
+              "locator": "#instructions",
+              "sourceId": "claude-code-instruction-docs"
+            }
+          ],
+          "factId": "instruction-project-claude-rules",
+          "lastChangedAt": "2026-08-22T10:32:40Z",
+          "lifecycle": "current",
+          "value": {
+            "format": "markdown",
+            "layout": "rules-dir",
+            "path": ".claude/rules",
+            "rulesDirPattern": ".claude/rules/*.md",
+            "scope": "project"
+          }
+        }
+      ],
+      "mcp": [],
+      "models": [
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "compatibility-model-claude-2-0",
+          "lifecycle": "legacy",
+          "value": {
+            "id": "claude-2.0",
+            "purpose": "cross-provider-reference-compatibility",
+            "replacement": "claude-opus-4-5"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "compatibility-model-claude-2-1",
+          "lifecycle": "legacy",
+          "value": {
+            "id": "claude-2.1",
+            "purpose": "cross-provider-reference-compatibility",
+            "replacement": "claude-opus-4-5"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "compatibility-model-claude-3-5-haiku-20241022",
+          "lifecycle": "legacy",
+          "value": {
+            "id": "claude-3-5-haiku-20241022",
+            "purpose": "cross-provider-reference-compatibility",
+            "replacement": "claude-haiku-4-5"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "compatibility-model-claude-3-5-sonnet-20240620",
+          "lifecycle": "legacy",
+          "value": {
+            "id": "claude-3-5-sonnet-20240620",
+            "purpose": "cross-provider-reference-compatibility",
+            "replacement": "claude-sonnet-4-5"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "compatibility-model-claude-3-5-sonnet-20241022",
+          "lifecycle": "legacy",
+          "value": {
+            "id": "claude-3-5-sonnet-20241022",
+            "purpose": "cross-provider-reference-compatibility",
+            "replacement": "claude-sonnet-4-5"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "compatibility-model-claude-3-7-sonnet-20250219",
+          "lifecycle": "legacy",
+          "value": {
+            "id": "claude-3-7-sonnet-20250219",
+            "purpose": "cross-provider-reference-compatibility",
+            "replacement": "claude-sonnet-4-5"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "compatibility-model-claude-3-haiku-20240307",
+          "lifecycle": "legacy",
+          "value": {
+            "id": "claude-3-haiku-20240307",
+            "purpose": "cross-provider-reference-compatibility",
+            "replacement": "claude-haiku-4-5"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "compatibility-model-claude-3-opus-20240229",
+          "lifecycle": "legacy",
+          "value": {
+            "id": "claude-3-opus-20240229",
+            "purpose": "cross-provider-reference-compatibility",
+            "replacement": "claude-opus-4-5"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "compatibility-model-claude-3-sonnet-20240229",
+          "lifecycle": "legacy",
+          "value": {
+            "id": "claude-3-sonnet-20240229",
+            "purpose": "cross-provider-reference-compatibility",
+            "replacement": "claude-sonnet-4-5"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "compatibility-model-claude-instant-1-2",
+          "lifecycle": "legacy",
+          "value": {
+            "id": "claude-instant-1.2",
+            "purpose": "cross-provider-reference-compatibility",
+            "replacement": "claude-haiku-4-5"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "compatibility-model-gemini-1-0-pro",
+          "lifecycle": "legacy",
+          "value": {
+            "id": "gemini-1.0-pro",
+            "purpose": "cross-provider-reference-compatibility",
+            "replacement": "gemini-2.5-pro"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "compatibility-model-gemini-1-5-flash",
+          "lifecycle": "legacy",
+          "value": {
+            "id": "gemini-1.5-flash",
+            "purpose": "cross-provider-reference-compatibility",
+            "replacement": "gemini-2.5-flash"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "compatibility-model-gemini-1-5-pro",
+          "lifecycle": "legacy",
+          "value": {
+            "id": "gemini-1.5-pro",
+            "purpose": "cross-provider-reference-compatibility",
+            "replacement": "gemini-2.5-pro"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "compatibility-model-gemini-pro",
+          "lifecycle": "legacy",
+          "value": {
+            "id": "gemini-pro",
+            "purpose": "cross-provider-reference-compatibility",
+            "replacement": "gemini-2.5-pro"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "compatibility-model-gpt-3-5-turbo",
+          "lifecycle": "legacy",
+          "value": {
+            "id": "gpt-3.5-turbo",
+            "purpose": "cross-provider-reference-compatibility",
+            "replacement": "gpt-4o-mini"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "compatibility-model-gpt-4",
+          "lifecycle": "legacy",
+          "value": {
+            "id": "gpt-4",
+            "purpose": "cross-provider-reference-compatibility",
+            "replacement": "gpt-4o"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "compatibility-model-gpt-4-32k",
+          "lifecycle": "legacy",
+          "value": {
+            "id": "gpt-4-32k",
+            "purpose": "cross-provider-reference-compatibility",
+            "replacement": "gpt-4o"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "model-claude-haiku-4-5",
+          "lifecycle": "current",
+          "value": {
+            "id": "claude-haiku-4-5",
+            "purpose": "runtime-capability"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "model-claude-opus-4-1",
+          "lifecycle": "current",
+          "value": {
+            "id": "claude-opus-4-1",
+            "purpose": "runtime-capability"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "model-claude-opus-4-5",
+          "lifecycle": "current",
+          "value": {
+            "id": "claude-opus-4-5",
+            "purpose": "runtime-capability"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "model-claude-sonnet-4-0",
+          "lifecycle": "current",
+          "value": {
+            "id": "claude-sonnet-4-0",
+            "purpose": "runtime-capability"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "model-claude-sonnet-4-5",
+          "lifecycle": "current",
+          "value": {
+            "id": "claude-sonnet-4-5",
+            "purpose": "runtime-capability"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "model-default",
+          "lifecycle": "current",
+          "value": {
+            "id": "default",
+            "purpose": "runtime-capability"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "model-haiku",
+          "lifecycle": "current",
+          "value": {
+            "id": "haiku",
+            "purpose": "runtime-capability"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "model-opus",
+          "lifecycle": "current",
+          "value": {
+            "id": "opus",
+            "purpose": "runtime-capability"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "model-opusplan",
+          "lifecycle": "current",
+          "value": {
+            "id": "opusplan",
+            "purpose": "runtime-capability"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "model-sonnet",
+          "lifecycle": "current",
+          "value": {
+            "id": "sonnet",
+            "purpose": "runtime-capability"
+          }
+        }
+      ],
+      "settings": [
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "setting-enableallprojectmcpservers",
+          "lifecycle": "current",
+          "value": {
+            "key": "enableAllProjectMcpServers",
+            "valueType": "boolean"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "setting-env",
+          "lifecycle": "current",
+          "value": {
+            "key": "env",
+            "valueType": "object"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "setting-hooks",
+          "lifecycle": "current",
+          "value": {
+            "key": "hooks",
+            "valueType": "object"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "setting-model",
+          "lifecycle": "current",
+          "value": {
+            "key": "model",
+            "valueType": "string"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "setting-permissions",
+          "lifecycle": "current",
+          "value": {
+            "key": "permissions",
+            "valueType": "object"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "setting-statusline",
+          "lifecycle": "current",
+          "value": {
+            "key": "statusLine",
+            "valueType": "object"
+          }
+        }
+      ],
+      "skills": [],
+      "tools": [
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-agent",
+          "lifecycle": "current",
+          "value": {
+            "name": "Agent"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-artifact",
+          "lifecycle": "current",
+          "value": {
+            "name": "Artifact"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-askuserquestion",
+          "lifecycle": "current",
+          "value": {
+            "name": "AskUserQuestion"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-bash",
+          "lifecycle": "current",
+          "value": {
+            "name": "Bash"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-bashoutput",
+          "lifecycle": "current",
+          "value": {
+            "name": "BashOutput"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-croncreate",
+          "lifecycle": "current",
+          "value": {
+            "name": "CronCreate"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-crondelete",
+          "lifecycle": "current",
+          "value": {
+            "name": "CronDelete"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-cronlist",
+          "lifecycle": "current",
+          "value": {
+            "name": "CronList"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-edit",
+          "lifecycle": "current",
+          "value": {
+            "name": "Edit"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-enterplanmode",
+          "lifecycle": "current",
+          "value": {
+            "name": "EnterPlanMode"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-enterworktree",
+          "lifecycle": "current",
+          "value": {
+            "name": "EnterWorktree"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-exitplanmode",
+          "lifecycle": "current",
+          "value": {
+            "name": "ExitPlanMode"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-exitworktree",
+          "lifecycle": "current",
+          "value": {
+            "name": "ExitWorktree"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-glob",
+          "lifecycle": "current",
+          "value": {
+            "name": "Glob"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-grep",
+          "lifecycle": "current",
+          "value": {
+            "name": "Grep"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-killbash",
+          "lifecycle": "current",
+          "value": {
+            "name": "KillBash"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-killshell",
+          "lifecycle": "current",
+          "value": {
+            "name": "KillShell"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-listmcpresources",
+          "lifecycle": "current",
+          "value": {
+            "name": "ListMcpResources"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-ls",
+          "lifecycle": "current",
+          "value": {
+            "name": "LS"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-monitor",
+          "lifecycle": "current",
+          "value": {
+            "name": "Monitor"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-multiedit",
+          "lifecycle": "current",
+          "value": {
+            "name": "MultiEdit"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-notebookedit",
+          "lifecycle": "current",
+          "value": {
+            "name": "NotebookEdit"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-notebookread",
+          "lifecycle": "current",
+          "value": {
+            "name": "NotebookRead"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-pushnotification",
+          "lifecycle": "current",
+          "value": {
+            "name": "PushNotification"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-read",
+          "lifecycle": "current",
+          "value": {
+            "name": "Read"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-readmcpresource",
+          "lifecycle": "current",
+          "value": {
+            "name": "ReadMcpResource"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-schedulewakeup",
+          "lifecycle": "current",
+          "value": {
+            "name": "ScheduleWakeup"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-sendmessage",
+          "lifecycle": "current",
+          "value": {
+            "name": "SendMessage"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-skill",
+          "lifecycle": "current",
+          "value": {
+            "name": "Skill"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-slashcommand",
+          "lifecycle": "current",
+          "value": {
+            "name": "SlashCommand"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-task",
+          "lifecycle": "current",
+          "value": {
+            "name": "Task"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-taskcreate",
+          "lifecycle": "current",
+          "value": {
+            "name": "TaskCreate"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-taskget",
+          "lifecycle": "current",
+          "value": {
+            "name": "TaskGet"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-tasklist",
+          "lifecycle": "current",
+          "value": {
+            "name": "TaskList"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-taskoutput",
+          "lifecycle": "current",
+          "value": {
+            "name": "TaskOutput"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-taskstop",
+          "lifecycle": "current",
+          "value": {
+            "name": "TaskStop"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-taskupdate",
+          "lifecycle": "current",
+          "value": {
+            "name": "TaskUpdate"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-todoread",
+          "lifecycle": "current",
+          "value": {
+            "name": "TodoRead"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-todowrite",
+          "lifecycle": "current",
+          "value": {
+            "name": "TodoWrite"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-toolsearch",
+          "lifecycle": "current",
+          "value": {
+            "name": "ToolSearch"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-webfetch",
+          "lifecycle": "current",
+          "value": {
+            "name": "WebFetch"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-websearch",
+          "lifecycle": "current",
+          "value": {
+            "name": "WebSearch"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-workflow",
+          "lifecycle": "current",
+          "value": {
+            "name": "Workflow"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "unknown",
+          "evidence": [
+            {
+              "checkedAt": "2026-07-26T00:00:00Z",
+              "locator": "#catalog-snapshot",
+              "sourceId": "agentconfig-legacy-claude-catalog"
+            }
+          ],
+          "factId": "tool-write",
+          "lifecycle": "current",
+          "value": {
+            "name": "Write"
+          }
+        }
+      ]
+    },
+    "id": "claude-code",
+    "maintainer": {
+      "confidence": "verified",
+      "detectionMarkers": ["CLAUDE.md", ".claude/"],
+      "detectorId": "claude-code",
+      "docsUrl": "https://docs.anthropic.com/en/docs/claude-code/memory",
+      "owner": "runtime-maintainers/claude-code",
+      "scaffoldPath": "CLAUDE.md",
+      "scaffoldTemplate": "# Project instructions\n\n<!-- Add project-specific guidance here. -->\n",
+      "supportTier": "first-class"
+    },
+    "productFamily": "Claude Code",
+    "profileRevision": 2,
+    "promotion": {
+      "approvals": [
+        {
+          "approvedAt": "2026-08-23T12:52:46Z",
+          "approverId": "tranqy",
+          "basedOnProfileRevision": 1,
+          "candidateHash": "sha256:f20992f866049f161fdc7a8bf0b8b8993e514014dfe3b9a1176b94640bd2ea77",
+          "candidateId": "claude-code-20260822103240-f20992f86604",
+          "comment": "Approved after independent review against current Anthropic documentation.",
+          "decision": "approve"
+        }
+      ],
+      "basedOnProfileRevision": 1,
+      "candidateHash": "sha256:f20992f866049f161fdc7a8bf0b8b8993e514014dfe3b9a1176b94640bd2ea77",
+      "candidateId": "claude-code-20260822103240-f20992f86604",
+      "canonicalHash": "sha256:f76ad83ce9a59005433de36b7242b10efcd0083ab82bcaf6c9ee430a49d75459",
+      "method": "reviewed-candidate",
+      "promotedAt": "2026-08-23T12:52:46Z",
+      "promoterId": "codex"
+    },
+    "schemaVersion": 1,
+    "sources": [
+      {
+        "covers": ["hookEvents", "models", "settings", "tools"],
+        "freshness": {
+          "reason": "Migrated internal snapshot dated 2026-07-26; upstream source snapshots were not retained.",
+          "status": "unavailable"
+        },
+        "id": "agentconfig-legacy-claude-catalog",
+        "kind": "independent-docs",
+        "required": false,
+        "retrievalPolicy": {
+          "maxAgeDays": 30,
+          "method": "http"
+        },
+        "url": "https://github.com/junoddev/agentconfiging",
+        "versionScheme": "rolling"
+      },
+      {
+        "covers": ["instructionArtifacts"],
+        "freshness": {
+          "status": "fresh"
+        },
+        "id": "claude-code-instruction-docs",
+        "kind": "official-config",
+        "latestSuccessfulRetrieval": {
+          "contentHash": "sha256:afd613e0212fccb1fe7028a1a1bef077645aa938516da421ffd3e623c71a6eaf",
+          "retrievedAt": "2026-08-22T10:32:40Z"
+        },
+        "required": true,
+        "retrievalPolicy": {
+          "allowedRedirectUrls": ["https://code.claude.com/docs/en/memory"],
+          "maxAgeDays": 30,
+          "method": "http"
+        },
+        "url": "https://docs.anthropic.com/en/docs/claude-code/memory",
+        "versionScheme": "rolling"
+      },
+      {
+        "covers": [
+          "commands",
+          "extensions",
+          "history",
+          "hookEvents",
+          "mcp",
+          "models",
+          "settings",
+          "skills",
+          "tools"
+        ],
+        "freshness": {
+          "status": "fresh"
+        },
+        "id": "claude-code-product-docs",
+        "kind": "official-product",
+        "latestSuccessfulRetrieval": {
+          "contentHash": "sha256:afd613e0212fccb1fe7028a1a1bef077645aa938516da421ffd3e623c71a6eaf",
+          "retrievedAt": "2026-08-22T10:32:40Z"
+        },
+        "required": false,
+        "retrievalPolicy": {
+          "allowedRedirectUrls": ["https://code.claude.com/docs/en/memory"],
+          "maxAgeDays": 7,
+          "method": "http"
+        },
+        "url": "https://docs.anthropic.com/en/docs/claude-code/memory",
+        "versionScheme": "rolling"
+      }
+    ],
+    "vendor": "Anthropic"
+  },
+  {
+    "aliases": [],
+    "coverage": {
+      "commands": "unknown",
+      "extensions": "unknown",
+      "history": "unknown",
+      "hookEvents": "unknown",
+      "instructionArtifacts": "partial",
+      "mcp": "unknown",
+      "models": "unknown",
+      "settings": "unknown",
+      "skills": "unknown",
+      "tools": "unknown"
+    },
+    "displayName": "OpenAI Codex",
+    "facts": {
+      "commands": [],
+      "extensions": [],
+      "history": [],
+      "hookEvents": [],
+      "instructionArtifacts": [
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "verified",
+          "evidence": [
+            {
+              "checkedAt": "2026-08-22T10:36:43Z",
+              "contentHash": "sha256:19e7590e5e00dfe5b8857a992cc52ef84d2a8b633649e1ecb9d8605d340bff72",
+              "locator": "#instructions",
+              "sourceId": "codex-instruction-docs"
+            }
+          ],
+          "factId": "instruction-global-01-home-codex-agents-md",
+          "lastChangedAt": "2026-07-26T00:00:00Z",
+          "lifecycle": "current",
+          "value": {
+            "format": "markdown",
+            "layout": "single-file",
+            "loadBehavior": "AGENTS.md is a shared cross-tool convention; other runtimes read it too.",
+            "path": "~/.codex/AGENTS.md",
+            "scope": "global"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-08-22T10:36:43Z"
+          },
+          "confidence": "verified",
+          "evidence": [
+            {
+              "checkedAt": "2026-08-22T10:36:43Z",
+              "contentHash": "sha256:19e7590e5e00dfe5b8857a992cc52ef84d2a8b633649e1ecb9d8605d340bff72",
+              "locator": "#instructions",
+              "sourceId": "codex-instruction-docs"
+            }
+          ],
+          "factId": "instruction-global-home-codex-agents-override-md",
+          "lastChangedAt": "2026-08-22T10:36:43Z",
+          "lifecycle": "current",
+          "value": {
+            "format": "markdown",
+            "layout": "single-file",
+            "path": "~/.codex/AGENTS.override.md",
+            "scope": "global"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-07-26T00:00:00Z"
+          },
+          "confidence": "verified",
+          "evidence": [
+            {
+              "checkedAt": "2026-08-22T10:36:43Z",
+              "contentHash": "sha256:19e7590e5e00dfe5b8857a992cc52ef84d2a8b633649e1ecb9d8605d340bff72",
+              "locator": "#instructions",
+              "sourceId": "codex-instruction-docs"
+            }
+          ],
+          "factId": "instruction-project-01-agents-md",
+          "lastChangedAt": "2026-07-26T00:00:00Z",
+          "lifecycle": "current",
+          "value": {
+            "format": "markdown",
+            "layout": "single-file",
+            "loadBehavior": "AGENTS.md is a shared cross-tool convention; other runtimes read it too.",
+            "path": "AGENTS.md",
+            "scope": "project"
+          }
+        },
+        {
+          "applicability": {
+            "observedFrom": "2026-08-22T10:36:43Z"
+          },
+          "confidence": "verified",
+          "evidence": [
+            {
+              "checkedAt": "2026-08-22T10:36:43Z",
+              "contentHash": "sha256:19e7590e5e00dfe5b8857a992cc52ef84d2a8b633649e1ecb9d8605d340bff72",
+              "locator": "#instructions",
+              "sourceId": "codex-instruction-docs"
+            }
+          ],
+          "factId": "instruction-project-agents-override-md",
+          "lastChangedAt": "2026-08-22T10:36:43Z",
+          "lifecycle": "current",
+          "value": {
+            "format": "markdown",
+            "layout": "single-file",
+            "path": "AGENTS.override.md",
+            "scope": "project"
+          }
+        }
+      ],
+      "mcp": [],
+      "models": [],
+      "settings": [],
+      "skills": [],
+      "tools": []
+    },
+    "id": "codex",
+    "maintainer": {
+      "confidence": "verified",
+      "detectionMarkers": ["AGENTS.md", ".codex/"],
+      "detectorId": "codex",
+      "docsUrl": "https://agents.md/",
+      "owner": "runtime-maintainers/codex",
+      "scaffoldPath": "AGENTS.md",
+      "scaffoldTemplate": "# Project instructions\n\n<!-- Add project-specific guidance here. -->\n",
+      "supportTier": "first-class"
+    },
+    "productFamily": "OpenAI Codex",
+    "profileRevision": 2,
+    "promotion": {
+      "approvals": [
+        {
+          "approvedAt": "2026-08-23T12:52:46Z",
+          "approverId": "tranqy",
+          "basedOnProfileRevision": 1,
+          "candidateHash": "sha256:a3d868715061ac341d088ee60e20b1182d7505f9b15360a045e76f1e7eb5dcba",
+          "candidateId": "codex-20260822103643-a3d868715061",
+          "comment": "Approved after independent review against current OpenAI documentation.",
+          "decision": "approve"
+        }
+      ],
+      "basedOnProfileRevision": 1,
+      "candidateHash": "sha256:a3d868715061ac341d088ee60e20b1182d7505f9b15360a045e76f1e7eb5dcba",
+      "candidateId": "codex-20260822103643-a3d868715061",
+      "canonicalHash": "sha256:500883b8d3f215362ade1098e4b0a323c51a8ba4b52c6d6861b7192a04158f1c",
+      "method": "reviewed-candidate",
+      "promotedAt": "2026-08-23T12:52:46Z",
+      "promoterId": "codex"
+    },
+    "schemaVersion": 1,
+    "sources": [
+      {
+        "covers": ["instructionArtifacts"],
+        "freshness": {
+          "status": "fresh"
+        },
+        "id": "codex-instruction-docs",
+        "kind": "official-config",
+        "latestSuccessfulRetrieval": {
+          "contentHash": "sha256:19e7590e5e00dfe5b8857a992cc52ef84d2a8b633649e1ecb9d8605d340bff72",
+          "retrievedAt": "2026-08-22T10:36:43Z"
+        },
+        "required": true,
+        "retrievalPolicy": {
+          "allowedRedirectUrls": [
+            "https://learn.chatgpt.com/docs/agent-configuration/agents-md",
+            "https://developers.openai.com/codex",
+            "https://learn.chatgpt.com/docs"
+          ],
+          "maxAgeDays": 30,
+          "method": "http"
+        },
+        "url": "https://developers.openai.com/codex/guides/agents-md",
+        "versionScheme": "rolling"
+      },
+      {
+        "covers": [
+          "commands",
+          "extensions",
+          "history",
+          "hookEvents",
+          "mcp",
+          "models",
+          "settings",
+          "skills",
+          "tools"
+        ],
+        "freshness": {
+          "status": "fresh"
+        },
+        "id": "codex-product-docs",
+        "kind": "official-product",
+        "latestSuccessfulRetrieval": {
+          "contentHash": "sha256:463efca119f6b3df8247ad5aa1a4af604dd1da122aa8808f517e88bacf8ad44d",
+          "retrievedAt": "2026-08-22T10:36:43Z"
+        },
+        "required": false,
+        "retrievalPolicy": {
+          "allowedRedirectUrls": [
+            "https://learn.chatgpt.com/docs/agent-configuration/agents-md",
+            "https://developers.openai.com/codex",
+            "https://learn.chatgpt.com/docs"
+          ],
+          "maxAgeDays": 7,
+          "method": "http"
+        },
+        "url": "https://developers.openai.com/codex/",
+        "versionScheme": "rolling"
+      },
+      {
+        "covers": [],
+        "freshness": {
+          "reason": "Baseline import has no stored source snapshot.",
+          "status": "unavailable"
+        },
+        "id": "codex-shared-convention-docs",
+        "kind": "independent-docs",
+        "required": false,
+        "retrievalPolicy": {
+          "maxAgeDays": 30,
+          "method": "http"
+        },
+        "url": "https://agents.md/",
+        "versionScheme": "rolling"
+      }
+    ],
+    "vendor": "OpenAI"
+  }
+]

@@ -41,7 +41,7 @@ describe('profile audit extraction and candidate contract', () => {
       canonical,
       candidate,
       [],
-      '2026-08-15T12:00:00Z',
+      '2026-08-24T12:00:00Z',
       [],
       [],
     );
@@ -85,14 +85,14 @@ describe('profile audit extraction and candidate contract', () => {
     const candidate = structuredClone(base);
     candidate.facts.instructionArtifacts.push({
       ...structuredClone(candidate.facts.instructionArtifacts[0]!),
-      factId: 'instruction-project-agents-override-md',
-      value: { ...candidate.facts.instructionArtifacts[0]!.value, path: 'AGENTS.override.md' },
+      factId: 'instruction-project-agents-local-md',
+      value: { ...candidate.facts.instructionArtifacts[0]!.value, path: 'AGENTS.local.md' },
     });
     const envelope = buildCandidateEnvelope(
       base,
       candidate,
       ['source@sha256:x'],
-      '2026-08-15T00:00:00Z',
+      '2026-08-24T00:00:00Z',
       ['found'],
       [],
     );
@@ -100,7 +100,7 @@ describe('profile audit extraction and candidate contract', () => {
     expect(envelope.baseProfileHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(envelope.candidateHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(envelope.semanticDiff).toMatchObject([
-      { operation: 'add', factId: 'instruction-project-agents-override-md' },
+      { operation: 'add', factId: 'instruction-project-agents-local-md' },
     ]);
   });
 
@@ -132,7 +132,7 @@ describe('profile audit extraction and candidate contract', () => {
       candidateDir: path.join(root, 'candidates'),
       fetch,
       resolveHost: publicDns,
-      now: () => new Date('2026-08-15T00:00:00Z'),
+      now: () => new Date('2026-08-24T00:00:00Z'),
     });
     expect(result.status).toBe('drift');
     const envelope = JSON.parse(fs.readFileSync(result.candidatePath!, 'utf8')) as Record<
@@ -173,7 +173,7 @@ describe('profile audit extraction and candidate contract', () => {
       candidateDir: temp(),
       fetch: async () => response('volatile product documentation'),
       resolveHost: publicDns,
-      now: () => new Date('2026-08-15T00:00:00Z'),
+      now: () => new Date('2026-08-24T00:00:00Z'),
     });
     expect(weekly.evidence.map((item) => item.sourceId)).toEqual(['codex-product-docs']);
     expect(weekly).toMatchObject({
@@ -209,7 +209,7 @@ describe('profile audit extraction and candidate contract', () => {
       candidateDir: temp(),
       fetch: async () => response('<code>AGENTS.md</code>'),
       resolveHost: publicDns,
-      now: () => new Date('2026-08-15T00:00:00Z'),
+      now: () => new Date('2026-08-24T00:00:00Z'),
     });
     expect(monthly.evidence.map((item) => item.sourceId).sort()).toEqual([
       'codex-instruction-docs',
@@ -239,7 +239,7 @@ describe('profile audit extraction and candidate contract', () => {
       candidateDir: temp(),
       fetch: async () => response('same volatile body', 200, { etag: 'v1' }),
       resolveHost: publicDns,
-      now: () => new Date('2026-08-15T00:00:00Z'),
+      now: () => new Date('2026-08-24T00:00:00Z'),
     });
     const second = await auditAgentProfile({
       profileId: 'codex',
@@ -248,7 +248,7 @@ describe('profile audit extraction and candidate contract', () => {
       candidateDir: temp(),
       fetch: async () => response('', 304),
       resolveHost: publicDns,
-      now: () => new Date('2026-08-15T00:00:01Z'),
+      now: () => new Date('2026-08-24T00:00:01Z'),
     });
     for (const result of [first, second]) {
       expect(result).toMatchObject({
@@ -258,7 +258,7 @@ describe('profile audit extraction and candidate contract', () => {
       const envelope = JSON.parse(fs.readFileSync(result.candidatePath!, 'utf8')) as {
         sourceChanges: Array<{ beforeContentHash?: string; afterContentHash: string }>;
       };
-      expect(envelope.sourceChanges[0]!.beforeContentHash).toBeUndefined();
+      expect(envelope.sourceChanges[0]!.beforeContentHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     }
     expect(second.evidence[0]!.contentHash).toBe(first.evidence[0]!.contentHash);
   });
@@ -349,7 +349,7 @@ describe('profile audit network/cache defenses', () => {
           candidateDir: temp(),
           fetch: codexFetch,
           resolveHost: publicDns,
-          now: () => new Date('2026-08-15T00:00:00Z'),
+          now: () => new Date('2026-08-24T00:00:00Z'),
         })
       ).status,
     ).toBe('drift');
@@ -366,7 +366,7 @@ describe('profile audit network/cache defenses', () => {
           candidateDir: temp(),
           fetch: claudeFetch,
           resolveHost: publicDns,
-          now: () => new Date('2026-08-15T00:00:00Z'),
+          now: () => new Date('2026-08-24T00:00:00Z'),
         })
       ).status,
     ).toBe('drift');
@@ -383,7 +383,7 @@ describe('profile audit network/cache defenses', () => {
         throw new Error('optional offline');
       },
       resolveHost: publicDns,
-      now: () => new Date('2026-08-15T00:00:00Z'),
+      now: () => new Date('2026-08-24T00:00:00Z'),
     });
     expect(result.status).toBe('drift');
     expect(result.errors).toEqual([]);
@@ -447,7 +447,7 @@ describe('profile audit network/cache defenses', () => {
       candidateDir: temp(),
       fetch: async () => response('<code>AGENTS.md</code>', 200, { etag: 'v1' }),
       resolveHost: publicDns,
-      now: () => new Date('2026-08-15T00:00:00Z'),
+      now: () => new Date('2026-08-24T00:00:00Z'),
     });
     expect(first.status).toBe('drift');
     const cached = first.evidence[0]!.cachePath;
@@ -457,7 +457,7 @@ describe('profile audit network/cache defenses', () => {
       candidateDir: temp(),
       fetch: async () => response('', 304),
       resolveHost: publicDns,
-      now: () => new Date('2026-08-15T00:00:01Z'),
+      now: () => new Date('2026-08-24T00:00:01Z'),
     });
     expect(second.status).toBe('drift');
     fs.writeFileSync(cached, 'corrupt');
@@ -516,7 +516,7 @@ describe('profile audit network/cache defenses', () => {
       candidateDir: temp(),
       fetch: async () => response('<code>AGENTS.md</code>'),
       resolveHost: publicDns,
-      now: () => new Date('2026-08-15T00:00:00Z'),
+      now: () => new Date('2026-08-24T00:00:00Z'),
       codexAssisted: true,
     });
     expect(result.status).toBe('invalid');

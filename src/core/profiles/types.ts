@@ -151,6 +151,9 @@ export interface AgentProfile {
         approvals: Array<{
           approverId: string;
           approvedAt: string;
+          candidateId: string;
+          candidateHash: string;
+          basedOnProfileRevision: number;
           decision: 'approve' | 'reject';
           comment?: string;
         }>;

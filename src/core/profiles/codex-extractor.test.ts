@@ -40,7 +40,7 @@ describe('bounded Codex profile extraction', () => {
     const result = await extractProfileWithCodex({
       profile: fixture(),
       evidence: [{ sourceId: 'codex-docs', contentHash: HASH, body: BODY }],
-      checkedAt: '2026-08-15T00:00:00Z',
+      checkedAt: '2026-08-24T00:00:00Z',
       runner: isolated(run),
     });
     expect(result.changes).toEqual([]);
@@ -83,7 +83,7 @@ describe('bounded Codex profile extraction', () => {
       extractProfileWithCodex({
         profile: fixture(),
         evidence: [],
-        checkedAt: '2026-08-15T00:00:00Z',
+        checkedAt: '2026-08-24T00:00:00Z',
       }),
     ).rejects.toThrow('verified isolated runner');
     const run = vi
@@ -94,7 +94,7 @@ describe('bounded Codex profile extraction', () => {
       extractProfileWithCodex({
         profile: fixture(),
         evidence: [],
-        checkedAt: '2026-08-15T00:00:00Z',
+        checkedAt: '2026-08-24T00:00:00Z',
         runner: isolated(run),
       }),
     ).rejects.toThrow('nondeterministic');
@@ -102,7 +102,7 @@ describe('bounded Codex profile extraction', () => {
       extractProfileWithCodex({
         profile: fixture(),
         evidence: [],
-        checkedAt: '2026-08-15T00:00:00Z',
+        checkedAt: '2026-08-24T00:00:00Z',
         runner: isolated(async () => '```json\n{}\n```'),
       }),
     ).rejects.toThrow('did not return JSON');
@@ -115,7 +115,7 @@ describe('bounded Codex profile extraction', () => {
       extractProfileWithCodex({
         profile: fixture(),
         evidence: [{ sourceId: 'codex-docs', contentHash: HASH, body: BODY }],
-        checkedAt: '2026-08-15T00:00:00Z',
+        checkedAt: '2026-08-24T00:00:00Z',
         runner: isolated(async () =>
           output(changed, [
             {
@@ -136,7 +136,7 @@ describe('bounded Codex profile extraction', () => {
       extractProfileWithCodex({
         profile: fixture(),
         evidence: [],
-        checkedAt: '2026-08-15T00:00:00Z',
+        checkedAt: '2026-08-24T00:00:00Z',
         runner: isolated(async () => output(removed)),
       }),
     ).rejects.toThrow('proposed a removal');
@@ -146,7 +146,7 @@ describe('bounded Codex profile extraction', () => {
       extractProfileWithCodex({
         profile: fixture(),
         evidence: [],
-        checkedAt: '2026-08-15T00:00:00Z',
+        checkedAt: '2026-08-24T00:00:00Z',
         runner: isolated(async () => output(renamed)),
       }),
     ).rejects.toThrow('changed profile metadata');
@@ -156,7 +156,7 @@ describe('bounded Codex profile extraction', () => {
       extractProfileWithCodex({
         profile: fixture(),
         evidence: [],
-        checkedAt: '2026-08-15T00:00:00Z',
+        checkedAt: '2026-08-24T00:00:00Z',
         runner: isolated(async () => JSON.stringify(extra)),
       }),
     ).rejects.toThrow('unexpected fields');
@@ -169,7 +169,7 @@ describe('bounded Codex profile extraction', () => {
       extractProfileWithCodex({
         profile: fixture(),
         evidence: [{ sourceId: 'docs', contentHash: `sha256:${'a'.repeat(64)}`, body: 'x' }],
-        checkedAt: '2026-08-15T00:00:00Z',
+        checkedAt: '2026-08-24T00:00:00Z',
         runner,
       }),
     ).rejects.toThrow('hashes');
@@ -185,7 +185,7 @@ describe('bounded Codex profile extraction', () => {
       extractProfileWithCodex({
         profile: fixture(),
         evidence: [],
-        checkedAt: '2026-08-15T00:00:00Z',
+        checkedAt: '2026-08-24T00:00:00Z',
         maxOutputBytes: 0,
         runner,
       }),
@@ -198,7 +198,7 @@ describe('bounded Codex profile extraction', () => {
       extractProfileWithCodex({
         profile: fixture(),
         evidence: [],
-        checkedAt: '2026-08-15T00:00:00Z',
+        checkedAt: '2026-08-24T00:00:00Z',
         maxOutputBytes: 16,
         runner: isolated(async () => 'x'.repeat(17)),
       }),
@@ -212,7 +212,7 @@ describe('bounded Codex profile extraction', () => {
       return output();
     });
     await expect(
-      extractProfileWithCodex({ profile, evidence: [], checkedAt: '2026-08-15T00:00:00Z', runner }),
+      extractProfileWithCodex({ profile, evidence: [], checkedAt: '2026-08-24T00:00:00Z', runner }),
     ).rejects.toThrow('canonical profile snapshot');
   });
 });

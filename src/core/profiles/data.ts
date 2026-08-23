@@ -11,6 +11,7 @@ import {
   CLAUDE_TOOLS_SEED,
 } from './claude-seed.js';
 import { RUNTIME_SOURCE_MANIFESTS } from './source-manifests.js';
+import promotedProfilesJson from './promoted-profiles.json';
 
 const SNAPSHOT_AT = '2026-07-26T00:00:00Z';
 const BASELINE_PROMOTED_AT = '2026-08-15T00:00:00Z';
@@ -262,6 +263,10 @@ function makeProfile(runtime: RuntimeFormat): AgentProfile {
 }
 
 /** Canonical seed profiles. Runtime consumers remain on RUNTIME_FORMATS until E14.3. */
+const promotedProfiles = promotedProfilesJson as AgentProfile[];
+const promotedById = new Map(promotedProfiles.map((profile) => [profile.id, profile]));
+
+/** Canonical profiles: reviewed promotions replace their generated baseline. */
 export const AGENT_PROFILES: readonly AgentProfile[] = BASELINE_RUNTIME_FORMATS.map(
-  makeProfile,
+  (runtime) => promotedById.get(runtime.id) ?? makeProfile(runtime),
 ).sort((a, b) => a.id.localeCompare(b.id));

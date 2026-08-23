@@ -262,7 +262,13 @@ function validateShape(value: unknown, issues: ProfileValidationIssue[]): value 
           candidate.promotion.approvals.forEach((approval, index) => {
             const path = `${root}.promotion.approvals[${index}]`;
             if (!record(approval)) return issues.push({ path, message: 'must be an object' });
-            for (const key of ['approverId', 'approvedAt']) string(approval[key], `${path}.${key}`);
+            for (const key of ['approverId', 'approvedAt', 'candidateId', 'candidateHash'])
+              string(approval[key], `${path}.${key}`);
+            if (!Number.isInteger(approval.basedOnProfileRevision))
+              issues.push({
+                path: `${path}.basedOnProfileRevision`,
+                message: 'must be an integer',
+              });
             enumValue(approval.decision, `${path}.decision`, new Set(['approve', 'reject']));
             if (approval.comment !== undefined) string(approval.comment, `${path}.comment`);
           });
@@ -492,6 +498,15 @@ export function validateAgentProfiles(
             message: 'must be non-empty and unique',
           });
         approvers.add(approval.approverId);
+        if (
+          approval.candidateId !== profile.promotion.candidateId ||
+          approval.candidateHash !== profile.promotion.candidateHash ||
+          approval.basedOnProfileRevision !== profile.promotion.basedOnProfileRevision
+        )
+          issues.push({
+            path: `${root}.promotion.approvals[${index}]`,
+            message: 'must identify the promoted candidate and base revision',
+          });
         if (approval.decision === 'reject')
           issues.push({
             path: `${root}.promotion.approvals[${index}].decision`,

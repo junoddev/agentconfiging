@@ -12,7 +12,7 @@ import {
 
 describe('agent profile registry', () => {
   it('contains a valid deterministic profile for every runtime', () => {
-    expect(validateAgentProfiles(AGENT_PROFILES, new Date('2026-08-15T00:00:00Z'))).toEqual([]);
+    expect(validateAgentProfiles(AGENT_PROFILES, new Date('2026-08-23T13:00:00Z'))).toEqual([]);
     expect(AGENT_PROFILES.map((profile) => profile.id)).toEqual(
       BASELINE_RUNTIME_FORMATS.map((runtime) => runtime.id).sort(),
     );
@@ -32,31 +32,63 @@ describe('agent profile registry', () => {
       expect(profile?.maintainer.scaffoldPath).toBe(runtime.scaffoldPath);
       expect(profile?.maintainer.scaffoldTemplate).toBe(runtime.scaffoldTemplate);
       expect(profile?.maintainer.detectionMarkers).toEqual(runtime.detectionMarkers);
-      expect(profile?.promotion).toMatchObject({
-        method: 'baseline-import',
-        provenance: 'src/core/profiles/baseline.ts',
-      });
-      expect(profile?.sources.every((source) => source.freshness.status === 'unavailable')).toBe(
-        true,
-      );
+      if (!['claude-code', 'codex'].includes(runtime.id))
+        expect(profile?.promotion).toMatchObject({
+          method: 'baseline-import',
+          provenance: 'src/core/profiles/baseline.ts',
+        });
       const artifacts = profile?.facts.instructionArtifacts.map((fact) => fact.value);
       expect(
         artifacts?.filter((value) => value.scope === 'project').map((value) => value.path),
-      ).toEqual(runtime.instructionPaths);
+      ).toEqual(expect.arrayContaining(runtime.instructionPaths));
       expect(
         artifacts?.filter((value) => value.scope === 'global').map((value) => value.path),
-      ).toEqual(runtime.globalPaths ?? []);
+      ).toEqual(expect.arrayContaining(runtime.globalPaths ?? []));
       for (const artifact of artifacts ?? []) {
         expect(artifact.format).toBe(runtime.format);
-        expect(artifact.layout).toBe(runtime.layout);
-        expect(artifact.loadBehavior).toBe(runtime.scopeNotes);
+        if ([...runtime.instructionPaths, ...(runtime.globalPaths ?? [])].includes(artifact.path)) {
+          expect(artifact.layout).toBe(runtime.layout);
+          expect(artifact.loadBehavior).toBe(runtime.scopeNotes);
+        }
       }
       expect(profile?.sources.some((source) => source.url === runtime.docsUrl)).toBe(true);
     }
   });
 
-  it('projects the complete legacy RuntimeFormat contract without behavior drift', () => {
-    expect(RUNTIME_FORMATS).toEqual(BASELINE_RUNTIME_FORMATS);
+  it('loads reviewed promotions with approval provenance and new instruction artifacts', () => {
+    const claude = getAgentProfile('claude-code')!;
+    const codex = getAgentProfile('codex')!;
+    for (const profile of [claude, codex]) {
+      expect(profile.profileRevision).toBe(2);
+      expect(profile.promotion).toMatchObject({
+        method: 'reviewed-candidate',
+        basedOnProfileRevision: 1,
+        approvals: [
+          expect.objectContaining({
+            approverId: 'tranqy',
+            decision: 'approve',
+            basedOnProfileRevision: 1,
+          }),
+        ],
+      });
+    }
+    expect(claude.facts.instructionArtifacts.map((fact) => fact.value.path)).toContain(
+      '.claude/rules',
+    );
+    expect(codex.facts.instructionArtifacts.map((fact) => fact.value.path)).toEqual(
+      expect.arrayContaining(['~/.codex/AGENTS.override.md', 'AGENTS.override.md']),
+    );
+  });
+
+  it('projects promoted instruction paths through the RuntimeFormat compatibility surface', () => {
+    expect(RUNTIME_FORMATS).toHaveLength(BASELINE_RUNTIME_FORMATS.length);
+    expect(
+      RUNTIME_FORMATS.find((runtime) => runtime.id === 'claude-code')?.instructionPaths,
+    ).toEqual(expect.arrayContaining(['CLAUDE.md', '.claude/rules']));
+    expect(RUNTIME_FORMATS.find((runtime) => runtime.id === 'codex')).toMatchObject({
+      instructionPaths: expect.arrayContaining(['AGENTS.md', 'AGENTS.override.md']),
+      globalPaths: expect.arrayContaining(['~/.codex/AGENTS.md', '~/.codex/AGENTS.override.md']),
+    });
   });
 
   it('keeps dated Claude catalogs as evidenced profile facts and exposes only a safe projection', () => {

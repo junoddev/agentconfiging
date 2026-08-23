@@ -13,6 +13,11 @@ describe('public agent changelog', () => {
         change.observedAt,
       );
       expect(change.sourceUrl).toMatch(/^https:\/\//);
+      expect(change).toMatchObject({
+        status: 'promoted',
+        profileRevision: 2,
+        promotedAt: '2026-08-23T12:52:46Z',
+      });
     }
     expect(JSON.stringify(agentChanges)).not.toMatch(
       /contentHash|candidateHash|cachePath|diagnostics|sha256:/,

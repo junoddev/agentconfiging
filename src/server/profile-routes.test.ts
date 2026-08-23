@@ -40,7 +40,7 @@ describe('content-safe profile API', () => {
     const canonical = getAgentProfile('codex')!;
     const profile = structuredClone(canonical);
     profile.facts.instructionArtifacts[0]!.confidence = 'corroborated';
-    const envelope = buildCandidateEnvelope(canonical, profile, [], '2026-08-15T12:00:00Z', [], []);
+    const envelope = buildCandidateEnvelope(canonical, profile, [], '2026-08-24T12:00:00Z', [], []);
     fs.writeFileSync(
       path.join(candidates, `${envelope.candidateId}.candidate.json`),
       JSON.stringify(envelope),
