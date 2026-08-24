@@ -10,6 +10,10 @@ fixtures/
 .agents/
 .claude/
 .codex/
+.github/agents/
+.github/hooks/
+.github/skills/
+.impeccable/
 package-lock.json
 *.md
 
