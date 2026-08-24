@@ -697,19 +697,20 @@ async function setHookCommand(page, value) {
 }
 
 async function selectHookTarget(page, matcher) {
-  const result = await page.evaluate(`(() => {
-    const select = document.querySelector('#hook-target');
-    if (!select) return 'missing';
-    const matcher = ${JSON.stringify(matcher)};
-    const option = Array.from(select.options).find((o) => o.value === matcher)
-      || Array.from(select.options).find((o) => (o.textContent || '').includes(matcher) || o.value.includes(matcher));
-    if (!option) return 'no-option';
-    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
-    setter.call(select, option.value);
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-    return 'ok';
-  })()`);
-  if (result !== 'ok') fail(`could not select hook target ${matcher}: ${result}`);
+  await waitFor(page, `hook target ${matcher}`, () =>
+    page.evaluate(`(() => {
+      const select = document.querySelector('#hook-target');
+      if (!select) return false;
+      const matcher = ${JSON.stringify(matcher)};
+      const option = Array.from(select.options).find((o) => o.value === matcher)
+        || Array.from(select.options).find((o) => (o.textContent || '').includes(matcher) || o.value.includes(matcher));
+      if (!option) return false;
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+      setter.call(select, option.value);
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    })()`),
+  );
 }
 
 async function navigate(page, url) {
