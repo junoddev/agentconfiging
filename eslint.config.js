@@ -9,7 +9,6 @@ export default tseslint.config(
       'node_modules/',
       'docs/',
       'fixtures/',
-      '.beads/',
       'coverage/',
       '.qa-screenshots/',
       'site/.astro/',

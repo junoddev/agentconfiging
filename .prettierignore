@@ -6,7 +6,6 @@ docs/
 # Imported Console reference (read-only source of truth — never reformat)
 opendesign/
 fixtures/
-.beads/
 .agents/
 .claude/
 .codex/
