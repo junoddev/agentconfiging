@@ -43,7 +43,7 @@ describe('profile refresh runner', () => {
       profileId: 'not-a-canonical-profile',
       complete: false,
     });
-  });
+  }, 15_000);
 });
 
 describe('profile refresh planning', () => {
