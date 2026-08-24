@@ -51,16 +51,46 @@ const jsonLd = {
     </div>
 
     <section id="demo"><div class="shell">
-      <div class="section-head"><p class="eyebrow">Detected now</p><h2>One view over the configuration you already have.</h2></div>
-      <div class="console" aria-label="Example agentconfiging scan output">
-        <div class="console-bar"><span class="live"></span>agentconfiging / project overview</div>
-        <div class="console-body">
-          <div class="console-line"><span>CLAUDE</span><span>CLAUDE.md · settings.json · 4 skills</span><span class="ok">DETECTED</span></div>
-          <div class="console-line"><span>CODEX</span><span>AGENTS.md · config.toml · 2 rules</span><span class="ok">DETECTED</span></div>
-          <div class="console-line"><span>CURSOR</span><span>.cursor/rules · mcp.json</span><span class="ok">DETECTED</span></div>
-          <div class="console-line"><span>FINDINGS</span><span>broken import · rules drift · secret redacted</span><span>3 REVIEW</span></div>
+      <div class="section-head"><p class="eyebrow">Proof, not promise</p><h2>See the finding. See the fix. Then decide.</h2></div>
+      <div class="proof-console" aria-label="Fixture-backed agentconfiging review showing detected agents, a selected finding, and its proposed diff">
+        <div class="proof-topbar">
+          <div class="proof-brand"><span class="live"></span><strong>agentconfiging</strong><span>/</span><span>demo-repo</span></div>
+          <div class="proof-context"><span class="scope s-project">PROJECT</span><span>site/fixtures/demo-repo</span></div>
+          <span class="proof-state">REVIEW MODE</span>
         </div>
+        <div class="proof-workspace">
+          <aside class="proof-sidebar" aria-label="Detected agents">
+            <p class="proof-label">Detected from fixture</p>
+            <ul class="agent-list">
+              <li><span class="agent-mark">CL</span><span><strong>Claude Code</strong><small>CLAUDE.md · settings.local.json</small></span><span class="ok">●</span></li>
+              <li><span class="agent-mark">CX</span><span><strong>Codex</strong><small>AGENTS.md</small></span><span class="ok">●</span></li>
+              <li><span class="agent-mark">CR</span><span><strong>Cursor</strong><small>.cursorrules</small></span><span class="ok">●</span></li>
+            </ul>
+            <div class="proof-filetree">
+              <p class="proof-label">Project files</p>
+              <span>▾ .claude</span>
+              <span class="tree-child">settings.local.json</span>
+              <span>AGENTS.md</span><span>CLAUDE.md</span><span>.cursorrules</span>
+            </div>
+          </aside>
+          <div class="proof-main">
+            <div class="finding-strip">
+              <div><span class="severity">ERROR</span><span class="scope s-local">LOCAL</span></div>
+              <p class="proof-label">Selected finding · settings-local-committed</p>
+            </div>
+            <div class="finding-copy">
+              <h3><code>.claude/settings.local.json</code> may be committed</h3>
+              <p>This local settings file is present, but the project has no <code>.gitignore</code>. Local settings often contain personal tokens or opt-ins that shouldn’t be shared.</p>
+            </div>
+            <div class="diff-head"><div><p class="proof-label">Proposed change</p><strong>.gitignore</strong></div><span class="safe-label">DRY RUN · NOT WRITTEN</span></div>
+            <pre class="proof-diff" aria-label="Proposed gitignore diff"><code><span class="diff-meta">new file · .gitignore</span>
+<span class="diff-add">+.claude/settings.local.json</span></code></pre>
+            <div class="proof-actions"><span>Exact file diff ready for review</span><button class="btn btn-primary" type="button" disabled aria-disabled="true">Apply fix</button></div>
+          </div>
+        </div>
+        <div class="proof-status"><span><span class="live"></span>3 agents detected</span><span>fixture-backed demonstration</span><span>localhost only</span></div>
       </div>
+      <p class="proof-caption">Reproducible from the sanitized project in <a href={`${github}/tree/main/site/fixtures/demo-repo`}>site/fixtures/demo-repo</a>. The window combines real analyzer output into one illustrative review state; the disabled action does not modify this page.</p>
     </div></section>
 
     <section id="how-it-works"><div class="shell">

@@ -220,7 +220,8 @@ h2 {
   margin: 0;
   color: var(--muted);
 }
-.console {
+.console,
+.proof-console {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
@@ -251,6 +252,232 @@ h2 {
 }
 .ok {
   color: var(--accent);
+}
+.proof-console {
+  position: relative;
+  border-color: color-mix(in oklch, var(--accent) 34%, var(--border));
+}
+.proof-console::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: var(--accent);
+}
+.proof-topbar,
+.proof-status {
+  display: grid;
+  align-items: center;
+  font: 11px var(--font-mono);
+  color: var(--muted);
+}
+.proof-topbar {
+  grid-template-columns: 1fr auto 1fr;
+  min-height: 50px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+.proof-brand,
+.proof-context,
+.proof-status > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.proof-brand strong {
+  color: var(--fg);
+}
+.proof-context {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+.proof-state {
+  justify-self: end;
+  letter-spacing: 0.08em;
+}
+.scope,
+.severity,
+.safe-label {
+  display: inline-flex;
+  width: fit-content;
+  padding: 3px 6px;
+  border-radius: 5px;
+  font: 600 10px var(--font-mono);
+  letter-spacing: 0.07em;
+}
+.scope.s-project {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.scope.s-local,
+.safe-label {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+.severity {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+.proof-workspace {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  min-height: 520px;
+}
+.proof-sidebar {
+  padding: 22px 14px;
+  border-right: 1px solid var(--border);
+  background: var(--bg);
+}
+.proof-label {
+  margin: 0;
+  color: var(--muted);
+  font: 500 10px var(--font-mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.agent-list {
+  margin: 12px 0 28px;
+  padding: 0;
+  list-style: none;
+}
+.agent-list li {
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.agent-mark {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font: 600 9px var(--font-mono);
+}
+.agent-list strong,
+.agent-list small {
+  display: block;
+}
+.agent-list strong {
+  font-size: 13px;
+}
+.agent-list small {
+  overflow: hidden;
+  color: var(--muted);
+  font: 10px var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.proof-filetree {
+  display: grid;
+  gap: 7px;
+  padding: 0 8px;
+  color: var(--muted);
+  font: 11px var(--font-mono);
+}
+.proof-filetree .proof-label {
+  margin-bottom: 4px;
+}
+.tree-child {
+  padding-left: 18px;
+  color: var(--warn);
+}
+.proof-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  padding: 26px;
+}
+.finding-strip,
+.diff-head,
+.proof-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.finding-strip > div {
+  display: flex;
+  gap: 6px;
+}
+.finding-copy {
+  padding: 30px 0 28px;
+  border-bottom: 1px solid var(--border);
+}
+.finding-copy h3 {
+  margin: 0 0 12px;
+  font-size: clamp(20px, 3vw, 30px);
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+.finding-copy p {
+  max-width: 660px;
+  margin: 0;
+  color: var(--muted);
+}
+.finding-copy code,
+.diff-head strong {
+  font-family: var(--font-mono);
+}
+.diff-head {
+  padding: 22px 0 12px;
+}
+.diff-head strong {
+  font-size: 13px;
+}
+.proof-diff {
+  flex: 1;
+  min-height: 142px;
+  padding: 20px;
+  border-radius: var(--radius);
+  line-height: 2;
+}
+.diff-meta {
+  color: var(--muted);
+}
+.diff-add {
+  display: inline-block;
+  min-width: 100%;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.proof-actions {
+  margin-top: 16px;
+  color: var(--muted);
+  font: 11px var(--font-mono);
+}
+.proof-actions .btn:disabled {
+  cursor: default;
+  opacity: 0.78;
+}
+.proof-status {
+  grid-template-columns: 1fr auto 1fr;
+  min-height: 34px;
+  padding: 0 14px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+.proof-status > span:nth-child(2) {
+  justify-self: center;
+}
+.proof-status > span:last-child {
+  justify-self: end;
+}
+.proof-caption {
+  max-width: 820px;
+  margin: 16px 0 0;
+  color: var(--muted);
+  font: 11px/1.7 var(--font-mono);
+}
+.proof-caption a {
+  color: var(--accent);
+  text-underline-offset: 3px;
 }
 .runtime-grid {
   display: grid;
@@ -487,6 +714,71 @@ details p {
     grid-template-columns: 62px 1fr;
   }
   .console-line span:last-child {
+    display: none;
+  }
+  .proof-topbar {
+    grid-template-columns: 1fr auto;
+  }
+  .proof-context {
+    display: none;
+  }
+  .proof-workspace {
+    grid-template-columns: 1fr;
+  }
+  .proof-sidebar {
+    padding: 18px 12px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .agent-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin: 10px 0 0;
+  }
+  .agent-list li {
+    grid-template-columns: 1fr auto;
+    padding: 9px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .agent-mark,
+  .agent-list small,
+  .proof-filetree {
+    display: none;
+  }
+  .proof-main {
+    padding: 20px 14px;
+  }
+  .finding-strip {
+    align-items: flex-start;
+    flex-direction: column-reverse;
+  }
+  .finding-copy {
+    padding: 22px 0;
+  }
+  .finding-copy h3 {
+    overflow-wrap: anywhere;
+  }
+  .diff-head {
+    align-items: flex-end;
+  }
+  .safe-label {
+    text-align: right;
+  }
+  .proof-diff {
+    min-height: auto;
+    padding: 14px;
+    font-size: 10px;
+  }
+  .proof-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .proof-status {
+    grid-template-columns: 1fr auto;
+  }
+  .proof-status > span:nth-child(2) {
     display: none;
   }
   .footer {
