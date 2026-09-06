@@ -156,11 +156,16 @@ export const HTTP_MAX_REDIRECTS = 5;
  *  RFC-1918 private + link-local ranges (10/8, 172.16-31, 192.168/16,
  *  169.254/16 incl. the 169.254.169.254 cloud-metadata endpoint). */
 function isBlockedV4(host: string): boolean {
-  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
-  if (!m) return false;
-  const a = Number(m[1]);
-  const b = Number(m[2]);
-  if (a > 255 || b > 255) return false;
+  // Up to 4 digits per octet so malformed/out-of-range/leading-zero literals
+  // match and fail closed below instead of passing as a DNS-looking name.
+  const m = /^(\d{1,4})\.(\d{1,4})\.(\d{1,4})\.(\d{1,4})$/.exec(host);
+  if (!m) return false; // a DNS name never matches a dotted-numeric shape
+  // Fail closed on ambiguous literals: an out-of-range octet is malformed, and
+  // a leading-zero octet may be parsed as OCTAL by resolver stacks
+  // (`0177.0.0.1` === 127.0.0.1), so neither may reach fetch unblocked.
+  const octets = [m[1], m[2], m[3], m[4]].map(String);
+  if (octets.some((o) => Number(o) > 255 || (o.length > 1 && o.startsWith('0')))) return true;
+  const [a, b] = [Number(m[1]), Number(m[2])];
   if (a === 0 || a === 10 || a === 127) return true; // this-host, private, loopback
   if (a === 169 && b === 254) return true; // link-local (incl. cloud metadata)
   if (a === 192 && b === 168) return true; // private

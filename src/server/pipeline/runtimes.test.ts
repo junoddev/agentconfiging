@@ -248,6 +248,12 @@ describe('isBlockedHttpHost', () => {
     expect(isBlockedHttpHost('8.8.8.8')).toBe(false);
   });
 
+  it('fails closed on malformed or octal-ambiguous v4 literals', () => {
+    for (const host of ['1.2.3.999', '999.1.1.1', '0177.0.0.1', '10.00.0.1']) {
+      expect(isBlockedHttpHost(host), host).toBe(true);
+    }
+  });
+
   it('blocks v4-mapped IPv6 in hex AND dotted spellings (incl. full form)', () => {
     for (const host of [
       '::ffff:10.0.0.1',
