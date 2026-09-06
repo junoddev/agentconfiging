@@ -39,7 +39,7 @@ jobs:
           OPENAI_KEY: ${{ secrets.FIREWORKS_API_KEY }}
           OPENAI__KEY: ${{ secrets.FIREWORKS_API_KEY }}
           OPENAI__API_BASE: https://api.fireworks.ai/inference/v1
-          github_action_config.auto_review: "true"
-          github_action_config.auto_describe: "false"
-          github_action_config.auto_improve: "false"
+          github_action_config.auto_review: 'true'
+          github_action_config.auto_describe: 'false'
+          github_action_config.auto_improve: 'false'
           github_action_config.pr_actions: '["opened", "reopened", "synchronize", "ready_for_review", "review_requested"]'
