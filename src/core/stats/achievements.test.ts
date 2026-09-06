@@ -24,6 +24,7 @@ const maxed: DashboardStats = {
   activeDays: 100_000,
   streak: { current: 100_000, longest: 100_000 },
   xp: { xp: 10_000_000, level: 1_000, xpIntoLevel: 0, xpForNextLevel: 1, levelProgress: 0 },
+  usage: zeroed.usage,
   heatmap: [],
 };
 

@@ -52,7 +52,17 @@ function makeHome(name: string): string {
     {
       type: 'assistant',
       timestamp: iso(NOW - DAY + 60_000),
-      message: { role: 'assistant', content: [{ type: 'text', text: SECRET_BODY }] },
+      message: {
+        role: 'assistant',
+        model: 'claude-sonnet-4-5',
+        content: [{ type: 'text', text: SECRET_BODY }],
+        usage: {
+          input_tokens: 1000,
+          output_tokens: 100,
+          cache_creation_input_tokens: 10,
+          cache_read_input_tokens: 20,
+        },
+      },
     },
   ]
     .map((l) => JSON.stringify(l))
@@ -123,6 +133,12 @@ function makeReplayHome(name: string, count = 0): string {
       message: {
         role: 'assistant',
         model: 'claude-x',
+        usage: {
+          input_tokens: 500,
+          output_tokens: 50,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+        },
         content: [
           { type: 'thinking', thinking: `secret is ${PLANTED_SECRET}` },
           { type: 'tool_use', id: 'tu-1', name: 'Bash', input: { command: PLANTED_SECRET } },
@@ -199,6 +215,16 @@ describe('GET /api/stats', () => {
     expect(body.stats.sessionCount).toBe(2);
     expect(body.stats.messageCounts.total).toBe(3);
     expect(body.stats.promptCount).toBe(2);
+    expect(body.stats.usage.tokens).toMatchObject({
+      inputTokens: 1000,
+      outputTokens: 100,
+      cacheCreationTokens: 10,
+      cacheReadTokens: 20,
+      totalTokens: 1130,
+    });
+    expect(body.stats.usage.messagesWithUsage).toBe(1);
+    expect(body.stats.usage.cost.status).toBe('known');
+    expect(body.stats.usage.cost.amountUsd).toBeCloseTo(0.0045435);
     expect(body.sessionsScanned).toBe(2);
     expect(body.sessionsTotal).toBe(2);
     expect(body.capped).toBe(false);
@@ -221,6 +247,9 @@ describe('GET /api/stats', () => {
     // Only the most-recent session (sess-b, 1 message) is counted.
     expect(body.stats.sessionCount).toBe(1);
     expect(body.stats.messageCounts.total).toBe(1);
+    expect(body.stats.usage.messagesWithUsage).toBe(0);
+    expect(body.stats.usage.cost.status).toBe('unknown');
+    expect(body.stats.usage.cost.amountUsd).toBeUndefined();
   });
 
   it('is resilient to a missing home (zeroed stats, not an error)', async () => {
@@ -251,6 +280,10 @@ describe('GET /api/sessions', () => {
     expect(body.sessions[1].title).toBe('Alpha <script>alert(1)</script>');
     expect(body.sessions[1].messageCount).toBe(2);
     expect(body.sessions[1].cwd).toBe('/home/user/proj');
+    expect(body.sessions[1].usage.tokens.totalTokens).toBe(1130);
+    expect(body.sessions[1].usage.cost.status).toBe('known');
+    expect(body.sessions[0].usage.messagesWithUsage).toBe(0);
+    expect(body.sessions[0].usage.cost.status).toBe('unknown');
     // No message bodies on any summary.
     for (const s of body.sessions) {
       expect(s).not.toHaveProperty('messages');
@@ -291,6 +324,9 @@ describe('GET /api/sessions/:id (replay detail)', () => {
     expect(body.messageCount).toBe(3);
     // Adversarial title preserved as DATA, not executed.
     expect(body.title).toBe('Replay <b>run</b>');
+    expect(body.usage.tokens.totalTokens).toBe(550);
+    expect(body.usage.cost.status).toBe('unknown');
+    expect(body.usage.cost.amountUsd).toBeUndefined();
 
     const user = body.messages[0];
     expect(user.blocks[0].kind).toBe('text');
@@ -398,6 +434,8 @@ describe('sessionSummary', () => {
     expect(summary.title).toBe('T');
     expect(summary.messageCount).toBe(2);
     expect(summary.runtimeMs).toBe(5000);
+    expect(summary.usage.messagesWithUsage).toBe(0);
+    expect(summary.usage.cost.status).toBe('unknown');
   });
 });
 

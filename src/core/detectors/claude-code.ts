@@ -35,7 +35,9 @@ export const claudeCodeDetector: Detector = {
     const settingsPath = `${prefix}settings.json`;
     const localSettingsPath = `${prefix}settings.local.json`;
 
-    const named = ['CLAUDE.md', settingsPath, localSettingsPath].filter((p) => findFile(m, p));
+    const named = ['CLAUDE.md', '.mcp.json', settingsPath, localSettingsPath].filter((p) =>
+      findFile(m, p),
+    );
     const dirFiles = filesUnder(m, prefix).map((f) => f.path);
 
     const signals = [

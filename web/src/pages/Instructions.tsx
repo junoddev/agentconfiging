@@ -121,11 +121,11 @@ export function Instructions() {
  * way. All file content is rendered as TEXT NODES — never HTML.
  */
 function InstructionsPage() {
-  const { report, getFile, activeAgent } = useAppState();
+  const { report, getFile, agentScopeKind } = useAppState();
   const { entries: globalEntries } = useGlobalConfig();
   const flow = useWriteFlow();
   const toast = useToast();
-  const agentKind = activeAgent?.kind;
+  const agentKind = agentScopeKind;
 
   // Every instance file (not just instruction files) — the set an @import is
   // resolved against to decide present vs broken.

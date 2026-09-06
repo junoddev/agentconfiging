@@ -1,0 +1,185 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import AgentChanges from '../components/AgentChanges.astro';
+
+const github = 'https://github.com/junoddev/agentconfiging';
+const docs = `${github}/blob/main/docs/USAGE.md`;
+const faqs = [
+  ['Does anything leave my machine?', 'No. The product binds to localhost, uses a per-session token, and has no account, telemetry, or hosted component.'],
+  ['Do I need an account or API key?', 'No. Run the command in a repository. There is no signup and no product API key.'],
+  ['What runtimes does it detect?', 'Claude Code, Cursor, GitHub Copilot, Codex, Continue, Aider, Gemini CLI, and opencode. Seven additional instruction formats are available as sync targets.'],
+  ['Is it safe to let it write config?', 'Writes are path-guarded and dry-run first. You review a unified diff before committing, and deletes go to trash.'],
+  ['Why might search or the terminal be unavailable?', 'Those two features use optional native modules. The core inspector, editors, sync, catalog, and report workflow still work without them.'],
+  ['Can I use it in CI?', 'Yes. agentconfiging report emits structured JSON and returns severity-based exit codes.'],
+  ['What does this site collect?', 'Nothing. It has no analytics scripts, cookies, forms, accounts, or server-side code.'],
+];
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'SoftwareApplication', name: 'agentconfiging', applicationCategory: 'DeveloperApplication',
+      operatingSystem: 'macOS, Linux, Windows', url: 'https://agentconfig.ing', codeRepository: github,
+      license: 'https://opensource.org/license/mit', offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    },
+    { '@type': 'FAQPage', mainEntity: faqs.map(([name, text]) => ({ '@type': 'Question', name, acceptedAnswer: { '@type': 'Answer', text } })) },
+  ],
+};
+---
+
+<BaseLayout>
+  <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+  <header class="topbar">
+    <div class="shell topbar-inner">
+      <a class="brand" href="/">agentconfig<span class="brand-dot">.</span>ing</a>
+      <nav class="nav" aria-label="Primary">
+        <a href="#features">Features</a><a href="#changes">Agent changes</a><a href="#security">Security</a><a href="#faq">FAQ</a>
+      </nav>
+      <button class="icon-button" id="theme-toggle" type="button" aria-label="Toggle color theme">Paper / Ink</button>
+    </div>
+  </header>
+  <main>
+    <div class="shell hero" id="hero">
+      <p class="eyebrow">Local control center for AI agent configuration</p>
+      <h1>Your AI agents have config. Now it has a control center.</h1>
+      <p class="lede">Run one command in any repo to inspect every detected runtime, find real configuration problems, and apply fixes through a diff you review. Nothing leaves your machine.</p>
+      <div class="command-row">
+        <div class="command" aria-label="Command to run"><span class="prompt">$</span><span>npx agentconfiging</span></div>
+        <button class="btn btn-primary" id="copy-command" type="button" data-command="npx agentconfiging">Copy command</button>
+      </div>
+      <div class="hero-actions"><a class="btn btn-secondary" href={github}>View on GitHub</a><a class="btn btn-secondary" href={docs}>Read the docs</a></div>
+      <p class="reassurance"><span class="live"></span>Runs on your machine · no account · nothing uploaded · MIT</p>
+    </div>
+
+    <section id="demo"><div class="shell">
+      <div class="section-head"><p class="eyebrow">Proof, not promise</p><h2>See the finding. See the fix. Then decide.</h2></div>
+      <div class="proof-console" aria-label="Fixture-backed agentconfiging review showing detected agents, a selected finding, and its proposed diff">
+        <div class="proof-topbar">
+          <div class="proof-brand"><span class="live"></span><strong>agentconfiging</strong><span>/</span><span>demo-repo</span></div>
+          <div class="proof-context"><span class="scope s-project">PROJECT</span><span>site/fixtures/demo-repo</span></div>
+          <span class="proof-state">REVIEW MODE</span>
+        </div>
+        <div class="proof-workspace">
+          <aside class="proof-sidebar" aria-label="Detected agents">
+            <p class="proof-label">Detected from fixture</p>
+            <ul class="agent-list">
+              <li><span class="agent-mark">CL</span><span><strong>Claude Code</strong><small>CLAUDE.md · settings.local.json</small></span><span class="ok">●</span></li>
+              <li><span class="agent-mark">CX</span><span><strong>Codex</strong><small>AGENTS.md</small></span><span class="ok">●</span></li>
+              <li><span class="agent-mark">CR</span><span><strong>Cursor</strong><small>.cursorrules</small></span><span class="ok">●</span></li>
+            </ul>
+            <div class="proof-filetree">
+              <p class="proof-label">Project files</p>
+              <span>▾ .claude</span>
+              <span class="tree-child">settings.local.json</span>
+              <span>AGENTS.md</span><span>CLAUDE.md</span><span>.cursorrules</span>
+            </div>
+          </aside>
+          <div class="proof-main">
+            <div class="finding-strip">
+              <div><span class="severity">ERROR</span><span class="scope s-local">LOCAL</span></div>
+              <p class="proof-label">Selected finding · settings-local-committed</p>
+            </div>
+            <div class="finding-copy">
+              <h3><code>.claude/settings.local.json</code> may be committed</h3>
+              <p>This local settings file is present, but the project has no <code>.gitignore</code>. Local settings often contain personal tokens or opt-ins that shouldn’t be shared.</p>
+            </div>
+            <div class="diff-head"><div><p class="proof-label">Proposed change</p><strong>.gitignore</strong></div><span class="safe-label">DRY RUN · NOT WRITTEN</span></div>
+            <pre class="proof-diff" aria-label="Proposed gitignore diff"><code><span class="diff-meta">new file · .gitignore</span>
+<span class="diff-add">+.claude/settings.local.json</span></code></pre>
+            <div class="proof-actions"><span>Exact file diff ready for review</span><button class="btn btn-primary" type="button" disabled aria-disabled="true">Apply fix</button></div>
+          </div>
+        </div>
+        <div class="proof-status"><span><span class="live"></span>3 agents detected</span><span>fixture-backed demonstration</span><span>localhost only</span></div>
+      </div>
+      <p class="proof-caption">Reproducible from the sanitized project in <a href={`${github}/tree/main/site/fixtures/demo-repo`}>site/fixtures/demo-repo</a>. The window combines real analyzer output into one illustrative review state; the disabled action does not modify this page.</p>
+    </div></section>
+
+    <section id="how-it-works"><div class="shell">
+      <div class="section-head"><p class="eyebrow">How it works</p><h2>Run. Inspect. Fix.</h2></div>
+      <div class="grid">
+        <article class="card"><span class="card-index">01 / RUN</span><h3>Open locally</h3><p>The CLI starts on a random localhost port with a per-session bearer token.</p></article>
+        <article class="card"><span class="card-index">02 / INSPECT</span><h3>See the whole repo</h3><p>Detected runtimes, parsed artifacts, MCP servers, instructions, hooks, and findings in one UI.</p></article>
+        <article class="card"><span class="card-index">03 / FIX</span><h3>Review every write</h3><p>Machine-fixable findings produce an explicit diff before anything changes on disk.</p></article>
+      </div>
+    </div></section>
+
+    <section id="features"><div class="shell">
+      <div class="section-head"><p class="eyebrow">Feature map</p><h2>The same mental model from first visit to daily use.</h2></div>
+      <div class="grid">
+        <article class="card"><span class="card-index">INSPECT</span><h3>Find what matters</h3><p>Browse every artifact and run analyzers for broken imports, stale rules, risky settings, and more.</p></article>
+        <article class="card"><span class="card-index">EDIT</span><h3>Change with context</h3><p>Edit instructions, hooks, MCP servers, skills, rules, and settings with a dry-run diff.</p></article>
+        <article class="card"><span class="card-index">SYNC</span><h3>Keep one source</h3><p>Generate runtime instruction formats from a chosen source and turn drift into a visible finding.</p></article>
+        <article class="card"><span class="card-index">CATALOG</span><h3>Install traceably</h3><p>Use an offline-first catalog with checksums, provenance, and reviewable changes.</p></article>
+        <article class="card"><span class="card-index">SESSIONS</span><h3>Read local history</h3><p>Understand activity and context health from redacted histories already on your machine.</p></article>
+        <article class="card"><span class="card-index">OPERATE</span><h3>Stay in the loop</h3><p>Work through git, terminals, and visual pipelines without losing sight of the underlying files.</p></article>
+      </div>
+    </div></section>
+
+    <section id="runtimes"><div class="shell">
+      <div class="section-head"><p class="eyebrow">Runtime coverage</p><h2>Eight detected. Seven more instruction targets.</h2></div>
+      <div class="runtime-grid">
+        {['Claude Code','Cursor','GitHub Copilot','Codex','Continue','Aider','Gemini CLI','opencode'].map((name) => <div class="pill primary">{name}</div>)}
+        {['Cline','Windsurf','Zed','Amazon Q','Junie','Roo','Qodo'].map((name) => <div class="pill">{name}</div>)}
+      </div>
+    </div></section>
+
+    <section id="changes"><div class="shell">
+      <div class="section-head"><p class="eyebrow">Agent changes over time</p><h2>Upstream behavior moves. The history stays visible.</h2></div>
+      <p class="section-intro">Content-safe before-and-after summaries from official profile refreshes. Observed changes stay pending until human review promotes them.</p>
+      <AgentChanges limit={2} />
+      <a class="text-link" href="/changelog">View the full agent profile changelog →</a>
+    </div></section>
+
+    <section id="security"><div class="shell">
+      <div class="section-head"><p class="eyebrow">Security model</p><h2>Private by architecture, not by policy.</h2></div>
+      <div class="security">
+        <div class="notice"><h3>Nothing leaves your machine.</h3><p>No hosted backend. No telemetry. No account. Secrets are redacted server-side before config content reaches the browser.</p></div>
+        <ul class="checklist"><li>127.0.0.1 on a random port</li><li>Per-session bearer token</li><li>Canonical-path write guards</li><li>Dry-run diffs before writes</li><li>Deletes move to trash</li><li>PTY disabled in daemon mode</li></ul>
+      </div>
+    </div></section>
+
+    <section id="ci"><div class="shell">
+      <div class="section-head"><p class="eyebrow">Report for CI</p><h2>Configuration quality as an exit code.</h2></div>
+      <div class="ci">
+        <pre><code><span class="ok">$</span> npx agentconfiging report --pretty
+&#123;
+  "findings": [...],
+  "stats": &#123; ... &#125;,
+  "localOnly": false
+&#125;</code></pre>
+        <div class="code-table" aria-label="Report exit codes"><div><b>0</b><span>no warning or error</span></div><div><b>1</b><span>warning found</span></div><div><b>2</b><span>error found</span></div><div><b>3</b><span>engine failure</span></div><div><b>64</b><span>usage error</span></div></div>
+      </div>
+    </div></section>
+
+    <section id="faq"><div class="shell">
+      <div class="section-head"><p class="eyebrow">FAQ</p><h2>Before you run it.</h2></div>
+      <div class="faq">{faqs.map(([question, answer]) => <details><summary>{question}</summary><p>{answer}</p></details>)}</div>
+    </div></section>
+  </main>
+  <footer><div class="shell footer"><a class="brand" href="/">agentconfig<span class="brand-dot">.</span>ing</a><a href="/changelog">Changelog</a><a href={github}>GitHub</a><a href="https://www.npmjs.com/package/agentconfiging">npm</a><a href={docs}>Docs</a><span>MIT</span></div></footer>
+
+  <script>
+    const copy = document.querySelector<HTMLButtonElement>('#copy-command');
+    copy?.addEventListener('click', async () => {
+      const command = copy.dataset.command || 'npx agentconfiging';
+      try {
+        await navigator.clipboard.writeText(command);
+      } catch {
+        const fallback = document.createElement('textarea');
+        fallback.value = command;
+        fallback.style.position = 'fixed';
+        fallback.style.opacity = '0';
+        document.body.append(fallback);
+        fallback.select();
+        document.execCommand('copy');
+        fallback.remove();
+      }
+      copy.textContent = 'Copied';
+      window.setTimeout(() => { copy.textContent = 'Copy command'; }, 1800);
+    });
+    document.querySelector('#theme-toggle')?.addEventListener('click', () => {
+      const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      document.documentElement.dataset.theme = next;
+      try { localStorage.setItem('agentconfiging-theme', next); } catch {}
+    });
+  </script>
+</BaseLayout>

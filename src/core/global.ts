@@ -28,6 +28,7 @@ import { detect, type DetectedAgent } from './detectors/index.js';
 import type { Manifest, ManifestStats } from './manifest.js';
 import { KNOWN_DIRS, ScanError, scanGlobal } from './scanner.js';
 import { buildReport, toReportFinding, type AnalyzerEnv, type ReportFinding } from './report.js';
+import type { AgentConfigQuality } from './quality.js';
 
 /** One successfully scanned global config dir, content-free. */
 export interface GlobalEntry {
@@ -36,6 +37,7 @@ export interface GlobalEntry {
   /** Well-known dir name under home (e.g. '.claude') — the manifest's cwdBasename. */
   dir: string;
   agents: DetectedAgent[];
+  quality: AgentConfigQuality;
   findings: ReportFinding[];
   stats: ManifestStats;
 }
@@ -62,11 +64,12 @@ function serializeError(err: unknown): GlobalEntryError['error'] {
 /** Run detect + buildReport over one global manifest into an envelope entry. */
 export function buildGlobalEntry(manifest: Manifest, env?: AnalyzerEnv): GlobalEntry {
   const agents = detect(manifest);
-  const { findings } = buildReport(manifest, agents, env);
+  const { findings, quality } = buildReport(manifest, agents, env);
   return {
     root: manifest.root,
     dir: manifest.cwdBasename,
     agents,
+    quality,
     findings: findings.map(toReportFinding),
     stats: manifest.stats,
   };

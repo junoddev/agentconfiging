@@ -1,8 +1,8 @@
-# agentconfig design system — "Console"
+# agentconfig.ing design system — "Console"
 
 A terminal-adjacent system-utility language (adopted from `opendesign/DESIGN.md`
 and its reference console mockup in `opendesign/` — the mockup's own branding is
-replaced by **agentconfig** everywhere in the app).
+replaced by **agentconfig.ing** everywhere in the app).
 Posture: information per square inch, not vibes. Data-dense, mono-detailed, one green accent,
 hairline borders everywhere. Dark is the native mode (the tool is launched from a terminal);
 light is a first-class inverse, not an afterthought.
@@ -108,8 +108,8 @@ Prose, titles, and button labels stay sans.
 
 | Region | Spec |
 |---|---|
-| Topbar | 49px, `--surface`, bottom hairline; brand (mono, accent sigil) left, context chooser centered, utilities right |
-| Sidebar | 232px, `--surface`, right hairline; grouped nav + scope legend pinned to bottom |
+| Topbar | 49px, `--surface`, bottom hairline; brand (mono, accent sigil) left, persistent Folder chooser centered, utilities right |
+| Sidebar | 232px, `--surface`, right hairline; folder-scoped grouped nav, Configure Agent chooser, scope legend pinned to bottom |
 | Content | scrollable, dot-grid background, inner column max-width 980px |
 | Statusbar | 30px, mono 11.5px `--muted`; see content spec below |
 | Breakpoint | ≤860px: sidebar hides, grids collapse to 2-col, micro labels drop |
@@ -127,7 +127,9 @@ Prose, titles, and button labels stay sans.
 
 Class names are the contract — reuse them, don't reinvent.
 
-- **Context chooser** (`.chooser` / `.ch-side` / `.ch-menu` / `.ch-item`): one bordered control, two baseline-aligned sides (micro label + value + 9px caret) split by a hairline `.ch-div`. Menus drop 6px below, 250px min, 5px padding, 7px-radius items; active item = accent-soft bg + accent text.
+- **Folder chooser** (`.chooser` / `.ch-side` / `.ch-menu` / `.ch-item`): one persistent bordered control in the top bar. Folder is the application boundary and therefore remains visible on every route. Its menu drops 6px below, 250px min, 5px padding; active item = accent-soft bg + accent text.
+- **Configure Agent chooser** (`.side-agent`): a compact bordered control directly below the Configure group label. It scopes only Configure and Library destinations; its remembered selection is not presented as the context of Folder, Activity, or Tools pages.
+- **Agent-native terminology:** Library inventory labels adapt to the Configure agent. Claude Code uses “Plugins”; Codex and extension-oriented agents use “Extensions.” Sidebar, command palette, and page heading must resolve through the same terminology helper.
 - **Sidebar nav** (`.nav-item`): 7px/10px padding, transparent 2px left border; active = `--accent-soft` bg, accent left bar, 550 weight. Mono glyph (15px box) + label + mono count pushed right.
 - **Scope badges** (`.scope.s-*`): the system's signature. 10.5px mono uppercase, 5px radius. Every configurable row shows one — provenance is never implicit. See the scope mapping below.
 - **Status pills** (`.pill.p-*`): 999px radius, 11px mono. ok/connected = accent-soft · warn = warn-soft · error = danger-soft · disabled = fg-soft/muted.
@@ -144,10 +146,10 @@ Class names are the contract — reuse them, don't reinvent.
 - **Toast**: inverted (`--fg` bg / `--bg` text), mono 12px, bottom-right, 2.2s, confirms every mutating action.
 - **Pager** (`.pager`): meta "Showing x–y of n" left; Prev / `Page x / y` / Next right. Page size select adjacent to the search that feeds it.
 
-**Scope mapping.** agentconfig's data model uses `project` and `global` scopes (the Console
+**Scope mapping.** agentconfig.ing's data model uses `project` and `global` scopes (the Console
 mockup calls the machine-wide scope "user"). Badge classes and colors:
 
-| agentconfig scope | Badge | Treatment | Meaning |
+| agentconfig.ing scope | Badge | Treatment | Meaning |
 |---|---|---|---|
 | `project` | `.scope.s-project` | accent-soft bg / accent text | repo-level config (`./.claude`, `AGENTS.md`, `.mcp.json`) |
 | `global` | `.scope.s-global` | outlined neutral (surface + hairline, muted text) | this machine's home-dir config (`~/.claude`, `~/.codex`, …) |
@@ -183,6 +185,21 @@ Micro only. 0.12–0.15s `ease` on background/color/border; 0.05s translateY pre
 - Labels are nouns, buttons are verbs that say what happens ("Resume", "Add hook", "Save hook").
 - Provenance is always visible: any value that comes from a file shows its scope badge and, where useful, its source path in mono.
 - Adaptive terminology: name things what the underlying tool names them (Hooks / Plugins / Extensions / Notifications; CLAUDE.md / AGENTS.md). When a capability doesn't exist, say so in a notice and show the nearest equivalent — never fake parity.
+- **Extension inventory terminology:** `#/extensions` is a normalized inventory
+  surface, not a universal plugin manager. Use **plugins** for Claude Code,
+  **extensions** for providers that use that term (such as the planned Gemini
+  adapter), and **configuration artifacts** for Codex's `AGENTS.md`, rules, and
+  config. Keep the agentconfig.ing Catalog distinct from provider-owned packages.
+- **Capability states:** provider cards must distinguish `supported`, `detected`,
+  `unavailable`, `unsupported`, and `error`. A missing provider CLI is an
+  unavailable dependency; a provider without a lifecycle contract is unsupported.
+  Never collapse those states or imply install/remove parity that the adapter does
+  not implement.
+- **Lifecycle safety boundary:** provider-managed install, remove, update, enable,
+  and disable are opt-in capabilities. They are safe to expose only through a
+  fixed-argument provider CLI/API with bounded execution, defensive parsing, and
+  provider-owned uninstall. Read-only adapters must not direct-write provider
+  plugin state or execute plugin code.
 - Empty/no-match states name the filter that caused them.
 
 ## 8. Don'ts
@@ -195,7 +212,7 @@ on resting elements, no raw hex outside the token block, no invented metrics.
 
 Console translated to the terminal: same voice, same restraint.
 
-- **Layout**: header line (`AGENTCONFIG · <n> instances · <url>`), instance list
+- **Layout**: header line (`AGENTCONFIG.ING · <n> instances · <url>`), instance list
   (name, agent count, finding count, `●` loaded / `○` lazy), and a log pane.
   Completed log lines render via Ink `<Static>`; only the bottom status region re-renders.
 - **Color**: terminal-safe mapping of the tokens — accent green, warn yellow,

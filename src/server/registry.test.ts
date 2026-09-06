@@ -29,6 +29,7 @@ function makeTempDir(): string {
 function countingRegistry(version = '1.2.3') {
   const builds: string[] = [];
   const scans: string[] = [];
+  const contextCosts: { root: string; fresh?: boolean }[] = [];
   const registry = new InstanceRegistry(version, (root) => {
     builds.push(root);
     const fake = {
@@ -36,11 +37,16 @@ function countingRegistry(version = '1.2.3') {
         scans.push(root);
         return { root, scope: 'project' } as unknown;
       },
+      contextHealth: () => ({ totalBytes: 0, fileCount: 0, budgetBytes: 1 }),
+      contextCost: (_scope: string, opts: { fresh?: boolean } = {}) => {
+        contextCosts.push({ root, fresh: opts.fresh });
+        return { budgetTokens: 100000, agents: [] };
+      },
       invalidate: () => undefined,
     };
     return fake as unknown as ReportStore;
   });
-  return { registry, builds, scans };
+  return { registry, builds, scans, contextCosts };
 }
 
 describe('idFor', () => {
@@ -143,6 +149,24 @@ describe('lazy load + unload', () => {
     const { registry } = countingRegistry();
     expect(registry.unload('deadbeefdeadbeef')).toBe(false);
     expect(registry.remove('deadbeefdeadbeef')).toBe(false);
+  });
+
+  it('contextCost loads lazily and forwards fresh semantics to the store', () => {
+    const dir = makeTempDir();
+    const { registry, builds, scans, contextCosts } = countingRegistry();
+    const inst = registry.add(dir);
+
+    expect(registry.contextCost(inst)).toEqual({ budgetTokens: 100000, agents: [] });
+    expect(builds).toEqual([inst.root]);
+    expect(scans).toEqual([]);
+    expect(contextCosts).toEqual([{ root: inst.root, fresh: undefined }]);
+
+    registry.contextCost(inst, { fresh: true });
+    expect(builds).toHaveLength(1);
+    expect(contextCosts).toEqual([
+      { root: inst.root, fresh: undefined },
+      { root: inst.root, fresh: true },
+    ]);
   });
 });
 

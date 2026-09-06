@@ -25,6 +25,59 @@ export interface AgentFiles {
 }
 
 /**
+ * The runtimes available to the shell picker. Project detections take
+ * precedence, but machine-global detections keep the picker usable for a
+ * project that has no local config of its own. A runtime can be detected by
+ * more than one global config directory, so collapse those entries by kind.
+ */
+export function availableAgents(
+  projectAgents: readonly DetectedAgent[],
+  globalEntries: readonly unknown[],
+): DetectedAgent[] {
+  const merged = new Map<string, DetectedAgent>();
+  const add = (agent: DetectedAgent) => {
+    const existing = merged.get(agent.kind);
+    if (existing === undefined) {
+      merged.set(agent.kind, agent);
+      return;
+    }
+    merged.set(agent.kind, {
+      ...existing,
+      files: [...new Set([...existing.files, ...agent.files])],
+    });
+  };
+
+  for (const agent of projectAgents) add(agent);
+  for (const entry of globalEntries) {
+    if (typeof entry !== 'object' || entry === null || !('agents' in entry)) continue;
+    const agents = entry.agents;
+    if (!Array.isArray(agents)) continue;
+    for (const agent of agents) {
+      // Report data is untrusted (GlobalEntryError flows through the same
+      // list): only accept well-formed agents so a malformed entry cannot
+      // reach the picker or crash the files merge below.
+      if (typeof agent !== 'object' || agent === null) continue;
+      const kind = (agent as { kind?: unknown }).kind;
+      const files = (agent as { files?: unknown }).files;
+      if (typeof kind !== 'string' || kind === '') continue;
+      if (!Array.isArray(files) || !files.every((f) => typeof f === 'string')) continue;
+      const confidence = (agent as { confidence?: unknown }).confidence;
+      const extras = (agent as { extras?: unknown }).extras;
+      add({
+        kind,
+        confidence:
+          confidence === 'high' || confidence === 'medium' || confidence === 'low'
+            ? confidence
+            : 'low',
+        files: [...files],
+        extras: typeof extras === 'object' && extras !== null ? { ...extras } : {},
+      });
+    }
+  }
+  return [...merged.values()];
+}
+
+/**
  * Resolve the effective active agent: the stored/selected kind when this
  * report detected it, else the first detected agent (report order), else
  * undefined (no agents detected — pages render their empty states).

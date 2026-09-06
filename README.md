@@ -34,11 +34,15 @@ into a structured report, then serves a full control center over it:
   regenerate the other runtimes' instruction files from it. Long-tail formats
   (Cline, Windsurf, Zed, Amazon Q, Junie, Roo, Qodo) are supported as sync
   targets even where full detection isn't built.
+- **Extensions & plugins** — inspect a normalized installed-extension inventory
+  across supported runtimes. Claude Code's native plugin marketplace remains a
+  separate browse/install experience; Codex configuration and rules are surfaced
+  read-only and are not presented as installable Codex plugins.
 - **Catalog & marketplace** — browse an installable registry (a 40-entry seed
   snapshot ships in the package for offline first-run) plus the Claude Code plugin
-  marketplace. Installs are checksum-verified, diff-previewed, and stamped with
-  provenance so upgrade/removal stays traceable. Also scaffolds runtime config
-  from templates.
+  marketplace. agentconfig.ing-managed installs are checksum-verified, diff-previewed,
+  and stamped with provenance so removal stays traceable. Also scaffolds runtime
+  config from templates.
 - **Sessions & analytics** — a dashboard of activity computed from real session
   history, redacted session replay, context-health budgets, and full-text
   session search.
@@ -105,7 +109,11 @@ never be uploaded.
 A localhost server with filesystem write access and a terminal has to defend
 against the browser ecosystem. The model is deliberately conservative:
 
-- **Local only.** Binds `127.0.0.1` on a random ephemeral port. No accounts, no
+- **Local by default.** Binds `127.0.0.1` on a random ephemeral port. Pass
+  `--accept-all` to explicitly bind `0.0.0.0`, accept any Host/Origin, and print
+  token-bearing sample URLs for discovered local hostnames and addresses. This
+  exposes the write-capable control center to your network; bearer-token
+  authentication remains required. No accounts, no
   telemetry, no upload — nothing leaves the machine.
 - **Per-session token.** A bearer token is generated at launch and embedded in
   the opened URL; every API and WebSocket request must present it. Strict
@@ -136,11 +144,57 @@ targets, even where full detection isn't built:
 
 **Cline · Windsurf · Zed · Amazon Q · JetBrains Junie · Roo · Qodo**
 
+## Extension support and rollout
+
+The `#/extensions` page is an inventory, not a promise that every runtime has a
+plugin manager. “Extension” is the app's normalized display term; the underlying
+runtime's name wins in the UI and documentation: Claude calls these **plugins**,
+Gemini calls them **extensions**, while Codex's `AGENTS.md`, rules, and config are
+**configuration artifacts**, not Codex plugins. agentconfig.ing's own Catalog is a
+separate, provenance-tracked source of installable skills, agents, commands, MCP
+servers, and hooks.
+
+Current support is deliberately narrow:
+
+| Provider | Inventory today | Provider-managed install/remove | CLI requirement |
+|---|---|---|---|
+| Claude Code | Native installed plugins, with scope/version/source/enabled metadata | Marketplace browse and install delegated to `claude`; other lifecycle operations are not yet exposed here | `claude` for marketplace and plugin inventory |
+| Codex | Read-only project/global config and rules, including `AGENTS.md` and `.codex/rules/*.rules` | Not supported; agentconfig.ing Catalog writes are labeled agentconfig.ing-managed | No `codex` CLI required |
+| Cursor, Continue, GitHub Copilot, Aider, opencode | No provider plugin lifecycle adapter yet; their detected config/rules remain available in the normal inspector | Not supported by the Extensions page | No provider CLI required for current inspection |
+| Gemini CLI | Planned native extension adapter | Planned lifecycle delegation, with provider-owned install/remove | `gemini` when this adapter ships |
+
+Provider cards distinguish `supported`, `detected`, `unavailable`, `unsupported`,
+and `error`. For example, a missing `claude` executable makes the Claude
+inventory unavailable; it does not make Claude unsupported. Missing Codex files
+produce an unavailable read-only inventory, and no Codex CLI is needed. These
+states are intentional so absence of a provider lifecycle is not confused with a
+temporary local failure.
+
+### Rollout and known gaps
+
+The first release establishes a safe read-only normalized contract, keeps Claude
+marketplace compatibility intact, and adds Codex as the lowest-maintenance
+non-Claude inventory. Gemini CLI is the next planned adapter because it has the
+clearest native extension lifecycle, but it requires bounded CLI delegation and
+additional trust/availability handling. Cursor, Continue, Copilot, Aider, and
+opencode remain observe-only candidates until stable provider-owned list/detail
+and lifecycle contracts justify an adapter.
+
+agentconfig.ing does not directly write provider plugin state, execute plugin code, or
+invent version/source data. Install/remove support is safe only when a provider's
+own lifecycle can be delegated with fixed arguments, timeouts, bounded output,
+defensive parsing, and provider-owned uninstall semantics. Until then, use the
+agentconfig.ing Catalog for its explicitly managed artifacts and review its diff and
+provenance before writing files.
+
 ---
 
 ## Requirements
 
-- **Node.js >= 20**
+- **Node.js >= 20.19** (CI covers current Node 20.x and 22.x on Linux and macOS)
+- **Google Chrome or Chromium** is required only for the real-browser e2e gate:
+  `npm run e2e:browser`. Set `CHROME_PATH=/path/to/chrome` when it is not in a
+  standard install location.
 - Two native modules are **optional** and degrade gracefully when absent:
   - `better-sqlite3` — powers full-text session search. Without it, search is
     unavailable; everything else works.

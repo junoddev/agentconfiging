@@ -129,6 +129,7 @@ export const ALLOWED_EXTS: readonly string[] = [
   '.js',
   '.py',
   '.mdc',
+  '.rules',
 ];
 
 export const SKIP_DIRS: ReadonlySet<string> = new Set([
@@ -159,6 +160,23 @@ export const SKIP_DIRS: ReadonlySet<string> = new Set([
  */
 export const GLOBAL_SKIP_DIRS: ReadonlySet<string> = new Set([
   ...SKIP_DIRS,
+  // Codex stores large amounts of session/app state beside its actual global
+  // configuration. Keep the rules/ directory scannable, but never let these
+  // state trees crowd out ~/.codex/config.toml or ~/.codex/rules/*.
+  '.tmp',
+  'ambient-suggestions',
+  'archived_sessions',
+  'attachments',
+  'browser',
+  'computer-use',
+  'node_repl',
+  'pets',
+  'plugins',
+  'process_manager',
+  'sessions',
+  'shell_snapshots',
+  'sqlite',
+  'vendor_imports',
   'projects',
   'todos',
   'statsig',

@@ -36,6 +36,18 @@ function makeReport(
       files: a.files ?? [],
       extras: a.extras ?? {},
     })),
+    quality: {
+      score: 100,
+      components: [],
+      metrics: {
+        totalTokens: 0,
+        guideCount: 0,
+        directiveCount: 0,
+        criticalRuleCount: 0,
+        buriedCriticalRuleCount: 0,
+        contradictionCount: 0,
+      },
+    },
     findings: findings.map((f) => ({
       id: f.id,
       severity: 'warning',

@@ -1,0 +1,80 @@
+.profiles-notice {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+}
+.profiles-notice span {
+  color: var(--muted);
+}
+.profiles-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.profiles-table {
+  width: 100%;
+  min-width: 1240px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.profiles-table th,
+.profiles-table td {
+  padding: 10px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+.profiles-table thead th {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.profiles-table tbody th {
+  min-width: 180px;
+}
+.profiles-name,
+.profiles-table tbody th .meta,
+.profiles-fresh {
+  display: block;
+}
+.profiles-name {
+  margin-bottom: 3px;
+  font-size: 13px;
+}
+.profiles-fresh {
+  margin-top: 5px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.profiles-fresh--expired {
+  color: var(--danger);
+}
+.profiles-fresh--stale {
+  color: var(--warn);
+}
+.profiles-sources {
+  margin-top: 18px;
+}
+.profiles-sources h2 {
+  margin-bottom: 7px;
+}
+.profiles-sources div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+.profiles-sources a {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}

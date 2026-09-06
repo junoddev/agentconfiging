@@ -1,0 +1,21 @@
+{
+  "model": "claude-3-opus-20240229",
+  "env": {
+    "OPENAI_API_KEY": "sk-canaryopenaiagentconfig6dt6AAAAAAAAAAAA",
+    "ANTHROPIC_API_KEY": "sk-ant-canaryAnthropic6dt6BBBBBBBBBBBB",
+    "PARTIAL_ENV_TOKEN": "PARTIAL_DOTENV_CANARY_7yb7_TAIL"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo guard"
+          }
+        ]
+      }
+    ]
+  }
+}

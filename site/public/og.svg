@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs><pattern id="g" width="26" height="26" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#4a554e"/></pattern></defs>
+  <rect width="1200" height="630" fill="#18201b"/><rect width="1200" height="630" fill="url(#g)"/>
+  <text x="80" y="105" fill="#64d67c" font-family="monospace" font-size="26">agentconfig.ing</text>
+  <text x="80" y="250" fill="#edf2ee" font-family="system-ui,sans-serif" font-weight="650" font-size="62">One command. Every agent config</text>
+  <text x="80" y="326" fill="#edf2ee" font-family="system-ui,sans-serif" font-weight="650" font-size="62">inspected and fixable.</text>
+  <rect x="80" y="410" width="620" height="92" rx="12" fill="#202a23" stroke="#4a554e"/>
+  <text x="112" y="468" fill="#64d67c" font-family="monospace" font-size="28">$</text><text x="150" y="468" fill="#edf2ee" font-family="monospace" font-size="28">npx agentconfiging</text>
+  <text x="80" y="565" fill="#aab4ad" font-family="monospace" font-size="19">LOCAL ONLY · NO ACCOUNT · NOTHING UPLOADED · MIT</text>
+</svg>

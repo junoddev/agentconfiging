@@ -3,6 +3,7 @@ import { parseRoute } from '../routes.js';
 import {
   RAIL_ORDER,
   buildCommands,
+  commandTargetContext,
   filterCommands,
   moveSelection,
   parseGlobalKey,
@@ -16,11 +17,11 @@ import {
 const EXPECTED_NAV = new Set([...RAIL_ORDER, 'gallery']);
 
 describe('RAIL_ORDER', () => {
-  it('covers the 23 sidebar pages, overview first', () => {
-    expect(RAIL_ORDER).toHaveLength(23);
+  it('covers the 25 sidebar pages, overview first', () => {
+    expect(RAIL_ORDER).toHaveLength(25);
     expect(RAIL_ORDER[0]).toBe('overview');
-    expect(RAIL_ORDER[RAIL_ORDER.length - 1]).toBe('pipelines');
-    expect(new Set(RAIL_ORDER).size).toBe(23); // no dupes
+    expect(RAIL_ORDER[RAIL_ORDER.length - 1]).toBe('profiles');
+    expect(new Set(RAIL_ORDER).size).toBe(25); // no dupes
   });
 
   it('groups WORKSPACE first (instances before artifacts), then CONFIGURE', () => {
@@ -80,6 +81,61 @@ describe('buildCommands', () => {
     expect(railLabel('git')).toBe('Git');
     expect(railLabel('mcp')).toBe('MCP');
   });
+
+  it('carries folder context to Configure, Library, and Tools destinations', () => {
+    const target = { instanceId: 'inst-1', agentKind: 'claude-code' };
+    const commands = buildCommands('light', undefined, target);
+    const hash = (id: string) =>
+      commands.find((command) => command.id === id)?.action.type === 'navigate'
+        ? (commands.find((command) => command.id === id)?.action as { hash: string }).hash
+        : undefined;
+    expect(hash('nav:settings')).toBe('#/settings?instance=inst-1&agent=claude-code');
+    expect(hash('nav:catalog')).toBe('#/catalog?instance=inst-1&agent=claude-code');
+    expect(hash('nav:findings')).toBe('#/findings');
+    expect(hash('nav:dashboard')).toBe('#/dashboard');
+    expect(hash('nav:git')).toBe('#/git?instance=inst-1&agent=claude-code');
+  });
+
+  it('carries explicit Operate targets separately from chooser context', () => {
+    const contextTarget = { instanceId: 'config', agentKind: 'claude-code' };
+    const operateTarget = { instanceId: 'runtime' };
+    const commands = buildCommands('light', undefined, contextTarget, operateTarget);
+    const hash = (id: string) =>
+      commands.find((command) => command.id === id)?.action.type === 'navigate'
+        ? (commands.find((command) => command.id === id)?.action as { hash: string }).hash
+        : undefined;
+
+    expect(hash('nav:settings')).toBe('#/settings?instance=config&agent=claude-code');
+    expect(hash('nav:terminal')).toBe('#/terminal?instance=runtime');
+  });
+
+  it('preserves explicit aggregate route targets for Configure and Library commands', () => {
+    const chooserTarget = { instanceId: 'chooser', agentKind: 'claude-code' };
+    const explicitTarget = { instanceId: 'deep', agentKind: 'codex' };
+
+    for (const route of [
+      { name: 'findings' as const, target: explicitTarget },
+      { name: 'dashboard' as const, target: explicitTarget },
+    ]) {
+      const targets = commandTargetContext(route, chooserTarget);
+      const commands = buildCommands(
+        'light',
+        undefined,
+        targets.contextTarget,
+        targets.operateTarget,
+      );
+      const hash = (id: string) =>
+        commands.find((command) => command.id === id)?.action.type === 'navigate'
+          ? (commands.find((command) => command.id === id)?.action as { hash: string }).hash
+          : undefined;
+
+      expect(hash('nav:settings')).toBe('#/settings?instance=deep&agent=codex');
+      expect(hash('nav:catalog')).toBe('#/catalog?instance=deep&agent=codex');
+      expect(hash('nav:findings')).toBe('#/findings');
+      expect(hash('nav:dashboard')).toBe('#/dashboard');
+      expect(hash('nav:git')).toBe('#/git?instance=chooser&agent=claude-code');
+    }
+  });
 });
 
 describe('railShortcutHash — Cmd+1..9 → route', () => {
@@ -102,7 +158,7 @@ describe('railShortcutHash — Cmd+1..9 → route', () => {
 
   it('returns undefined out of range', () => {
     expect(railShortcutHash(0)).toBeUndefined();
-    expect(railShortcutHash(25)).toBeUndefined();
+    expect(railShortcutHash(26)).toBeUndefined();
   });
 });
 

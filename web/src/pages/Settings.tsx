@@ -195,7 +195,7 @@ export function Settings() {
 }
 
 function SettingsBody() {
-  const { currentInstance, getFile, activeAgent, client } = useAppState();
+  const { currentInstance, getFile, agentScopeKind, client } = useAppState();
   const flow = useWriteFlow();
   const toast = useToast();
   const instanceId = currentInstance?.id;
@@ -317,7 +317,7 @@ function SettingsBody() {
   // Claude-only surface (bead a6y): .claude/settings*.json is read by Claude
   // Code alone, so any other active agent gets an honest not-applicable state.
   // Placed AFTER every hook call so the hook order never changes.
-  const notApplicable = activeAgent !== undefined && !sectionApplies('settings', activeAgent.kind);
+  const notApplicable = agentScopeKind !== undefined && !sectionApplies('settings', agentScopeKind);
   if (notApplicable) {
     return (
       <main className="layout-main page">
@@ -332,7 +332,7 @@ function SettingsBody() {
           </div>
         </div>
         <Notice tone="info">
-          <strong>Not applicable to {displayNameForKind(activeAgent.kind)}.</strong>{' '}
+          <strong>Not applicable to {displayNameForKind(agentScopeKind)}.</strong>{' '}
           .claude/settings.json is a Claude Code surface — switch the Agent picker to Claude Code to
           view or edit it.
         </Notice>

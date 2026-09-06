@@ -51,6 +51,19 @@ export function countBySeverity(findings: readonly ReportFinding[]): SeverityCou
 }
 
 /**
+ * Narrow findings to the active top-bar agent. `undefined` deliberately means
+ * "not resolved yet" (boot window) and passes rows through, mirroring
+ * scopedAgents/sectionApplies.
+ */
+export function scopeFindings(
+  findings: readonly ReportFinding[],
+  kind: string | undefined,
+): ReportFinding[] {
+  if (kind === undefined) return [...findings];
+  return findings.filter((f) => f.agent === kind);
+}
+
+/**
  * Keep the delivered (already severity-sorted) order; drop findings whose
  * severity is toggled off. An empty active set yields an empty list — filtering
  * hides bands honestly rather than silently falling back to "show all".
@@ -90,6 +103,15 @@ export function globalFindingRows(entries: readonly GlobalEntry[]): GlobalFindin
     for (const finding of entry.findings) rows.push({ root: entry.root, finding });
   }
   return rows;
+}
+
+/** Global findings use the same active-agent narrowing as project findings. */
+export function scopeGlobalFindingRows(
+  rows: readonly GlobalFindingRow[],
+  kind: string | undefined,
+): GlobalFindingRow[] {
+  if (kind === undefined) return [...rows];
+  return rows.filter((row) => row.finding.agent === kind);
 }
 
 /** Terse severity tally for the global layer ('1 ERROR · 2 INFO'); empty string

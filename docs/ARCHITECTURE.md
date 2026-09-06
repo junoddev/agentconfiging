@@ -54,10 +54,41 @@ JSON fixtures.
   knowledge table (`src/core/runtimes/`) extends beyond the 8 detected runtimes to
   a long tail of sync-only formats (Cline, Windsurf, Zed, Amazon Q, Junie, Roo,
   Qodo) as data.
+- **Agent profiles** — the canonical, versioned knowledge layer describing each
+  upstream runtime's configuration contract. Each factual leaf carries evidence,
+  applicability, lifecycle, confidence, and freshness metadata. Profiles are not
+  scan results: detectors combine a profile with a local `Manifest` to produce a
+  `DetectedAgent`; catalog provenance separately records files installed by this
+  product. Existing instruction-format, settings, model, tool, and hook catalogs
+  become projections of promoted profiles rather than competing sources of truth.
+  See [SPEC.md](./SPEC.md#411-agent-profiles-upstream-runtime-knowledge) for the
+  contract and Claude/Codex examples.
 - **History readers** (`src/core/history/`) — parse `~/.claude/history.jsonl` and
   session JSONL into typed session/usage models feeding the dashboard,
   and replay. Read-only and resilient to unknown line types. cwd is read from
   in-file entries, never decoded from the lossy directory slug.
+
+### Profile update boundary
+
+Profiles use two revisions: `schemaVersion` migrates the document shape, while a
+per-runtime `profileRevision` advances on each reviewed promotion. Maintainer-owned
+scaffolding (templates, preferred write targets, detector mapping, ownership, and
+source policy) surrounds evidence-backed upstream facts and cannot be changed by
+extractors.
+
+The update path is intentionally one-way and review-gated:
+
+```text
+authoritative sources -> hashed evidence -> extraction -> candidate + semantic diff
+                                                        |
+canonical profile <- atomic human promotion <- validation/tests/review
+```
+
+Scheduled jobs never write the canonical registry. Failed sources remain visible
+as unavailable/stale and cannot imply removal. Candidate profiles are based on an
+explicit canonical revision, so promotion rejects stale concurrent work. The
+canonical registry then projects data into runtime consumers; executable detector
+and parser behavior stays in code.
 
 ### Server (`src/server/`)
 

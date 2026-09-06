@@ -65,6 +65,8 @@ import { registerStorageRoutes } from './storage.js';
 import { registerSyncRoute } from './sync.js';
 import { registerCatalogRoutes, type CatalogSource } from './catalog.js';
 import { registerMarketplaceRoutes, type ClaudeExec } from './marketplace.js';
+import { registerExtensionRoutes, type ExtensionProviderAdapter } from './extensions.js';
+import { createBuiltInExtensionAdapters } from './extension-adapters.js';
 import { registerGitRoutes } from './git-routes.js';
 import type { GitExec } from './git.js';
 import { registerStatsRoutes } from './stats-routes.js';
@@ -77,6 +79,7 @@ import type { RuntimeMap } from './pipeline/index.js';
 import { PtyManager } from './pty.js';
 import type { WriteScope } from './pathguard.js';
 import { jsonError } from './http.js';
+import { registerProfileRoutes } from './profile-routes.js';
 
 export interface AppConfig {
   /** SHA-256 digest of the session bearer token — the app never sees the raw token. */
@@ -87,6 +90,8 @@ export interface AppConfig {
    * Host check (fail-closed).
    */
   port: () => number;
+  /** Explicit unsafe mode: accept arbitrary Host and Origin values. */
+  acceptAll?: boolean;
   /** Directory the static app shell is served from (dist/web). */
   distDir: string;
   /**
@@ -127,6 +132,8 @@ export interface AppConfig {
    * with no real CLI present.
    */
   marketplaceExec?: ClaudeExec;
+  /** Normalized read-only provider adapters (agentconfig-4hm.5). */
+  extensionAdapters?: readonly ExtensionProviderAdapter[];
   /**
    * GIT PANEL (bead ngs.1): how the git-panel routes reach `git`. Defaults to the
    * real subprocess (execFile, fixed command `git`, arg array, no shell, cwd
@@ -170,6 +177,8 @@ export interface AppConfig {
    * of depending on whether the optional native module is built in the env.
    */
   searchLoader?: SqliteLoader;
+  /** Profile ids with reviewable candidate drift. Bodies and diagnostics never cross the API. */
+  pendingProfileDriftIds?: ReadonlySet<string>;
 }
 
 const MIME: Record<string, string> = {
@@ -268,6 +277,12 @@ function serveStatic(distDir: string, pathname: string): Response {
 
 export function createApp(config: AppConfig): Hono {
   const app = new Hono();
+  const extensionAdapters =
+    config.extensionAdapters ??
+    createBuiltInExtensionAdapters({
+      exec: config.marketplaceExec,
+      projectRoot: config.registry.resolve(undefined)?.root,
+    });
 
   const allowedHosts = () => {
     const port = config.port();
@@ -298,7 +313,7 @@ export function createApp(config: AppConfig): Hono {
   // Host allowlist on EVERY request (DNS-rebinding defense).
   app.use('*', async (c, next) => {
     const host = c.req.header('host');
-    if (!host || !allowedHosts().has(host.toLowerCase())) {
+    if (!config.acceptAll && (!host || !allowedHosts().has(host.toLowerCase()))) {
       return jsonError(403, 'forbidden');
     }
     await next();
@@ -307,7 +322,7 @@ export function createApp(config: AppConfig): Hono {
   // /api/*: Origin/CSRF gate + bearer token; responses are never cached.
   app.use('/api/*', async (c, next) => {
     const origin = c.req.header('origin');
-    if (origin !== undefined && !allowedOrigins().has(origin.toLowerCase())) {
+    if (!config.acceptAll && origin !== undefined && !allowedOrigins().has(origin.toLowerCase())) {
       return jsonError(403, 'forbidden');
     }
     // State-changing methods must PROVE same-origin (CSRF): a valid Origin
@@ -328,6 +343,7 @@ export function createApp(config: AppConfig): Hono {
   });
 
   app.get('/api/health', (c) => c.json({ ok: true, version: config.version }));
+  registerProfileRoutes(app, config.pendingProfileDriftIds);
 
   const registry = config.registry;
 
@@ -450,6 +466,22 @@ export function createApp(config: AppConfig): Hono {
     }
   });
 
+  // CONTEXT COST (ub3.2): GET /api/context-cost?instance= — per detected agent
+  // launch-time initial-context token estimates. Same auth/error/instance
+  // handling as context-health; same cached scan/detect lifecycle.
+  app.get('/api/context-cost', (c) => {
+    const url = new URL(c.req.url);
+    const fresh = url.searchParams.get('fresh') === '1';
+    const instance = registry.resolve(url.searchParams.get('instance') ?? undefined);
+    if (!instance) return jsonError(404, 'unknown instance');
+    try {
+      return c.json(registry.contextCost(instance, { fresh }));
+    } catch (err) {
+      console.error(`agentconfiging server: context-cost failed: ${String(err)}`);
+      return jsonError(500, 'context-cost failed');
+    }
+  });
+
   // WRITE API (gxo.3): POST /api/write, POST /api/delete, GET /api/file. These
   // register under /api, so they inherit the token + Origin/CSRF gates above.
   registerWriteRoutes(app, { scopes: config.scopes ?? [], trashDir: config.trashDir ?? '' });
@@ -504,6 +536,12 @@ export function createApp(config: AppConfig): Hono {
   // every spawn, degrades gracefully when the CLI is absent, and parses the CLI's
   // UNTRUSTED output defensively. See src/server/marketplace.ts.
   registerMarketplaceRoutes(app, { exec: config.marketplaceExec });
+
+  // EXTENSION INVENTORY (agentconfig-4hm.5): provider-neutral, read-only
+  // inventory. Provider adapters are injectable and must translate their own
+  // raw state before it reaches this route. Claude marketplace compatibility
+  // remains on /api/marketplace and is intentionally not migrated here.
+  registerExtensionRoutes(app, { adapters: extensionAdapters });
 
   // GIT PANEL (ngs.1): GET /api/git/status|log|branches|diff + POST
   // /api/git/stage|unstage|commit|checkout|push|pull — the launched-repo git

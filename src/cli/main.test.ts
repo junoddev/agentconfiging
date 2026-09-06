@@ -48,6 +48,18 @@ describe('runCli usage errors (EX_USAGE = 64, stderr only)', () => {
     expect(launch).not.toHaveBeenCalled();
   });
 
+  it('diagnoses an unknown command after recognized root options', async () => {
+    const launch = vi.fn(async () => 0);
+    const { code, stdout, stderr } = await cli(['--no-open', '--detach', 'frobnicate'], {
+      launch,
+    });
+    expect(code).toBe(EX_USAGE);
+    expect(stdout).toBe('');
+    expect(stderr).toContain("unknown command 'frobnicate'");
+    expect(stderr).toContain('Usage:');
+    expect(launch).not.toHaveBeenCalled();
+  });
+
   it('unknown report flag exits 64, distinct from the warnings-found exit 1', async () => {
     const { code, stdout, stderr } = await cli(['report', '--nope']);
     expect(code).toBe(EX_USAGE);
@@ -137,6 +149,15 @@ describe('runCli launch dispatch', () => {
     const { code } = await cli(['launch', '--no-open'], { launch });
     expect(code).toBe(0);
     expect(calls).toEqual([{ open: false, detach: false }]);
+  });
+
+  it('--accept-all opts the launch into all-interface binding', async () => {
+    const launch = vi.fn(async () => 0);
+    await cli(['launch', '--accept-all'], { launch });
+    expect(launch).toHaveBeenCalledWith(
+      { open: true, detach: false, acceptAll: true },
+      expect.anything(),
+    );
   });
 
   it('propagates the launch exit code', async () => {

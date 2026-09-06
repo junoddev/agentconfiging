@@ -12,6 +12,12 @@
  */
 
 import { EDITOR_ROUTES, ROUTE_LABELS, routeHash, type Route, type RouteName } from '../routes.js';
+import {
+  navigationMode,
+  normalizeNavigationTarget,
+  targetForRoute,
+  type NavigationTarget,
+} from '../navigation.js';
 import { fuzzyMatch } from './fuzzy.js';
 
 /** What running a command asks the shell to do. Discriminated so the effectful
@@ -45,6 +51,7 @@ export const RAIL_ORDER: RouteName[] = [
   ...EDITOR_ROUTES,
   // LIBRARY
   'catalog',
+  'extensions',
   'marketplace',
   // RUNTIME
   'dashboard',
@@ -55,6 +62,8 @@ export const RAIL_ORDER: RouteName[] = [
   'git',
   'terminal',
   'pipelines',
+  // REFERENCE (kept after the numbered legacy rail so Cmd+1..9 remains stable)
+  'profiles',
 ];
 
 /** Display label for a route — reads the routes.ts label seam so the palette
@@ -63,9 +72,45 @@ export function railLabel(name: RouteName): string {
   return ROUTE_LABELS[name];
 }
 
+export interface CommandTargetContext {
+  contextTarget?: NavigationTarget;
+  operateTarget?: NavigationTarget;
+}
+
+/**
+ * Pick the folder context a command list may carry from the current route.
+ * Configure/Library also consume its agent field. Operate keeps an explicit
+ * page target when present, otherwise it opens against the current folder.
+ */
+export function commandTargetContext(
+  sourceRoute: Route | undefined,
+  chooserTarget?: NavigationTarget,
+): CommandTargetContext {
+  const chooser = normalizeNavigationTarget(chooserTarget);
+  if (sourceRoute === undefined) return { contextTarget: chooser, operateTarget: chooser };
+
+  const explicitTarget = normalizeNavigationTarget(sourceRoute.target);
+  switch (navigationMode(sourceRoute)) {
+    case 'workspace':
+    case 'runtime':
+      return { contextTarget: explicitTarget ?? chooser, operateTarget: chooser };
+    case 'operate':
+      return { contextTarget: chooser, operateTarget: explicitTarget };
+    case 'configure':
+    case 'library':
+      return { contextTarget: chooser, operateTarget: chooser };
+  }
+}
+
 /** Canonical hash for a simple (no-param) route name. */
-function navHash(name: RouteName): string {
-  return routeHash({ name } as Route);
+function navHash(
+  name: RouteName,
+  contextTarget?: NavigationTarget,
+  operateTarget?: NavigationTarget,
+): string {
+  const route = { name } as Route;
+  const target = navigationMode(route) === 'operate' ? operateTarget : contextTarget;
+  return routeHash({ ...route, target: targetForRoute(route, target) });
 }
 
 /**
@@ -88,20 +133,24 @@ export function railShortcutHash(digit: number): string | undefined {
 export function buildCommands(
   theme: 'light' | 'dark',
   hiddenRoutes?: ReadonlySet<RouteName>,
+  contextTarget?: NavigationTarget,
+  operateTarget?: NavigationTarget,
+  labelOverrides?: Partial<Record<RouteName, string>>,
 ): Command[] {
+  const folderTarget = operateTarget ?? contextTarget;
   const nav: Command[] = RAIL_ORDER.filter((name) => !hiddenRoutes?.has(name)).map((name) => ({
     id: `nav:${name}`,
-    label: railLabel(name),
-    hint: navHash(name),
-    action: { type: 'navigate', hash: navHash(name) },
+    label: labelOverrides?.[name] ?? railLabel(name),
+    hint: navHash(name, contextTarget, folderTarget),
+    action: { type: 'navigate', hash: navHash(name, contextTarget, folderTarget) },
   }));
   // The internal gallery is de-emphasized (sidebar bottom) — navigable, but
   // outside Cmd+1..9.
   nav.push({
     id: 'nav:gallery',
     label: railLabel('gallery'),
-    hint: navHash('gallery'),
-    action: { type: 'navigate', hash: navHash('gallery') },
+    hint: navHash('gallery', contextTarget, folderTarget),
+    action: { type: 'navigate', hash: navHash('gallery', contextTarget, folderTarget) },
   });
 
   const actions: Command[] = [

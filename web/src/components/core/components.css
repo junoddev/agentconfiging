@@ -100,7 +100,7 @@
   color: var(--accent);
 }
 
-/* agentconfig's "global" scope wears the Console "user" treatment
+/* agentconfig.ing's "global" scope wears the Console "user" treatment
    (outlined neutral) but keeps its GLOBAL label + path detail. */
 .s-user,
 .s-global {
@@ -313,6 +313,14 @@ button.tile:active {
   font-size: 12px;
   color: var(--muted);
   margin-top: 2px;
+}
+
+.tile .t-caption {
+  margin-top: 6px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Optional mono delta beside the label (StatBlock). Growth may wear accent

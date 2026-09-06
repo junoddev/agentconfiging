@@ -1,0 +1,577 @@
+{
+  "version": "1.0.0",
+  "entries": [
+    {
+      "kind": "skill",
+      "name": "git-commit-helper",
+      "description": "Draft clear, conventional commit messages from a staged diff.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "skill", "git"],
+      "files": [
+        {
+          "path": ".claude/skills/git-commit-helper/SKILL.md",
+          "content": "---\nname: git-commit-helper\ndescription: Write a conventional commit message for the staged changes.\n---\n\n# Git Commit Helper\n\nWhen asked to write a commit message:\n\n1. Read the staged diff (`git diff --cached`).\n2. Pick one type: feat, fix, docs, refactor, test, chore, perf.\n3. Write a <=72 char summary in the imperative mood (\"add\", not \"added\").\n4. Add a body only when the *why* is not obvious from the summary.\n5. Never invent changes that are not in the diff.\n"
+        }
+      ]
+    },
+    {
+      "kind": "skill",
+      "name": "pr-description-writer",
+      "description": "Turn a branch diff into a reviewer-friendly pull request description.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "skill", "git", "review"],
+      "files": [
+        {
+          "path": ".claude/skills/pr-description-writer/SKILL.md",
+          "content": "---\nname: pr-description-writer\ndescription: Compose a PR description with summary, changes, and test notes.\n---\n\n# PR Description Writer\n\nProduce a description with these sections:\n\n- **Summary** — one paragraph on the intent.\n- **Changes** — a bullet per meaningful change, grouped by area.\n- **Testing** — how it was verified (commands, cases).\n- **Risk** — anything a reviewer should scrutinise.\n\nKeep it factual. Link issues by id; do not fabricate ticket numbers.\n"
+        }
+      ]
+    },
+    {
+      "kind": "skill",
+      "name": "changelog-updater",
+      "description": "Add a Keep-a-Changelog entry for a set of merged changes.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "skill", "docs"],
+      "files": [
+        {
+          "path": ".claude/skills/changelog-updater/SKILL.md",
+          "content": "---\nname: changelog-updater\ndescription: Append a changelog entry under the Unreleased heading.\n---\n\n# Changelog Updater\n\nFollow the Keep a Changelog format:\n\n1. Find or create an `## [Unreleased]` section.\n2. Group entries under Added, Changed, Fixed, Removed, Deprecated, Security.\n3. Write each line for a human reader, present tense, no commit hashes.\n4. Do not bump the version — releasing is a separate step.\n"
+        }
+      ]
+    },
+    {
+      "kind": "skill",
+      "name": "unit-test-scaffolder",
+      "description": "Generate a table-driven test skeleton for a target function.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "skill", "testing"],
+      "files": [
+        {
+          "path": ".claude/skills/unit-test-scaffolder/SKILL.md",
+          "content": "---\nname: unit-test-scaffolder\ndescription: Scaffold unit tests covering happy path, edges, and errors.\n---\n\n# Unit Test Scaffolder\n\nGiven a function to test:\n\n1. Identify inputs, outputs, and thrown errors.\n2. Enumerate cases: nominal, empty, boundary, and invalid input.\n3. Emit one assertion per case using the project's existing test runner.\n4. Leave a TODO where a case needs domain knowledge you lack.\n5. Never assert behaviour you have not read in the source.\n"
+        }
+      ]
+    },
+    {
+      "kind": "skill",
+      "name": "sql-query-reviewer",
+      "description": "Review a SQL query for correctness, indexes, and injection risk.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "skill", "database"],
+      "files": [
+        {
+          "path": ".claude/skills/sql-query-reviewer/SKILL.md",
+          "content": "---\nname: sql-query-reviewer\ndescription: Critique a SQL query for performance and safety.\n---\n\n# SQL Query Reviewer\n\nFor a supplied query, check:\n\n- **Correctness** — joins, NULL handling, GROUP BY completeness.\n- **Performance** — sargable predicates, missing indexes, N+1 patterns.\n- **Safety** — parameterisation; flag any string-built SQL as injection risk.\n\nSuggest an EXPLAIN before recommending an index. Do not run migrations.\n"
+        }
+      ]
+    },
+    {
+      "kind": "skill",
+      "name": "regex-builder",
+      "description": "Build and explain a regular expression from a plain-language spec.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "skill", "text"],
+      "files": [
+        {
+          "path": ".claude/skills/regex-builder/SKILL.md",
+          "content": "---\nname: regex-builder\ndescription: Construct a regex and explain each component.\n---\n\n# Regex Builder\n\n1. Restate the matching goal and list example matches and non-matches.\n2. Build the pattern incrementally; prefer explicit character classes.\n3. Explain every group and quantifier in one line each.\n4. Warn about catastrophic backtracking for nested quantifiers.\n5. Provide the pattern in the target language's escaping.\n"
+        }
+      ]
+    },
+    {
+      "kind": "skill",
+      "name": "api-endpoint-documenter",
+      "description": "Document an HTTP endpoint: method, params, responses, errors.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "skill", "docs", "api"],
+      "files": [
+        {
+          "path": ".claude/skills/api-endpoint-documenter/SKILL.md",
+          "content": "---\nname: api-endpoint-documenter\ndescription: Write reference docs for a single HTTP endpoint.\n---\n\n# API Endpoint Documenter\n\nDocument, from the handler source:\n\n- Method and path, with path/query parameters and types.\n- Request body schema and required fields.\n- Success response shape and status code.\n- Each error condition with its status and message.\n\nDo not document behaviour the code does not implement.\n"
+        }
+      ]
+    },
+    {
+      "kind": "skill",
+      "name": "error-message-improver",
+      "description": "Rewrite an error message to be actionable and specific.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "skill", "dx"],
+      "files": [
+        {
+          "path": ".claude/skills/error-message-improver/SKILL.md",
+          "content": "---\nname: error-message-improver\ndescription: Improve an error message so a user knows what to do next.\n---\n\n# Error Message Improver\n\nA good error states: what failed, why, and the next action.\n\n1. Name the operation that failed.\n2. Include the offending value (redact secrets first).\n3. Suggest a concrete fix or command.\n4. Avoid blame and internal jargon.\n5. Keep it to one or two sentences.\n"
+        }
+      ]
+    },
+    {
+      "kind": "skill",
+      "name": "dependency-upgrade-planner",
+      "description": "Plan a safe dependency upgrade from a changelog and lockfile.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "skill", "maintenance"],
+      "files": [
+        {
+          "path": ".claude/skills/dependency-upgrade-planner/SKILL.md",
+          "content": "---\nname: dependency-upgrade-planner\ndescription: Assess an upgrade for breaking changes and sequencing.\n---\n\n# Dependency Upgrade Planner\n\n1. Read the package's release notes between current and target versions.\n2. List breaking changes that touch APIs this repo uses.\n3. Order the upgrade: patch, then minor, then major, one PR each.\n4. Note the tests that must pass after each step.\n5. Do not upgrade transitive pins you do not understand.\n"
+        }
+      ]
+    },
+    {
+      "kind": "skill",
+      "name": "log-statement-auditor",
+      "description": "Audit logging for noise, secrets, and missing context.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "skill", "observability"],
+      "files": [
+        {
+          "path": ".claude/skills/log-statement-auditor/SKILL.md",
+          "content": "---\nname: log-statement-auditor\ndescription: Review log statements for level, secrets, and usefulness.\n---\n\n# Log Statement Auditor\n\nFor each log statement, verify:\n\n- **Level** is appropriate (no debug spam at info).\n- **No secrets** — tokens, passwords, PII are never logged.\n- **Context** — an id or key that makes the line searchable.\n\nFlag logs inside hot loops. Suggest structured fields over string concat.\n"
+        }
+      ]
+    },
+    {
+      "kind": "subagent",
+      "name": "bug-reproducer",
+      "description": "Writes a minimal failing test that reproduces a reported bug.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "subagent", "testing"],
+      "files": [
+        {
+          "path": ".claude/agents/bug-reproducer.md",
+          "content": "---\nname: bug-reproducer\ndescription: Reproduce a bug as a minimal failing test before any fix.\ntools: Read, Grep, Glob, Bash\n---\n\nYou reproduce bugs as tests. Given a bug report:\n\n1. Locate the relevant code by searching, not guessing.\n2. Write the smallest test that fails because of the bug.\n3. Confirm it fails for the reported reason, not an unrelated one.\n4. Hand back the failing test; do NOT fix the bug yourself.\n"
+        }
+      ]
+    },
+    {
+      "kind": "subagent",
+      "name": "refactoring-assistant",
+      "description": "Proposes behaviour-preserving refactors backed by existing tests.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "subagent", "refactor"],
+      "files": [
+        {
+          "path": ".claude/agents/refactoring-assistant.md",
+          "content": "---\nname: refactoring-assistant\ndescription: Refactor code without changing behaviour, guarded by tests.\ntools: Read, Edit, Grep, Glob, Bash\n---\n\nYou refactor safely. Rules:\n\n1. Confirm tests pass BEFORE changing anything.\n2. Make one structural change at a time; keep tests green.\n3. Never alter observable behaviour or public signatures without being asked.\n4. If tests are missing, say so and stop rather than refactoring blind.\n"
+        }
+      ]
+    },
+    {
+      "kind": "subagent",
+      "name": "security-auditor",
+      "description": "Reviews a diff for common vulnerability classes.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "subagent", "security"],
+      "files": [
+        {
+          "path": ".claude/agents/security-auditor.md",
+          "content": "---\nname: security-auditor\ndescription: Audit changes for injection, secrets, authz, and unsafe defaults.\ntools: Read, Grep, Glob\n---\n\nYou audit for security issues, read-only. Check for:\n\n- Injection (SQL, shell, template) from untrusted input.\n- Hardcoded secrets or credentials.\n- Missing authorization checks on state-changing paths.\n- Unsafe deserialization or path traversal.\n\nReport findings with severity and file:line. Never exfiltrate secrets you find.\n"
+        }
+      ]
+    },
+    {
+      "kind": "subagent",
+      "name": "test-coverage-improver",
+      "description": "Finds untested branches and adds targeted tests.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "subagent", "testing"],
+      "files": [
+        {
+          "path": ".claude/agents/test-coverage-improver.md",
+          "content": "---\nname: test-coverage-improver\ndescription: Add tests for the highest-value untested branches.\ntools: Read, Edit, Grep, Glob, Bash\n---\n\nYou raise meaningful coverage. Steps:\n\n1. Identify uncovered branches with real failure modes (skip trivial getters).\n2. Add tests that would catch a plausible regression.\n3. Prefer clarity over count; one good test beats five redundant ones.\n4. Keep new tests deterministic and independent.\n"
+        }
+      ]
+    },
+    {
+      "kind": "subagent",
+      "name": "documentation-writer",
+      "description": "Writes user-facing docs grounded in the actual source.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "subagent", "docs"],
+      "files": [
+        {
+          "path": ".claude/agents/documentation-writer.md",
+          "content": "---\nname: documentation-writer\ndescription: Document features accurately from the code, not assumptions.\ntools: Read, Grep, Glob\n---\n\nYou write documentation grounded in source. Rules:\n\n1. Read the implementation before describing it.\n2. Show real, runnable examples where possible.\n3. Note limitations and defaults explicitly.\n4. Never document a flag or option the code does not support.\n"
+        }
+      ]
+    },
+    {
+      "kind": "subagent",
+      "name": "performance-investigator",
+      "description": "Traces a performance complaint to a measured hotspot.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "subagent", "performance"],
+      "files": [
+        {
+          "path": ".claude/agents/performance-investigator.md",
+          "content": "---\nname: performance-investigator\ndescription: Find the measured cause of a slowdown before proposing fixes.\ntools: Read, Grep, Glob, Bash\n---\n\nYou investigate performance with evidence. Steps:\n\n1. Reproduce the slow path and measure it (timing, counts).\n2. Locate the dominant cost; do not optimise on a hunch.\n3. Propose the smallest change that addresses the measured cost.\n4. Re-measure to confirm. Report before/after numbers.\n"
+        }
+      ]
+    },
+    {
+      "kind": "subagent",
+      "name": "dependency-updater",
+      "description": "Applies a planned dependency upgrade and runs the gates.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "subagent", "maintenance"],
+      "files": [
+        {
+          "path": ".claude/agents/dependency-updater.md",
+          "content": "---\nname: dependency-updater\ndescription: Apply one dependency upgrade and verify the build and tests.\ntools: Read, Edit, Bash\n---\n\nYou apply upgrades one at a time. Steps:\n\n1. Bump exactly one dependency to the agreed version.\n2. Run install, build, and tests.\n3. Fix only breakage caused by the upgrade; report anything larger.\n4. Do not bundle unrelated changes into the upgrade.\n"
+        }
+      ]
+    },
+    {
+      "kind": "rule",
+      "name": "no-secrets-in-code",
+      "description": "Forbid hardcoded credentials; require env or a secret manager.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "rule", "security"],
+      "files": [
+        {
+          "path": ".agents/rules/no-secrets-in-code.md",
+          "content": "# Rule: No secrets in code\n\nNever hardcode API keys, tokens, passwords, or connection strings.\n\n- Read secrets from environment variables or a secret manager.\n- Keep example values in `.env.example` with placeholders only.\n- If you spot an existing hardcoded secret, flag it — do not commit around it.\n"
+        }
+      ]
+    },
+    {
+      "kind": "rule",
+      "name": "prefer-early-returns",
+      "description": "Reduce nesting by returning early on guard conditions.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "rule", "style"],
+      "files": [
+        {
+          "path": ".agents/rules/prefer-early-returns.md",
+          "content": "# Rule: Prefer early returns\n\nHandle error and edge conditions first and return, keeping the happy path\nat the lowest indentation.\n\n- Replace `else` branches after a return with straight-line code.\n- Avoid pyramids of nested `if` blocks.\n- Keep each function's main flow readable top to bottom.\n"
+        }
+      ]
+    },
+    {
+      "kind": "rule",
+      "name": "typescript-strict-nulls",
+      "description": "Treat null and undefined explicitly under strict TypeScript.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "rule", "typescript"],
+      "files": [
+        {
+          "path": ".agents/rules/typescript-strict-nulls.md",
+          "content": "# Rule: Explicit null handling\n\nWith strict null checks on:\n\n- Do not use non-null assertions (`!`) to silence the compiler.\n- Narrow with checks or optional chaining before access.\n- Model \"absent\" as `undefined` and \"known empty\" as an empty value.\n- Prefer discriminated unions over nullable grab-bag objects.\n"
+        }
+      ]
+    },
+    {
+      "kind": "rule",
+      "name": "consistent-error-handling",
+      "description": "Handle errors with typed results or narrow catches, not swallowing.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "rule", "reliability"],
+      "files": [
+        {
+          "path": ".agents/rules/consistent-error-handling.md",
+          "content": "# Rule: Consistent error handling\n\n- Never swallow an error silently; log or propagate with context.\n- Catch the narrowest scope you can act on.\n- Add context when rethrowing (what operation, which input — redact secrets).\n- Prefer returning a typed result over throwing for expected failures.\n"
+        }
+      ]
+    },
+    {
+      "kind": "rule",
+      "name": "descriptive-names",
+      "description": "Name things for intent; ban single-letter and abbreviation soup.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "rule", "style"],
+      "files": [
+        {
+          "path": ".agents/rules/descriptive-names.md",
+          "content": "# Rule: Descriptive names\n\n- Names state intent: `retryCount`, not `n`; `isReady`, not `flag`.\n- Single letters only for tight loop indices and math conventions.\n- Avoid unexplained abbreviations; match the domain's vocabulary.\n- Booleans read as predicates (`hasAccess`, `shouldRetry`).\n"
+        }
+      ]
+    },
+    {
+      "kind": "rule",
+      "name": "test-before-merge",
+      "description": "Require passing tests and a covering test for every change.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "rule", "testing"],
+      "files": [
+        {
+          "path": ".agents/rules/test-before-merge.md",
+          "content": "# Rule: Test before merge\n\n- Every behavioural change ships with a test that would fail without it.\n- The full suite must pass locally before a PR is opened.\n- Bug fixes include a regression test reproducing the bug.\n- Do not disable or skip tests to make a build green.\n"
+        }
+      ]
+    },
+    {
+      "kind": "hook",
+      "name": "format-on-write",
+      "description": "Run the formatter after a file is edited (PostToolUse hook config).",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "hook", "formatting"],
+      "files": [
+        {
+          "path": ".claude/hooks/format-on-write.json",
+          "content": "{\n  \"hooks\": {\n    \"PostToolUse\": [\n      {\n        \"matcher\": \"Edit|Write\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"npx prettier --write \\\"$CLAUDE_FILE_PATHS\\\" 2>/dev/null || true\"\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+        }
+      ]
+    },
+    {
+      "kind": "hook",
+      "name": "block-committing-secrets",
+      "description": "Scan a proposed commit for secret-looking strings and block it.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "hook", "security"],
+      "files": [
+        {
+          "path": ".claude/hooks/block-committing-secrets.json",
+          "content": "{\n  \"hooks\": {\n    \"PreToolUse\": [\n      {\n        \"matcher\": \"Bash\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"grep -REn \\\"(AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----)\\\" . && exit 2 || exit 0\"\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+        }
+      ]
+    },
+    {
+      "kind": "hook",
+      "name": "run-tests-on-stop",
+      "description": "Run the test suite when the agent finishes a turn (Stop hook config).",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "hook", "testing"],
+      "files": [
+        {
+          "path": ".claude/hooks/run-tests-on-stop.json",
+          "content": "{\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"npm test --silent || true\"\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+        }
+      ]
+    },
+    {
+      "kind": "hook",
+      "name": "lint-staged-precommit",
+      "description": "Lint changed files before a commit runs (PreToolUse Bash config).",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "hook", "linting"],
+      "files": [
+        {
+          "path": ".claude/hooks/lint-staged-precommit.json",
+          "content": "{\n  \"hooks\": {\n    \"PreToolUse\": [\n      {\n        \"matcher\": \"Bash\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"npx eslint $(git diff --cached --name-only --diff-filter=ACM) || true\"\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+        }
+      ]
+    },
+    {
+      "kind": "hook",
+      "name": "notify-on-completion",
+      "description": "Emit a desktop notification when the agent stops (Stop hook config).",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "hook", "dx"],
+      "files": [
+        {
+          "path": ".claude/hooks/notify-on-completion.json",
+          "content": "{\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"command -v osascript >/dev/null && osascript -e 'display notification \\\"Agent finished\\\" with title \\\"Claude Code\\\"' || true\"\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+        }
+      ]
+    },
+    {
+      "kind": "mcp-server",
+      "name": "filesystem",
+      "description": "Local filesystem MCP server scoped to the project directory.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "mcp-server", "filesystem"],
+      "files": [
+        {
+          "path": ".mcp/filesystem.json",
+          "content": "{\n  \"mcpServers\": {\n    \"filesystem\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"@modelcontextprotocol/server-filesystem\",\n        \".\"\n      ]\n    }\n  }\n}\n"
+        }
+      ]
+    },
+    {
+      "kind": "mcp-server",
+      "name": "github",
+      "description": "GitHub MCP server; reads its token from the environment.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "mcp-server", "github"],
+      "files": [
+        {
+          "path": ".mcp/github.json",
+          "content": "{\n  \"mcpServers\": {\n    \"github\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"@modelcontextprotocol/server-github\"\n      ],\n      \"env\": {\n        \"GITHUB_PERSONAL_ACCESS_TOKEN\": \"${GITHUB_PERSONAL_ACCESS_TOKEN}\"\n      }\n    }\n  }\n}\n"
+        }
+      ]
+    },
+    {
+      "kind": "mcp-server",
+      "name": "postgres",
+      "description": "PostgreSQL MCP server; connection string comes from the environment.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "mcp-server", "database"],
+      "files": [
+        {
+          "path": ".mcp/postgres.json",
+          "content": "{\n  \"mcpServers\": {\n    \"postgres\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"@modelcontextprotocol/server-postgres\",\n        \"${DATABASE_URL}\"\n      ]\n    }\n  }\n}\n"
+        }
+      ]
+    },
+    {
+      "kind": "mcp-server",
+      "name": "sqlite",
+      "description": "SQLite MCP server pointed at a local database file.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "mcp-server", "database"],
+      "files": [
+        {
+          "path": ".mcp/sqlite.json",
+          "content": "{\n  \"mcpServers\": {\n    \"sqlite\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"@modelcontextprotocol/server-sqlite\",\n        \"./data/app.db\"\n      ]\n    }\n  }\n}\n"
+        }
+      ]
+    },
+    {
+      "kind": "mcp-server",
+      "name": "fetch",
+      "description": "HTTP fetch MCP server for retrieving and reading web pages.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "mcp-server", "web"],
+      "files": [
+        {
+          "path": ".mcp/fetch.json",
+          "content": "{\n  \"mcpServers\": {\n    \"fetch\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"@modelcontextprotocol/server-fetch\"\n      ]\n    }\n  }\n}\n"
+        }
+      ]
+    },
+    {
+      "kind": "mcp-server",
+      "name": "git",
+      "description": "Git MCP server exposing history and diffs for the local repo.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "mcp-server", "git"],
+      "files": [
+        {
+          "path": ".mcp/git.json",
+          "content": "{\n  \"mcpServers\": {\n    \"git\": {\n      \"command\": \"npx\",\n      \"args\": [\n        \"-y\",\n        \"@modelcontextprotocol/server-git\",\n        \"--repository\",\n        \".\"\n      ]\n    }\n  }\n}\n"
+        }
+      ]
+    },
+    {
+      "kind": "command",
+      "name": "review-diff",
+      "description": "Slash command: review the working diff for issues before committing.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "command", "review"],
+      "files": [
+        {
+          "path": ".claude/commands/review-diff.md",
+          "content": "Review the current working diff.\n\nRun `git diff` and report, grouped by file:\n\n- Correctness risks and likely bugs.\n- Missing tests for new behaviour.\n- Style or naming that departs from the surrounding code.\n\nBe specific with file:line references. Do not make edits — just review.\n"
+        }
+      ]
+    },
+    {
+      "kind": "command",
+      "name": "generate-tests",
+      "description": "Slash command: write tests for the file or symbol under discussion.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "command", "testing"],
+      "files": [
+        {
+          "path": ".claude/commands/generate-tests.md",
+          "content": "Write tests for $ARGUMENTS.\n\n1. Read the target and its existing tests, if any.\n2. Cover the happy path, boundaries, and error cases.\n3. Match the project's test runner and file conventions.\n4. Ensure the new tests pass before finishing.\n"
+        }
+      ]
+    },
+    {
+      "kind": "command",
+      "name": "explain-selection",
+      "description": "Slash command: explain what a piece of code does and why.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["template", "command", "docs"],
+      "files": [
+        {
+          "path": ".claude/commands/explain-selection.md",
+          "content": "Explain $ARGUMENTS.\n\nGive a short, plain-language explanation covering:\n\n- What it does, step by step.\n- Any non-obvious edge cases or assumptions.\n- One risk or gotcha to watch for.\n\nAssume the reader knows the language but not this codebase.\n"
+        }
+      ]
+    },
+    {
+      "kind": "runtime-template",
+      "name": "cursor-starter",
+      "description": "Scaffold a Cursor project: a starter rules file and ignore list.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["runtime-template", "cursor", "scaffold"],
+      "files": [
+        {
+          "path": ".cursor/rules/project.mdc",
+          "content": "---\ndescription: Project conventions for Cursor\nalwaysApply: true\n---\n\n# Project rules\n\n- Follow the existing code style; do not reformat unrelated lines.\n- Add or update a test for every behavioural change.\n- Keep changes surgical and scoped to the request.\n- Never commit secrets; read them from the environment.\n"
+        },
+        {
+          "path": ".cursorignore",
+          "content": "node_modules/\ndist/\nbuild/\ncoverage/\n.env\n"
+        }
+      ]
+    },
+    {
+      "kind": "runtime-template",
+      "name": "codex-starter",
+      "description": "Scaffold Codex: an AGENTS.md guide and a minimal config.toml.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["runtime-template", "codex", "scaffold"],
+      "files": [
+        {
+          "path": "AGENTS.md",
+          "content": "# Agent instructions\n\nThis file guides AI agents working in this repository.\n\n## Build & test\n\n_Add your build and test commands here._\n\n## Conventions\n\n- Match existing style; keep changes minimal and well-tested.\n- Do not introduce new dependencies without asking.\n- Never hardcode secrets.\n"
+        },
+        {
+          "path": ".codex/config.toml",
+          "content": "# Codex project configuration\n# See https://developers.openai.com/codex for the full reference.\n\n[project]\nname = \"my-project\"\n"
+        }
+      ]
+    },
+    {
+      "kind": "runtime-template",
+      "name": "gemini-starter",
+      "description": "Scaffold Gemini CLI: a GEMINI.md guide and a settings file.",
+      "version": "1.0.0",
+      "source": "agentconfig-seed",
+      "tags": ["runtime-template", "gemini", "scaffold"],
+      "files": [
+        {
+          "path": "GEMINI.md",
+          "content": "# Project context for Gemini\n\n## Overview\n\n_Briefly describe what this project is._\n\n## Working agreements\n\n- Keep edits focused on the task.\n- Write tests alongside code changes.\n- Explain non-obvious decisions in the PR description.\n"
+        },
+        {
+          "path": ".gemini/settings.json",
+          "content": "{\n  \"contextFileName\": \"GEMINI.md\"\n}\n"
+        }
+      ]
+    }
+  ]
+}

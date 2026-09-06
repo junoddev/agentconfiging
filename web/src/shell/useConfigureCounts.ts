@@ -23,12 +23,25 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { isClaudeKind, scopeReport, scopedAgents, useAppState } from '../state/index.js';
-import { collectInstructionFiles } from '../pages/instructions/logic.js';
-import { collectEntries } from '../pages/skills/logic.js';
-import { collectRules } from '../pages/rules/logic.js';
-import { collectMemoryFiles } from '../pages/memory/logic.js';
-import { collectMcpCandidates, parseMcpFile } from '../pages/mcp/logic.js';
+import {
+  isClaudeKind,
+  scopeReport,
+  scopedAgents,
+  useAppState,
+  useGlobalConfig,
+} from '../state/index.js';
+import {
+  collectGlobalInstructionFiles,
+  collectInstructionFiles,
+} from '../pages/instructions/logic.js';
+import { collectEntries, collectGlobalEntries } from '../pages/skills/logic.js';
+import { collectGlobalRules, collectRules } from '../pages/rules/logic.js';
+import { collectGlobalMemoryFiles, collectMemoryFiles } from '../pages/memory/logic.js';
+import {
+  collectGlobalMcpCandidates,
+  collectMcpCandidates,
+  parseMcpFile,
+} from '../pages/mcp/logic.js';
 import { parseHooksBlock } from '../pages/hooks/logic.js';
 import { parseKeybindings } from '../pages/keybindings/logic.js';
 import { effectiveRows } from '../pages/settings/effective.js';
@@ -67,31 +80,54 @@ function parseSettingsObject(content: string): Record<string, unknown> | undefin
 }
 
 export function useConfigureCounts(): ConfigureCounts {
-  const { report, getFile, currentInstance, activeAgent, client } = useAppState();
+  const { report, getFile, currentInstance, agentScopeKind, client } = useAppState();
+  const { entries: globalEntries } = useGlobalConfig();
   const instanceId = currentInstance?.id;
   // Counts scope to the ACTIVE AGENT (bead a6y) — the same slice each page shows.
-  const agentKind = activeAgent?.kind;
+  const agentKind = agentScopeKind;
   // Settings/hooks/keybindings are Claude-only files: for another active agent
   // their reads are skipped and the counts fall out as an honest 0 (that agent
   // has none of these), keeping every Configure badge present and consistent.
   const claudeSurfaces = agentKind === undefined || isClaudeKind(agentKind);
+  const globalSettingsPath = useMemo(() => {
+    const claude = globalEntries.find((entry) => entry.dir === '.claude');
+    return claude ? `${claude.root}/settings.json` : undefined;
+  }, [globalEntries]);
+  const scopedGlobalEntries = useMemo(
+    () =>
+      globalEntries.map((entry) => ({ ...entry, agents: scopedAgents(entry.agents, agentKind) })),
+    [globalEntries, agentKind],
+  );
 
   // Cheap, synchronous counts (undefined until the first report arrives).
   const cheap = useMemo(() => {
     const scoped = report ? scopeReport(report, agentKind) : undefined;
     return {
-      instructions: scoped ? collectInstructionFiles(scoped.agents).length : undefined,
-      skills: scoped ? collectEntries(scoped).length : undefined,
-      rules: scoped ? collectRules(scoped).length : undefined,
-      memory: scoped ? collectMemoryFiles(scoped).length : undefined,
+      instructions: scoped
+        ? collectInstructionFiles(scoped.agents).length +
+          collectGlobalInstructionFiles(scopedGlobalEntries).length
+        : undefined,
+      skills: scoped
+        ? collectEntries(scoped).length + collectGlobalEntries(scopedGlobalEntries).length
+        : undefined,
+      rules: scoped
+        ? collectRules(scoped).length + collectGlobalRules(scopedGlobalEntries).length
+        : undefined,
+      memory: scoped
+        ? collectMemoryFiles(scoped).length + collectGlobalMemoryFiles(scopedGlobalEntries).length
+        : undefined,
     };
-  }, [report, agentKind]);
+  }, [report, agentKind, scopedGlobalEntries]);
 
   // MCP candidate paths drive one of the fetched counts; their identity keys the
   // fetch effect so a report push with an unchanged file set does not refetch.
   const mcpCandidates = useMemo(
     () => collectMcpCandidates(scopedAgents(report?.agents ?? [], agentKind)),
     [report, agentKind],
+  );
+  const globalMcpCandidates = useMemo(
+    () => collectGlobalMcpCandidates(scopedGlobalEntries),
+    [scopedGlobalEntries],
   );
   const candidateKey = mcpCandidates.join('\n');
 
@@ -115,37 +151,56 @@ export function useConfigureCounts(): ConfigureCounts {
         .catch(() => null);
 
     void (async () => {
-      const [settingsContent, localContent, keybindingsContent, ...mcpContents] = await Promise.all(
-        [
-          claudeSurfaces ? read(SETTINGS_PATH) : Promise.resolve(null),
-          claudeSurfaces ? read(LOCAL_SETTINGS_PATH) : Promise.resolve(null),
-          claudeSurfaces ? read(KEYBINDINGS_PATH) : Promise.resolve(null),
-          ...mcpCandidates.map(read),
-        ],
-      );
+      const [
+        settingsContent,
+        localContent,
+        keybindingsContent,
+        globalSettingsContent,
+        ...mcpContents
+      ] = await Promise.all([
+        claudeSurfaces ? read(SETTINGS_PATH) : Promise.resolve(null),
+        claudeSurfaces ? read(LOCAL_SETTINGS_PATH) : Promise.resolve(null),
+        claudeSurfaces ? read(KEYBINDINGS_PATH) : Promise.resolve(null),
+        claudeSurfaces && globalSettingsPath ? read(globalSettingsPath) : Promise.resolve(null),
+        ...mcpCandidates.map(read),
+        ...globalMcpCandidates.map((candidate) => read(candidate.path)),
+      ]);
       if (cancelled) return;
 
       const settingsObj = settingsContent ? parseSettingsObject(settingsContent) : undefined;
       const localObj = localContent ? parseSettingsObject(localContent) : undefined;
-      const settings = effectiveRows({ project: settingsObj, local: localObj }).filter(
-        (r) => r.win !== 'default',
-      ).length;
+      const globalSettingsObj = globalSettingsContent
+        ? parseSettingsObject(globalSettingsContent)
+        : undefined;
+      const settings = effectiveRows({
+        global: globalSettingsObj,
+        project: settingsObj,
+        local: localObj,
+      }).filter((r) => r.win !== 'default').length;
 
       const hookCount = (content: string | null): number => {
         if (!content) return 0;
         const parsed = parseHooksBlock(content);
         return parsed.ok ? parsed.entries.length : 0;
       };
-      const hooks = hookCount(settingsContent) + hookCount(localContent);
+      const hooks =
+        hookCount(settingsContent) + hookCount(localContent) + hookCount(globalSettingsContent);
 
       const mcp = mcpContents.reduce(
         (sum, content) => sum + (content ? parseMcpFile(content).servers.length : 0),
         0,
       );
 
-      const keybindings = keybindingsContent
-        ? parseKeybindings(keybindingsContent).bindings.length
-        : 0;
+      const globalKeybindingsPath = globalSettingsPath?.replace(
+        /settings\.json$/,
+        'keybindings.json',
+      );
+      const globalKeybindingsContent = globalKeybindingsPath
+        ? await read(globalKeybindingsPath)
+        : null;
+      const keybindings =
+        (keybindingsContent ? parseKeybindings(keybindingsContent).bindings.length : 0) +
+        (globalKeybindingsContent ? parseKeybindings(globalKeybindingsContent).bindings.length : 0);
 
       setFetched({ settings, hooks, mcp, keybindings });
     })();
@@ -153,7 +208,15 @@ export function useConfigureCounts(): ConfigureCounts {
     return () => {
       cancelled = true;
     };
-  }, [getFile, report, candidateKey, mcpCandidates, claudeSurfaces]);
+  }, [
+    getFile,
+    report,
+    candidateKey,
+    mcpCandidates,
+    globalMcpCandidates,
+    claudeSurfaces,
+    globalSettingsPath,
+  ]);
 
   // Sync target count via a dry-run plan — keyed on the instance only, so it does
   // not re-run on every report push. A failed plan leaves the count unset.
