@@ -1,0 +1,37 @@
+[config]
+model = "openai/accounts/fireworks/models/glm-5p3-flash"
+fallback_models = ["openai/accounts/fireworks/models/gpt-oss-120b"]
+reasoning_effort_models_override = ["glm-5p3-flash"]
+custom_model_max_tokens = 131_072
+max_model_tokens = 65_536
+max_output_tokens = 32_768
+ai_timeout = 600
+reasoning_effort = "low" # glm-5p3-flash is thinking-only: Fireworks rejects "none"
+repo_context_files = ["AGENTS.md", "CLAUDE.md"]
+repo_context_from_default_branch = true
+repo_context_max_lines = 500
+output_run_details = true
+extract_issue_from_branch = false
+persistent_inline_comments = true
+large_patch_policy = "clip"
+propagate_tool_errors = true
+
+[pr_reviewer]
+require_tests_review = true
+require_security_review = true
+require_ticket_analysis_review = false
+inline_key_issues = true
+num_max_findings = 7
+extra_instructions = """
+Review this TypeScript application (npm package `agentconfiging`) for correctness, security, regressions, and missing tests. Prioritize concrete defects over stylistic preferences.
+
+Enforce the repository guidance in CLAUDE.md. In particular, keep feedback to surgical, minimal diffs; flag speculative abstractions, unnecessary comments, and changes unrelated to the pull request's stated purpose.
+
+The stack is TypeScript ESM on Node >= 20: a commander CLI (`src/cli`), a Hono server (`src/server`), shared core logic (`src/core`), and a React 19 + Vite web UI (`web`). Check strict TypeScript soundness (no `any` leakage or unsafe casts in changed lines), correct async/error handling around chokidar file watching and child-process/pty usage, and proper separation between server, core, and UI layers.
+
+This tool reads and writes AI-agent configuration files in user repositories, so treat security review as primary: flag path traversal or writes outside the project root, unsafe symlink handling, command injection in shell/pty invocation, and secret or canary output leakage. Verify that changes touching `src/server`, `src/core`, or file-writing code respect the security gate (`npm run test:security`) and its canary sweep expectations.
+
+Verify that behavior changes have focused vitest coverage (unit, jsdom component, or e2e scripts under `scripts/`). Do not request tests for purely mechanical or documentation-only changes. Avoid comments about formatting that prettier or eslint would resolve.
+
+When analysis omits any changed production, security, workflow, or test file because of a token or context limit, explicitly call the review incomplete and do not characterize the pull request as having no major issues. Recommend a focused human review or a smaller pull request for the omitted surface.
+"""
