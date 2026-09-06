@@ -171,8 +171,13 @@ export function registerExtensionRoutes(app: Hono, config: ExtensionRoutesConfig
         continue;
       }
       const provider = wireProvider(adapter, safeState(inventory.state), inventory.reason);
+      if (provider.id === '') {
+        // No sanitized id to key extensions by — surface the provider as an
+        // explicit error instead of a silently empty card.
+        providers.push(wireProvider(adapter, 'error', 'provider id failed sanitization'));
+        continue;
+      }
       providers.push(provider);
-      if (provider.id === '') continue;
       if (Array.isArray(inventory.extensions)) {
         for (const extension of inventory.extensions) {
           if (extension !== null && typeof extension === 'object') {

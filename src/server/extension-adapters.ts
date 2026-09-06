@@ -169,16 +169,9 @@ function fixedCandidates(options: CodexExtensionAdapterOptions): Candidate[] {
     candidate(path.join(home, '.codex', 'AGENTS.md'), '~/.codex/AGENTS.md', 'global', 'config'),
   ];
   if (project !== undefined) {
-    candidates.push(
-      candidate(path.join(project, 'codex.toml'), 'codex.toml', 'project', 'config'),
-      candidate(path.join(project, 'AGENTS.md'), 'AGENTS.md', 'project', 'config'),
-      candidate(
-        path.join(project, '.codex', 'config.toml'),
-        '.codex/config.toml',
-        'project',
-        'config',
-      ),
-    );
+    // Codex reads config ONLY from CODEX_HOME (global) — project scope is
+    // honestly limited to AGENTS.md and .codex/rules/*.rules.
+    candidates.push(candidate(path.join(project, 'AGENTS.md'), 'AGENTS.md', 'project', 'config'));
   }
   return candidates;
 }

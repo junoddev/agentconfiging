@@ -228,4 +228,39 @@ describe('GET /api/extensions', () => {
       ],
     });
   });
+
+  it('reports an unsanitizable provider id as an explicit error with no extensions', async () => {
+    const adapter = {
+      provider: { id: 42, displayName: 'Broken', kind: 'config', scopes: [], capabilities: {} },
+      async listInstalled() {
+        return {
+          state: 'detected',
+          extensions: [
+            {
+              id: 'x',
+              name: 'orphan',
+              version: '',
+              scope: 'project',
+              source: 'local',
+              enabled: true,
+            },
+          ],
+        };
+      },
+    } as unknown as ExtensionProviderAdapter;
+
+    const response = await get(appWith([adapter]), '/api/extensions');
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      providers: Array<Record<string, unknown>>;
+      extensions: unknown[];
+    };
+    expect(body.providers).toHaveLength(1);
+    expect(body.providers[0]).toMatchObject({
+      id: '',
+      state: 'error',
+      reason: 'provider id failed sanitization',
+    });
+    expect(body.extensions).toEqual([]);
+  });
 });
