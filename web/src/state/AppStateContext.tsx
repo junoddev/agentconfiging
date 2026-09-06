@@ -79,7 +79,7 @@ export interface AppStateValue extends AppState {
    *  chooser reflects adds/removes made on the Instances page. Best-effort: a
    *  failure leaves the prior list in place. */
   refreshInstances: () => Promise<void>;
-  /** Pick the active agent (top-bar chooser); persisted across reloads. */
+  /** Pick the active Configure agent; persisted across reloads. */
   selectAgent: (kind: string) => void;
   /** Re-fetch the current instance's report (also called on a WS report push). */
   refetch: () => void;

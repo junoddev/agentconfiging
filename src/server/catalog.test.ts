@@ -272,7 +272,9 @@ describe('POST /api/catalog/install — attacks', () => {
     expect(fs.existsSync(path.join(projectRoot, '.agentconfig'))).toBe(false);
   });
 
-  it('refuses the full poison-manifest → remove-victim-file chain end-to-end', async () => {
+  // Incident agentconfig-0zm.4: reproduce the complete reserved-namespace
+  // poisoning chain, then prove the victim file remains on disk.
+  it('agentconfig-0zm.4 reserved .agentconfig poisoning chain is refused end-to-end', async () => {
     // The victim's own, never-installed file.
     const victimRel = '.claude/skills/victim/SKILL.md';
     fs.mkdirSync(path.join(projectRoot, '.claude', 'skills', 'victim'), { recursive: true });

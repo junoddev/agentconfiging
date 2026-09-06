@@ -127,10 +127,10 @@ describe('formatting (DESIGN §8 voice)', () => {
     expect(formatInstanceRow(listWith(B).instances[0]!)).toBe('○ proj-b · LAZY');
   });
 
-  it('header follows AGENTCONFIG · <n> INSTANCES · <url>', () => {
+  it('header follows AGENTCONFIG.ING · <n> INSTANCES · <url>', () => {
     expect(formatHeader(2, 'http://127.0.0.1:4242')).toBe(
-      'AGENTCONFIG · 2 INSTANCES · http://127.0.0.1:4242',
+      'AGENTCONFIG.ING · 2 INSTANCES · http://127.0.0.1:4242',
     );
-    expect(formatHeader(1, 'u')).toBe('AGENTCONFIG · 1 INSTANCE · u');
+    expect(formatHeader(1, 'u')).toBe('AGENTCONFIG.ING · 1 INSTANCE · u');
   });
 });

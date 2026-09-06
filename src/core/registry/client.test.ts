@@ -15,6 +15,7 @@ import {
   assertFetchableUrl,
   resolveRegistryCacheDir,
   type HttpFetch,
+  type HostResolver,
   type HttpResponse,
   type RegistryFs,
 } from './client.js';
@@ -86,6 +87,8 @@ function client(opts: {
   ttlMs?: number;
   timeoutMs?: number;
   maxFileBytes?: number;
+  resolveHost?: HostResolver;
+  allowInsecureLocalhost?: boolean;
 }): { c: RegistryClient; files: Map<string, string> } {
   const { fs, files } = memFs(opts.files);
   const c = new RegistryClient({
@@ -97,6 +100,8 @@ function client(opts: {
     ttlMs: opts.ttlMs,
     timeoutMs: opts.timeoutMs,
     maxFileBytes: opts.maxFileBytes,
+    resolveHost: opts.resolveHost ?? (async () => ['8.8.8.8']),
+    allowInsecureLocalhost: opts.allowInsecureLocalhost,
   });
   return { c, files };
 }
@@ -282,6 +287,27 @@ describe('fetchEntryFiles — payload verification', () => {
     expect(calls).toBe(1);
   });
 
+  it('re-fetches and replaces a tampered content-addressed payload cache entry', async () => {
+    const payload = 'authentic payload';
+    const sha = sha256Hex(payload);
+    let calls = 0;
+    const payloadPath = `${CACHE_DIR}/payloads/${sha}`;
+    const remote = entry({
+      files: [{ path: 'a', url: 'https://cdn.example/a', sha256: sha }],
+    });
+    const { c, files } = client({
+      files: { [payloadPath]: 'tampered payload' },
+      fetch: async () => {
+        calls += 1;
+        return httpResponse(payload);
+      },
+    });
+
+    await expect(c.fetchEntryFiles(remote)).resolves.toEqual([{ path: 'a', content: payload }]);
+    expect(calls).toBe(1);
+    expect(files.get(payloadPath)).toBe(payload);
+  });
+
   it('rejects a url payload whose bytes do not match the declared sha256', async () => {
     const fetchFn: HttpFetch = async () => httpResponse('not what was promised');
     const url = entry({
@@ -319,6 +345,39 @@ describe('fetchEntryFiles — payload verification', () => {
     const { c } = client({ fetch: fetchFn, maxFileBytes: 10 });
     await expect(c.fetchEntryFiles(url)).rejects.toBeInstanceOf(RegistryFetchError);
   });
+
+  it('stops a chunked response as soon as its streamed bytes exceed the cap', async () => {
+    let produced = 0;
+    let textCalled = false;
+    let discarded = false;
+    const fetchFn: HttpFetch = async () => ({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      body: (async function* () {
+        for (const chunk of ['12345', '67890', 'must-not-be-read']) {
+          produced += 1;
+          yield Buffer.from(chunk);
+        }
+      })(),
+      text: async () => {
+        textCalled = true;
+        return 'wrong path';
+      },
+      discard: () => {
+        discarded = true;
+      },
+    });
+    const remote = entry({
+      files: [{ path: 'a', url: 'https://cdn.example/a', sha256: sha256Hex('unused') }],
+    });
+    const { c } = client({ fetch: fetchFn, maxFileBytes: 6 });
+
+    await expect(c.fetchEntryFiles(remote)).rejects.toBeInstanceOf(RegistryFetchError);
+    expect(produced).toBe(2);
+    expect(textCalled).toBe(false);
+    expect(discarded).toBe(true);
+  });
 });
 
 describe('timeout', () => {
@@ -333,6 +392,22 @@ describe('timeout', () => {
 
     expect(result.overlaySource).toBe('none');
     expect(result.entries.length).toBe(SEED_COUNT);
+  });
+
+  it('bounds DNS resolution under the same request timeout', async () => {
+    let fetchCalls = 0;
+    const { c } = client({
+      timeoutMs: 10,
+      resolveHost: () => new Promise(() => {}),
+      fetch: async () => {
+        fetchCalls += 1;
+        return httpResponse(indexJson([]));
+      },
+    });
+
+    const result = await c.loadCatalog();
+    expect(result.overlaySource).toBe('none');
+    expect(fetchCalls).toBe(0);
   });
 });
 
@@ -352,6 +427,141 @@ describe('assertFetchableUrl', () => {
   it('allows http to localhost only when opted in', () => {
     expect(() => assertFetchableUrl('http://localhost:8080/x', true)).not.toThrow();
     expect(() => assertFetchableUrl('http://evil.example/x', true)).toThrow(RegistryFetchError);
+  });
+
+  it('allows public IPv4-mapped IPv6 and blocks private mapped IPv4', () => {
+    expect(() => assertFetchableUrl('https://[::ffff:8.8.8.8]/x', false)).not.toThrow();
+    expect(() => assertFetchableUrl('https://[::ffff:192.168.1.2]/x', false)).toThrow(
+      RegistryFetchError,
+    );
+  });
+
+  it.each([
+    'https://100.64.0.1/x',
+    'https://198.18.0.1/x',
+    'https://198.51.100.1/x',
+    'https://203.0.113.1/x',
+    'https://[fec0::1]/x',
+    'https://[2001:db8::1]/x',
+  ])('refuses reserved or otherwise non-public destination %s', (url) => {
+    expect(() => assertFetchableUrl(url, false)).toThrow(RegistryFetchError);
+  });
+
+  // Incident agentconfig-0zm.7: a malicious registry entry must not turn the
+  // payload downloader into a blind request to loopback, LAN, or cloud metadata.
+  it.each([
+    'https://127.0.0.1/admin',
+    'https://10.0.0.8/internal',
+    'https://192.168.1.9/private',
+    'https://169.254.169.254/latest/meta-data/',
+    'https://[::1]/admin',
+    'https://[::ffff:127.0.0.1]/admin',
+  ])(
+    'agentconfig-0zm.7 registry SSRF: refuses hostile payload URL %s before fetch',
+    async (url) => {
+      let calls = 0;
+      const fetchFn: HttpFetch = async () => {
+        calls += 1;
+        return httpResponse('internal secret');
+      };
+      const malicious = entry({
+        files: [{ path: 'a', url, sha256: sha256Hex('internal secret') }],
+      });
+      const { c } = client({ fetch: fetchFn });
+
+      await expect(c.fetchEntryFiles(malicious)).rejects.toBeInstanceOf(RegistryFetchError);
+      expect(calls).toBe(0);
+    },
+  );
+
+  it('agentconfig-0zm.7 registry SSRF DNS: refuses a private resolution before fetch', async () => {
+    let calls = 0;
+    const fetchFn: HttpFetch = async () => {
+      calls += 1;
+      return httpResponse('internal secret');
+    };
+    const malicious = entry({
+      files: [
+        {
+          path: 'a',
+          url: 'https://attacker.example/payload',
+          sha256: sha256Hex('internal secret'),
+        },
+      ],
+    });
+    const { c } = client({ fetch: fetchFn, resolveHost: async () => ['169.254.169.254'] });
+
+    await expect(c.fetchEntryFiles(malicious)).rejects.toBeInstanceOf(RegistryFetchError);
+    expect(calls).toBe(0);
+  });
+
+  it('agentconfig-0zm.7 registry SSRF redirect: validates a private next hop before fetch', async () => {
+    const calls: string[] = [];
+    const fetchFn: HttpFetch = async (url, init) => {
+      calls.push(url);
+      expect(init.redirect).toBe('manual');
+      return httpResponse('', {
+        ok: false,
+        status: 302,
+        headers: { location: 'https://169.254.169.254/latest/meta-data/' },
+      });
+    };
+    const malicious = entry({
+      files: [
+        {
+          path: 'a',
+          url: 'https://public.example/payload',
+          sha256: sha256Hex('unused'),
+        },
+      ],
+    });
+    const { c } = client({ fetch: fetchFn });
+
+    await expect(c.fetchEntryFiles(malicious)).rejects.toBeInstanceOf(RegistryFetchError);
+    expect(calls).toEqual(['https://public.example/payload']);
+  });
+
+  it('agentconfig-0zm.7 registry SSRF DNS: checks the registry index host before fetch', async () => {
+    let calls = 0;
+    const { c } = client({
+      fetch: async () => {
+        calls += 1;
+        return httpResponse(indexJson([]));
+      },
+      resolveHost: async () => ['10.0.0.1'],
+    });
+
+    const result = await c.loadCatalog();
+    expect(result.overlaySource).toBe('none');
+    expect(calls).toBe(0);
+  });
+
+  it('preserves opted-in localhost HTTP without DNS resolution', async () => {
+    const payload = 'local payload';
+    let resolutions = 0;
+    const local = entry({
+      files: [
+        {
+          path: 'a',
+          url: 'http://localhost:8080/payload',
+          sha256: sha256Hex(payload),
+        },
+      ],
+    });
+    const { c } = client({
+      fetch: async (_url, init) => {
+        expect(init.redirect).toBe('manual');
+        return httpResponse(payload);
+      },
+      resolveHost: async () => {
+        resolutions += 1;
+        return ['127.0.0.1'];
+      },
+      allowInsecureLocalhost: true,
+    });
+
+    await expect(c.fetchEntryFiles(local)).resolves.toEqual([{ path: 'a', content: payload }]);
+    expect(resolutions).toBe(0);
   });
 });
 

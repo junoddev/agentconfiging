@@ -47,12 +47,15 @@ import {
   blockLabel,
   filterSessions,
   formatDuration,
+  formatUsageCost,
+  formatUsageTokens,
   formatWhen,
   messageLabel,
   normalizeTag,
   renderSegments,
   sessionToMarkdown,
   shortId,
+  usageCostTitle,
 } from './sessions/logic.js';
 import './sessions.css';
 
@@ -313,7 +316,9 @@ function SessionsPage() {
               </span>
             </div>
 
-            <Table headers={['ID', 'Title', 'Path', 'Msgs', 'Duration', 'When', '']}>
+            <Table
+              headers={['ID', 'Title', 'Path', 'Msgs', 'Tokens', 'Cost', 'Duration', 'When', '']}
+            >
               {pageRows.map((s) => (
                 <tr
                   key={s.id}
@@ -337,6 +342,10 @@ function SessionsPage() {
                     {s.cwd !== '' && <span className="code">{s.cwd}</span>}
                   </td>
                   <td className="num-col">{s.messageCount}</td>
+                  <td className="num-col">{formatUsageTokens(s.usage)}</td>
+                  <td className="num-col" title={usageCostTitle(s.usage)}>
+                    {formatUsageCost(s.usage)}
+                  </td>
                   <td className="num-col">
                     {formatDuration(s.runtimeMs) !== '' ? formatDuration(s.runtimeMs) : '—'}
                   </td>
@@ -352,7 +361,7 @@ function SessionsPage() {
               ))}
               {pageRows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="muted">
+                  <td colSpan={9} className="muted">
                     No sessions match &ldquo;{query}&rdquo;.
                   </td>
                 </tr>
@@ -384,6 +393,8 @@ function SessionsPage() {
                     </div>
                     <span className="meta sx__detail-meta">
                       {shortId(detail.id)} · {detail.messageCount} messages
+                      {` · ${formatUsageTokens(detail.usage)} tokens`}
+                      {` · ${formatUsageCost(detail.usage)} estimated cost`}
                       {detail.cwd !== '' ? ` · ${detail.cwd}` : ''}
                     </span>
                   </div>

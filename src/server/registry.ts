@@ -43,7 +43,7 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { ContextHealth } from '../core/index.js';
+import type { ContextCost, ContextCostOptions, ContextHealth } from '../core/index.js';
 import { ReportStore, type ServedReport } from './store.js';
 
 /** A registered root. `store` exists only while loaded (lazy + unloadable). */
@@ -272,6 +272,18 @@ export class InstanceRegistry {
    */
   contextHealth(instance: RegistryInstance, opts: { fresh?: boolean } = {}): ContextHealth {
     return this.load(instance).contextHealth('project', opts);
+  }
+
+  /**
+   * Compute (or return cached) the per-agent CONTEXT-COST view for an instance
+   * (agentconfig-ub3.2), loading it lazily. Reuses the same scanned manifest and
+   * detected-agent lifecycle as {@link report}.
+   */
+  contextCost(
+    instance: RegistryInstance,
+    opts: { fresh?: boolean } & ContextCostOptions = {},
+  ): ContextCost {
+    return this.load(instance).contextCost('project', opts);
   }
 
   /**

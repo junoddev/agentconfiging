@@ -1,0 +1,3 @@
+https://www.agentconfig.ing/* https://agentconfig.ing/:splat 301
+/docs https://github.com/junoddev/agentconfiging/blob/main/docs/USAGE.md 301
+/docs/ https://github.com/junoddev/agentconfiging/blob/main/docs/USAGE.md 301

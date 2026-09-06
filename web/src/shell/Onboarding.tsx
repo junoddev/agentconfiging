@@ -18,7 +18,7 @@ export function Onboarding({ onDone }: OnboardingProps) {
   return (
     <Dialog
       open
-      title="Welcome to agentconfig"
+      title="Welcome to agentconfig.ing"
       onClose={onDone}
       footer={
         <>

@@ -345,6 +345,8 @@ export interface WsGateConfig {
   tokenHash: Buffer;
   /** Late-resolved bound port (0 until listen → everything fails closed). */
   port: () => number;
+  /** Explicit unsafe mode: accept arbitrary Host and Origin values. */
+  acceptAll?: boolean;
 }
 
 export type UpgradeDecision =
@@ -361,13 +363,17 @@ export function authorizeUpgrade(req: IncomingMessage, config: WsGateConfig): Up
   const port = config.port();
   const host = req.headers.host;
   const allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
-  if (!host || !allowedHosts.has(host.toLowerCase())) return { ok: false, status: 403 };
+  if (!config.acceptAll && (!host || !allowedHosts.has(host.toLowerCase()))) {
+    return { ok: false, status: 403 };
+  }
 
   // Origin is mandatory here: browsers always send it on a WS handshake, and
   // WS has no Same-Origin Policy, so a correct Origin is the CSRF defense.
   const origin = req.headers.origin;
   const allowedOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`]);
-  if (!origin || !allowedOrigins.has(origin.toLowerCase())) return { ok: false, status: 403 };
+  if (!config.acceptAll && (!origin || !allowedOrigins.has(origin.toLowerCase()))) {
+    return { ok: false, status: 403 };
+  }
 
   // Only RFC 6455 (version 13) is supported; anything else → 426 (the reject
   // response advertises `Sec-WebSocket-Version: 13`).

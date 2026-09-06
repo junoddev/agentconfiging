@@ -19,6 +19,7 @@
 
 import type { Hono } from 'hono';
 import type { Context } from 'hono';
+import { redact } from '../core/redact/index.js';
 import type { InstanceRegistry, RegistryInstance } from './registry.js';
 import { jsonError, resolveInstanceFromBody, resolveInstanceFromQuery } from './http.js';
 import {
@@ -150,7 +151,7 @@ export function registerGitRoutes(app: Hono, config: GitRoutesConfig): void {
       if (staged) args.push('--cached');
       args.push('--', file);
       const res = await run(instance, args);
-      return c.json({ gitAvailable: true, isRepo: true, diff: res.stdout });
+      return c.json({ gitAvailable: true, isRepo: true, diff: redact(res.stdout).text });
     } catch (err) {
       return c.json(failureBody(err));
     }

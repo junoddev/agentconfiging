@@ -4,7 +4,7 @@
  *  Content-free by the same contract as the served stats: this consumes only
  *  numbers, runtime ids, and achievement metadata. */
 
-import type { AchievementsPayload, DashboardStats } from '../../api/types.js';
+import type { AchievementsPayload, DashboardStats, UsageSummary } from '../../api/types.js';
 
 /** Group an integer with thousands separators, e.g. 12345 → "12,345". */
 export function groupThousands(n: number): string {
@@ -44,4 +44,50 @@ export function activityRange(stats: DashboardStats): string {
   if (stats.firstActiveDate === undefined || stats.lastActiveDate === undefined) return '';
   if (stats.firstActiveDate === stats.lastActiveDate) return stats.firstActiveDate;
   return `${stats.firstActiveDate} → ${stats.lastActiveDate}`;
+}
+
+/** Token count for usage tiles. Empty usage is unknown, not "0 tokens". */
+export function formatUsageTokens(usage: UsageSummary): string {
+  if (usage.messagesWithUsage === 0) return '—';
+  return groupThousands(usage.tokens.totalTokens);
+}
+
+export function formatUsageInputTokens(usage: UsageSummary): string {
+  if (usage.messagesWithUsage === 0) return '—';
+  return groupThousands(usage.tokens.inputTokens);
+}
+
+export function formatUsageOutputTokens(usage: UsageSummary): string {
+  if (usage.messagesWithUsage === 0) return '—';
+  return groupThousands(usage.tokens.outputTokens);
+}
+
+/** USD cost label. Omitted `amountUsd` stays unknown. */
+export function formatUsageCost(usage: UsageSummary): string {
+  if (usage.cost.amountUsd === undefined) return 'unknown';
+  const amount = usage.cost.amountUsd;
+  if (amount > 0 && amount < 0.01) return '<$0.01';
+  return `$${amount.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+export function usageMessagesCaption(usage: UsageSummary): string {
+  const n = usage.messagesWithUsage;
+  return `${groupThousands(n)} usage message${n === 1 ? '' : 's'}`;
+}
+
+/** Short controlled caption for the aggregate cost tile. */
+export function costCaption(usage: UsageSummary): string {
+  if (usage.messagesWithUsage === 0) return 'no usage blocks';
+  if (usage.cost.status === 'known') {
+    const n = usage.messagesWithUsage;
+    return `${n} usage message${n === 1 ? '' : 's'}`;
+  }
+  if (usage.cost.status === 'partial') {
+    const n = usage.cost.unpricedMessages + usage.assistantMessagesWithoutUsage;
+    return `${n} unpriced message${n === 1 ? '' : 's'}`;
+  }
+  return 'model pricing unknown';
 }

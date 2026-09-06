@@ -58,6 +58,7 @@ describe('analyzer registry auto-discovery', () => {
       'missing-project-guide',
       'no-agents-no-skills',
       'permissive-permissions',
+      'quality-bloat',
       'rules-drift',
       'settings-local-committed',
       'stale-model-ref',

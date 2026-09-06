@@ -4,9 +4,11 @@ This directory is the **in-package seed** for the E6 catalog (SPEC §4.5). It
 mirrors what the external **`agentconfig-registry`** git repo publishes, so the
 catalog works **offline on first run** before any network fetch.
 
-- `index.json` — the seed index (generated; do not hand-edit).
-- `build-seed.ts` — the single source of truth for the seed content and the
-  generator/verifier for `index.json`.
+- `catalog.json` — the reviewable seed catalog; edit this file to add, remove,
+  or update entries.
+- `index.json` — the generated seed index (do not hand-edit). Checksums are
+  added from file contents during generation.
+- `build-seed.ts` — the generator/verifier for `index.json`.
 
 ## Regenerating
 
@@ -44,7 +46,6 @@ installed.
         {
           "path": ".claude/skills/git-commit-helper/SKILL.md", // project-relative dest; guarded at INSTALL time, never trusted here
           "content": "…",           // inlined payload (seed + template entries always inline)
-          "sha256": "<64 lowercase hex of the content's UTF-8 bytes>"
         }
       ]
     }
@@ -56,7 +57,8 @@ Rules the validator enforces:
 
 - Each file has **exactly one** of `content` (inlined) or `url` (fetched +
   verified at fetch time by the fetch client, agentconfig-0zm.2).
-- `sha256` is 64 lowercase hex chars; content-bearing files are verified now.
+- The generator adds a `sha256` value for each inlined file; content-bearing
+  files are verified before the generated index is written.
 - `url` payloads must be `http(s)`.
 - `kind` must be one of the seven artifact kinds. Template-gallery entries are
   ordinary entries carrying a `template` tag (SPEC §5 row 14); runtime scaffolds
@@ -75,6 +77,7 @@ Rules the validator enforces:
 
 ## Authoring notes
 
-All seed content is **original, clean-room** starter config — no third-party
+Edit `catalog.json`, then run the generator to refresh `index.json` and its
+checksums. All seed content is **original, clean-room** starter config — no third-party
 tool content copied, no secrets, and no payload that executes on install
 (hook/MCP entries are config snippets; installing only writes files).

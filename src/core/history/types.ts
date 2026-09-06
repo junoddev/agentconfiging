@@ -75,12 +75,21 @@ export type ContentBlock =
   | { type: 'unknown'; blockType: string };
 
 /**
- * Per-message token accounting, lifted verbatim from an assistant message's
- * `message.usage` block. Pure token COUNTS (never content). Absent fields
- * default to 0; the whole struct is absent when the message carried no usage
- * block (user messages, older logs).
+ * Whether a parsed usage block contained every required token count. A partial
+ * usage block retains valid counts, but must not be treated as fully priceable.
+ */
+export type TokenUsageStatus = 'complete' | 'partial';
+
+/**
+ * Per-message token accounting, lifted from an assistant message's
+ * `message.usage` block. Pure token COUNTS (never content). Optional cache
+ * fields default to 0; malformed required fields leave `status: "partial"` so
+ * zero counts cannot be confused with an honestly reported zero-token message.
+ * The whole struct is absent only when the message carried no usage block (user
+ * messages, older logs).
  */
 export interface TokenUsage {
+  status: TokenUsageStatus;
   /** Fresh (uncached) input tokens billed at the input rate. */
   inputTokens: number;
   /** Generated output tokens. */
@@ -89,6 +98,8 @@ export interface TokenUsage {
   cacheCreationTokens: number;
   /** Tokens served FROM the prompt cache (billed at the cheap cache-read rate). */
   cacheReadTokens: number;
+  /** Controlled field names that were present-but-invalid or required-but-absent. */
+  invalidFields?: string[];
 }
 
 export interface SessionMessage {

@@ -57,6 +57,31 @@ export interface ManifestStats {
   skipped?: number;
 }
 
+export type QualityComponentId =
+  'token-efficiency' | 'position-risk' | 'clarity' | 'contradictions';
+
+export interface QualityComponentScore {
+  id: QualityComponentId;
+  score: number;
+  penalty: number;
+}
+
+export interface QualityMetrics {
+  totalTokens: number;
+  guideCount: number;
+  directiveCount: number;
+  criticalRuleCount: number;
+  buriedCriticalRuleCount: number;
+  contradictionCount: number;
+}
+
+/** Content-free 0-100 agent-config quality/bloat score (src/core/quality.ts). */
+export interface AgentConfigQuality {
+  score: number;
+  components: QualityComponentScore[];
+  metrics: QualityMetrics;
+}
+
 /** GET /api/report payload (src/server/store.ts, `ServedReport`). */
 export interface Report {
   version: string;
@@ -65,6 +90,7 @@ export interface Report {
   scope: 'project' | 'global';
   localOnly: boolean;
   agents: DetectedAgent[];
+  quality?: AgentConfigQuality;
   findings: ReportFinding[];
   stats: ManifestStats;
 }
@@ -85,6 +111,7 @@ export interface GlobalEntry {
   /** Well-known dir name under home (e.g. '.claude'). */
   dir: string;
   agents: DetectedAgent[];
+  quality?: AgentConfigQuality;
   findings: ReportFinding[];
   stats: ManifestStats;
 }
@@ -365,6 +392,44 @@ export interface ContextHealth {
   suggestions: ContextSuggestion[];
 }
 
+/**
+ * CONTEXT COST (agentconfig-ub3.5, GET /api/context-cost). Mirrors the expected
+ * ub3.2 server contract: one launch-time initial-context token breakdown per
+ * detected agent. Token counts are estimates from the canonical core pass; the
+ * web app only renders numbers, categories, and paths.
+ */
+
+/** One token-estimated file in an agent's initial context. */
+export interface ContextCostFile {
+  path: string;
+  tokens: number;
+  category: ContextCategory;
+}
+
+/** Token total for one context category inside a detected agent. */
+export interface ContextCostCategory {
+  category: ContextCategory;
+  tokens: number;
+  files: number;
+}
+
+/** Per-agent initial context token budget breakdown. */
+export interface AgentContextCost {
+  kind: string;
+  totalTokens: number;
+  budgetTokens: number;
+  budgetRatio: number;
+  status: BudgetStatus;
+  byCategory?: ContextCostCategory[];
+  files?: ContextCostFile[];
+}
+
+/** GET /api/context-cost payload. */
+export interface ContextCost {
+  budgetTokens: number;
+  agents: AgentContextCost[];
+}
+
 /** POST /api/storage/cleanup payload (src/server/storage.ts). */
 export interface StorageCleanupResponse {
   cleaned: true;
@@ -433,7 +498,7 @@ export interface CatalogEntryMeta {
 
 /**
  * One installed entry's provenance record for the resolved instance
- * (src/server/provenance.ts, `InstallRecord`). Present for entries agentconfig
+ * (src/server/provenance.ts, `InstallRecord`). Present for entries agentconfig.ing
  * installed; drives the INSTALL vs REMOVE affordance and the installed badge.
  */
 export interface InstalledRecord {
@@ -711,6 +776,37 @@ export interface XpStats {
   levelProgress: number;
 }
 
+/** Token totals from assistant `message.usage` blocks. */
+export interface UsageTokenTotals {
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+  totalTokens: number;
+}
+
+export type UsageCostStatus = 'known' | 'partial' | 'unknown';
+
+/** Token-derived cost estimate; `amountUsd` is omitted when unknown. */
+export interface UsageCostSummary {
+  status: UsageCostStatus;
+  currency: 'USD';
+  amountUsd?: number;
+  rateSource?: string;
+  pricedMessages: number;
+  unpricedMessages: number;
+}
+
+/** Usage + cost summary for a session or rolled-up dashboard window. */
+export interface UsageSummary {
+  tokens: UsageTokenTotals;
+  messagesWithUsage: number;
+  completeUsageMessages: number;
+  partialUsageMessages: number;
+  assistantMessagesWithoutUsage: number;
+  cost: UsageCostSummary;
+}
+
 /** The dashboard stats bundle. All numbers are real, never invented. */
 export interface DashboardStats {
   sessionCount: number;
@@ -720,6 +816,7 @@ export interface DashboardStats {
   activeDays: number;
   streak: StreakStats;
   xp: XpStats;
+  usage: UsageSummary;
   heatmap: HeatmapCell[];
   firstActiveDate?: string;
   lastActiveDate?: string;
@@ -769,6 +866,8 @@ export interface SessionSummary {
   live: boolean;
   /** User-authored tags (local sidecar; may be empty). */
   tags: string[];
+  /** Token/cost usage metadata from assistant `message.usage` blocks. */
+  usage: UsageSummary;
 }
 
 /** GET /api/sessions payload — a bounded, content-free session list. */
@@ -826,6 +925,8 @@ export interface SessionDetail {
   messages: ReplayMessage[];
   live: boolean;
   tags: string[];
+  /** Token/cost usage metadata from assistant `message.usage` blocks. */
+  usage: UsageSummary;
 }
 
 /** POST /api/sessions/:id/tags payload — the stored (sanitized) tag set. */
@@ -1171,4 +1272,35 @@ export interface PipelineSchedule {
 export interface ScheduleResponse {
   schedule: PipelineSchedule | null;
   nextRun: number | null;
+}
+
+export type ProfileCapability =
+  | 'instructionArtifacts'
+  | 'settings'
+  | 'models'
+  | 'tools'
+  | 'hookEvents'
+  | 'commands'
+  | 'skills'
+  | 'mcp'
+  | 'extensions'
+  | 'history';
+export type ProfileCoverage = 'full' | 'partial' | 'unknown' | 'unsupported';
+export type ProfileFreshness = 'fresh' | 'stale' | 'expired' | 'unavailable';
+export interface ProfileSummary {
+  id: string;
+  displayName: string;
+  vendor: string;
+  productFamily: string;
+  profileRevision: number;
+  supportTier: 'first-class' | 'profile-sync-only';
+  coverage: Record<ProfileCapability, ProfileCoverage>;
+  freshness: Record<ProfileCapability, ProfileFreshness>;
+  confidence: 'verified' | 'corroborated' | 'inferred' | 'unknown';
+  lastSuccessfulCheck?: string;
+  pendingDrift: boolean;
+  sources: Array<{ id: string; kind: string; url?: string }>;
+}
+export interface ProfilesResponse {
+  profiles: ProfileSummary[];
 }

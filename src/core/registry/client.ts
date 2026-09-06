@@ -39,11 +39,9 @@
  *   - Timeouts. Every fetch is bounded by an AbortController timeout so a slow
  *     or hanging endpoint cannot stall the client.
  *   - Bounded fetch surface: only the configured registry url and entry urls
- *     from a validated index (themselves capped + timed). NOTE: a compromised
- *     registry could point an entry url at an internal host (metadata IP, LAN,
- *     localhost) — a blind GET. Exfil is not possible: a payload is used only
- *     if its body hashes to the entry's declared sha256. Accepted risk for a
- *     local dev tool; an internal-host block is a documented follow-up (0zm.7).
+ *     from a validated index (themselves capped + timed). Literal loopback,
+ *     private, link-local, unspecified, and multicast IP hosts are refused so
+ *     a compromised registry cannot turn payload fetching into an SSRF probe.
  *   - Content-addressed payload cache. Payloads are cached under their sha256
  *     (a safe, self-verifying cache key); a cached payload whose bytes no
  *     longer hash to its key is ignored and re-fetched.
@@ -52,6 +50,10 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
+import net from 'node:net';
+import dns from 'node:dns/promises';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 
 import type { RegistryEntry, RegistryFile, RegistryIndex } from './schema.js';
 import { parseRegistryIndex } from './validate.js';
@@ -82,11 +84,26 @@ export interface HttpResponse {
   readonly ok: boolean;
   readonly status: number;
   readonly headers: { get(name: string): string | null };
+  /** Streaming body. Production responses always provide this so the byte cap
+   * is enforced before the complete response can be allocated. */
+  readonly body?: AsyncIterable<Uint8Array | string>;
   text(): Promise<string>;
+  discard?(): void;
 }
 
 /** Injectable fetch — `globalThis.fetch` satisfies this by structure. */
-export type HttpFetch = (url: string, init: { signal: AbortSignal }) => Promise<HttpResponse>;
+export type HttpFetch = (
+  url: string,
+  init: {
+    signal: AbortSignal;
+    redirect: 'manual';
+    resolvedAddress?: string;
+    headers?: Record<string, string>;
+  },
+) => Promise<HttpResponse>;
+
+/** DNS seam used immediately before each connection attempt. */
+export type HostResolver = (hostname: string) => Promise<readonly string[]>;
 
 /** Injectable filesystem seam — only the three operations the cache needs. */
 export interface RegistryFs {
@@ -121,6 +138,8 @@ export interface RegistryClientOptions {
   cacheDir?: string;
   /** Fetch seam. Defaults to global fetch. */
   fetch?: HttpFetch;
+  /** DNS seam. All returned addresses must be public before fetch is called. */
+  resolveHost?: HostResolver;
   /** Filesystem seam. Defaults to node:fs/promises. */
   fs?: RegistryFs;
   /** Clock seam (epoch ms). Defaults to Date.now. */
@@ -185,9 +204,92 @@ export function assertFetchableUrl(rawUrl: string, allowInsecureLocalhost: boole
   } catch {
     throw new RegistryFetchError(`invalid url: ${rawUrl}`);
   }
-  if (url.protocol === 'https:') return;
   if (url.protocol === 'http:' && allowInsecureLocalhost && isLocalhost(url.hostname)) return;
+  if (isBlockedRegistryHost(url.hostname)) {
+    throw new RegistryFetchError(`refusing private or local url: ${rawUrl}`);
+  }
+  if (url.protocol === 'https:') return;
   throw new RegistryFetchError(`refusing non-https url: ${rawUrl}`);
+}
+
+export function isBlockedRegistryHost(hostname: string): boolean {
+  const host = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (host === 'localhost' || host.endsWith('.localhost')) return true;
+
+  const version = net.isIP(host);
+  if (version === 4) {
+    const value = ipv4Value(host);
+    return IPV4_NON_PUBLIC.some(([network, bits]) => inIpv4Cidr(value, network, bits));
+  }
+  if (version === 6) {
+    const mapped = mappedIpv4(host);
+    if (mapped !== null) return isBlockedRegistryHost(mapped);
+    const value = ipv6Value(host);
+    // Public IPv6 destinations are global-unicast (2000::/3), excluding the
+    // IANA documentation and special-purpose subnets below.
+    return (
+      !inIpv6Cidr(value, ipv6Value('2000::'), 3) ||
+      inIpv6Cidr(value, ipv6Value('2001:db8::'), 32) ||
+      inIpv6Cidr(value, ipv6Value('2001:2::'), 48) ||
+      inIpv6Cidr(value, ipv6Value('2001:10::'), 28)
+    );
+  }
+  return false;
+}
+
+const IPV4_NON_PUBLIC: ReadonlyArray<readonly [number, number]> = [
+  [ipv4Value('0.0.0.0'), 8],
+  [ipv4Value('10.0.0.0'), 8],
+  [ipv4Value('100.64.0.0'), 10],
+  [ipv4Value('127.0.0.0'), 8],
+  [ipv4Value('169.254.0.0'), 16],
+  [ipv4Value('172.16.0.0'), 12],
+  [ipv4Value('192.0.0.0'), 24],
+  [ipv4Value('192.0.2.0'), 24],
+  [ipv4Value('192.88.99.0'), 24],
+  [ipv4Value('192.168.0.0'), 16],
+  [ipv4Value('198.18.0.0'), 15],
+  [ipv4Value('198.51.100.0'), 24],
+  [ipv4Value('203.0.113.0'), 24],
+  [ipv4Value('224.0.0.0'), 3],
+];
+
+function ipv4Value(host: string): number {
+  return host.split('.').reduce((value, octet) => value * 256 + Number(octet), 0) >>> 0;
+}
+
+function inIpv4Cidr(value: number, network: number, bits: number): boolean {
+  const divisor = 2 ** (32 - bits);
+  return Math.floor(value / divisor) === Math.floor(network / divisor);
+}
+
+function ipv6Value(host: string): bigint {
+  const [left = '', right = ''] = host.toLowerCase().split('::');
+  const leftParts = left === '' ? [] : left.split(':');
+  const rightParts = right === '' ? [] : right.split(':');
+  const parts = [
+    ...leftParts,
+    ...Array(8 - leftParts.length - rightParts.length).fill('0'),
+    ...rightParts,
+  ];
+  return parts.reduce((value, part) => (value << 16n) | BigInt(`0x${part}`), 0n);
+}
+
+function inIpv6Cidr(value: bigint, network: bigint, bits: number): boolean {
+  const shift = BigInt(128 - bits);
+  return value >> shift === network >> shift;
+}
+
+/** Decode both dotted and canonical-hex IPv4-mapped IPv6 spellings. */
+function mappedIpv4(host: string): string | null {
+  const dotted = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(host);
+  const dottedAddress = dotted?.[1];
+  if (dottedAddress !== undefined && net.isIP(dottedAddress) === 4) return dottedAddress;
+  const hex = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(host);
+  if (!hex) return null;
+  const high = Number.parseInt(hex[1]!, 16);
+  const low = Number.parseInt(hex[2]!, 16);
+  return `${high >>> 8}.${high & 0xff}.${low >>> 8}.${low & 0xff}`;
 }
 
 function isLocalhost(host: string): boolean {
@@ -216,7 +318,70 @@ const defaultFs: RegistryFs = {
   },
 };
 
-const defaultFetch: HttpFetch = (url, init) => fetch(url, init);
+export const defaultPinnedHttpFetch: HttpFetch = (rawUrl, init) =>
+  new Promise((resolve, reject) => {
+    const url = new URL(rawUrl);
+    const address = init.resolvedAddress;
+    const request = url.protocol === 'https:' ? httpsRequest : httpRequest;
+    const req = request(
+      url,
+      {
+        method: 'GET',
+        signal: init.signal,
+        headers: init.headers,
+        // Pin the connection to the address validated immediately above. TLS
+        // still authenticates the original URL hostname via SNI/Host.
+        ...(address === undefined
+          ? {}
+          : {
+              lookup: (_hostname, _options, callback) =>
+                typeof _options === 'object' && _options.all
+                  ? (
+                      callback as unknown as (
+                        error: null,
+                        addresses: Array<{ address: string; family: 4 | 6 }>,
+                      ) => void
+                    )(null, [{ address, family: net.isIP(address) as 4 | 6 }])
+                  : callback(null, address, net.isIP(address) as 4 | 6),
+            }),
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        let consumed = false;
+        resolve({
+          ok: (res.statusCode ?? 0) >= 200 && (res.statusCode ?? 0) < 300,
+          status: res.statusCode ?? 0,
+          headers: {
+            get: (name) => {
+              const value = res.headers[name.toLowerCase()];
+              return Array.isArray(value) ? value.join(', ') : (value ?? null);
+            },
+          },
+          body: res,
+          text: () =>
+            new Promise<string>((resolveText, rejectText) => {
+              if (consumed) return rejectText(new Error('response body already consumed'));
+              consumed = true;
+              res.on('data', (chunk: Buffer | string) => chunks.push(Buffer.from(chunk)));
+              res.on('end', () => resolveText(Buffer.concat(chunks).toString('utf8')));
+              res.on('error', rejectText);
+            }),
+          discard: () => {
+            consumed = true;
+            res.resume();
+          },
+        });
+      },
+    );
+    req.on('error', reject);
+    req.end();
+  });
+export const defaultHostResolver: HostResolver = async (hostname) => {
+  const results = await dns.lookup(hostname, { all: true, verbatim: true });
+  return results.map(({ address }) => address);
+};
+
+export const REGISTRY_MAX_REDIRECTS = 5;
 
 const SHA256_HEX = /^[0-9a-f]{64}$/;
 
@@ -224,6 +389,7 @@ export class RegistryClient {
   private readonly registryUrl: string;
   private readonly cacheDir: string;
   private readonly fetchFn: HttpFetch;
+  private readonly resolveHost: HostResolver;
   private readonly fs: RegistryFs;
   private readonly now: () => number;
   private readonly ttlMs: number;
@@ -235,7 +401,8 @@ export class RegistryClient {
   constructor(options: RegistryClientOptions = {}) {
     this.registryUrl = options.registryUrl ?? DEFAULT_REGISTRY_URL;
     this.cacheDir = options.cacheDir ?? resolveRegistryCacheDir(process.env, os.homedir());
-    this.fetchFn = options.fetch ?? defaultFetch;
+    this.fetchFn = options.fetch ?? defaultPinnedHttpFetch;
+    this.resolveHost = options.resolveHost ?? defaultHostResolver;
     this.fs = options.fs ?? defaultFs;
     this.now = options.now ?? Date.now;
     this.ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
@@ -396,18 +563,65 @@ export class RegistryClient {
     }
   }
 
-  /** HTTPS GET with scheme guard, timeout, and a byte cap on the body. */
+  /** HTTPS GET with DNS guard, manually validated redirects, timeout, and byte cap. */
   private async httpGet(url: string, maxBytes: number): Promise<string> {
-    assertFetchableUrl(url, this.allowInsecureLocalhost);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const res = await this.fetchFn(url, { signal: controller.signal });
-      if (!res.ok) throw new RegistryFetchError(`HTTP ${res.status} for ${url}`);
-      return await readCapped(res, maxBytes, url);
+      let currentUrl = url;
+      for (let redirects = 0; ; redirects += 1) {
+        const { url: parsed, address } = await this.assertResolvedTarget(
+          currentUrl,
+          controller.signal,
+        );
+        const res = await this.fetchFn(currentUrl, {
+          signal: controller.signal,
+          redirect: 'manual',
+          resolvedAddress: address,
+        });
+        const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null;
+        if (location !== null) {
+          if (redirects >= REGISTRY_MAX_REDIRECTS) {
+            res.discard?.();
+            throw new RegistryFetchError(`too many redirects for ${url}`);
+          }
+          res.discard?.();
+          currentUrl = new URL(location, parsed).toString();
+          continue;
+        }
+        if (!res.ok) throw new RegistryFetchError(`HTTP ${res.status} for ${currentUrl}`);
+        return await readCapped(res, maxBytes, currentUrl);
+      }
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  private async assertResolvedTarget(
+    rawUrl: string,
+    signal: AbortSignal,
+  ): Promise<{ url: URL; address: string | undefined }> {
+    assertFetchableUrl(rawUrl, this.allowInsecureLocalhost);
+    const url = new URL(rawUrl);
+    if (url.protocol === 'http:' && this.allowInsecureLocalhost && isLocalhost(url.hostname)) {
+      return { url, address: undefined };
+    }
+    const hostname = url.hostname.replace(/^\[|\]$/g, '');
+    if (net.isIP(hostname) !== 0) return { url, address: hostname };
+    let addresses: readonly string[];
+    try {
+      addresses = await abortable(this.resolveHost(hostname), signal);
+    } catch {
+      if (signal.aborted) throw new RegistryFetchError(`request timed out for ${rawUrl}`);
+      throw new RegistryFetchError(`unable to resolve registry host: ${hostname}`);
+    }
+    if (
+      addresses.length === 0 ||
+      addresses.some((address) => net.isIP(address) === 0 || isBlockedRegistryHost(address))
+    ) {
+      throw new RegistryFetchError(`refusing private or local address for ${hostname}`);
+    }
+    return { url, address: addresses[0] };
   }
 }
 
@@ -420,9 +634,43 @@ async function readCapped(res: HttpResponse, maxBytes: number, url: string): Pro
       throw new RegistryFetchError(`response for ${url} exceeds ${maxBytes} bytes`);
     }
   }
+  if (res.body !== undefined) {
+    const chunks: Buffer[] = [];
+    let bytes = 0;
+    for await (const chunk of res.body) {
+      const buffer = Buffer.from(chunk);
+      bytes += buffer.byteLength;
+      if (bytes > maxBytes) {
+        res.discard?.();
+        throw new RegistryFetchError(`response for ${url} exceeds ${maxBytes} bytes`);
+      }
+      chunks.push(buffer);
+    }
+    return Buffer.concat(chunks, bytes).toString('utf8');
+  }
+  // Compatibility fallback for injected test transports. The built-in
+  // transport always supplies `body`, and therefore never fully buffers first.
   const body = await res.text();
   if (Buffer.byteLength(body, 'utf8') > maxBytes) {
     throw new RegistryFetchError(`response for ${url} exceeds ${maxBytes} bytes`);
   }
   return body;
+}
+
+function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(new Error('aborted'));
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new Error('aborted'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      },
+    );
+  });
 }

@@ -79,6 +79,7 @@ import type { RuntimeMap } from './pipeline/index.js';
 import { PtyManager } from './pty.js';
 import type { WriteScope } from './pathguard.js';
 import { jsonError } from './http.js';
+import { registerProfileRoutes } from './profile-routes.js';
 
 export interface AppConfig {
   /** SHA-256 digest of the session bearer token — the app never sees the raw token. */
@@ -89,6 +90,8 @@ export interface AppConfig {
    * Host check (fail-closed).
    */
   port: () => number;
+  /** Explicit unsafe mode: accept arbitrary Host and Origin values. */
+  acceptAll?: boolean;
   /** Directory the static app shell is served from (dist/web). */
   distDir: string;
   /**
@@ -174,6 +177,8 @@ export interface AppConfig {
    * of depending on whether the optional native module is built in the env.
    */
   searchLoader?: SqliteLoader;
+  /** Profile ids with reviewable candidate drift. Bodies and diagnostics never cross the API. */
+  pendingProfileDriftIds?: ReadonlySet<string>;
 }
 
 const MIME: Record<string, string> = {
@@ -308,7 +313,7 @@ export function createApp(config: AppConfig): Hono {
   // Host allowlist on EVERY request (DNS-rebinding defense).
   app.use('*', async (c, next) => {
     const host = c.req.header('host');
-    if (!host || !allowedHosts().has(host.toLowerCase())) {
+    if (!config.acceptAll && (!host || !allowedHosts().has(host.toLowerCase()))) {
       return jsonError(403, 'forbidden');
     }
     await next();
@@ -317,7 +322,7 @@ export function createApp(config: AppConfig): Hono {
   // /api/*: Origin/CSRF gate + bearer token; responses are never cached.
   app.use('/api/*', async (c, next) => {
     const origin = c.req.header('origin');
-    if (origin !== undefined && !allowedOrigins().has(origin.toLowerCase())) {
+    if (!config.acceptAll && origin !== undefined && !allowedOrigins().has(origin.toLowerCase())) {
       return jsonError(403, 'forbidden');
     }
     // State-changing methods must PROVE same-origin (CSRF): a valid Origin
@@ -338,6 +343,7 @@ export function createApp(config: AppConfig): Hono {
   });
 
   app.get('/api/health', (c) => c.json({ ok: true, version: config.version }));
+  registerProfileRoutes(app, config.pendingProfileDriftIds);
 
   const registry = config.registry;
 
@@ -457,6 +463,22 @@ export function createApp(config: AppConfig): Hono {
     } catch (err) {
       console.error(`agentconfiging server: context-health failed: ${String(err)}`);
       return jsonError(500, 'context-health failed');
+    }
+  });
+
+  // CONTEXT COST (ub3.2): GET /api/context-cost?instance= — per detected agent
+  // launch-time initial-context token estimates. Same auth/error/instance
+  // handling as context-health; same cached scan/detect lifecycle.
+  app.get('/api/context-cost', (c) => {
+    const url = new URL(c.req.url);
+    const fresh = url.searchParams.get('fresh') === '1';
+    const instance = registry.resolve(url.searchParams.get('instance') ?? undefined);
+    if (!instance) return jsonError(404, 'unknown instance');
+    try {
+      return c.json(registry.contextCost(instance, { fresh }));
+    } catch (err) {
+      console.error(`agentconfiging server: context-cost failed: ${String(err)}`);
+      return jsonError(500, 'context-cost failed');
     }
   });
 

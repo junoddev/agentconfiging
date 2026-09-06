@@ -16,6 +16,7 @@ import type {
   ReplayMessage,
   SessionDetail,
   SessionSummary,
+  UsageSummary,
 } from '../../api/types.js';
 
 /** One run of the redacted text — a plain slice or a `[REDACTED:*]` mark. */
@@ -103,6 +104,33 @@ export function shortId(id: string): string {
   return id.slice(0, 8);
 }
 
+/** Token count for session rows/detail. Empty usage is unknown, not zero. */
+export function formatUsageTokens(usage: UsageSummary): string {
+  if (usage.messagesWithUsage === 0) return '—';
+  return Math.trunc(usage.tokens.totalTokens).toLocaleString('en-US');
+}
+
+/** USD cost label for token-derived estimates. */
+export function formatUsageCost(usage: UsageSummary): string {
+  if (usage.cost.amountUsd === undefined) return 'unknown';
+  if (usage.cost.amountUsd > 0 && usage.cost.amountUsd < 0.01) return '<$0.01';
+  return `$${usage.cost.amountUsd.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+/** Controlled caption for cost status. */
+export function usageCostTitle(usage: UsageSummary): string {
+  if (usage.messagesWithUsage === 0) return 'no usage blocks';
+  if (usage.cost.status === 'partial') {
+    const n = usage.cost.unpricedMessages + usage.assistantMessagesWithoutUsage;
+    return `${n} unpriced message${n === 1 ? '' : 's'}`;
+  }
+  if (usage.cost.status === 'known') return 'token-derived estimate';
+  return 'model pricing unknown';
+}
+
 /**
  * Case-insensitive substring filter over id + title + cwd + tags for the
  * browse table's `.search` (Console §7: the empty state names this query).
@@ -159,6 +187,8 @@ export function sessionToMarkdown(detail: SessionDetail): string {
   if (detail.startedAt !== undefined) meta.push(`started: ${detail.startedAt}`);
   if (detail.endedAt !== undefined) meta.push(`ended: ${detail.endedAt}`);
   meta.push(`messages: ${detail.messageCount}`);
+  meta.push(`tokens: ${formatUsageTokens(detail.usage)}`);
+  meta.push(`estimated cost: ${formatUsageCost(detail.usage)}`);
   if (detail.tags.length > 0) meta.push(`tags: ${detail.tags.join(', ')}`);
   out.push(meta.map((m) => `- ${m}`).join('\n'));
   out.push('');

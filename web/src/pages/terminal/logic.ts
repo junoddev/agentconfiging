@@ -141,6 +141,8 @@ export interface TerminalTab {
   id: number;
   /** The launch choice id (`shell` / `cli:<kind>`). */
   shell: string;
+  /** The explicit instance target captured when this PTY was opened. */
+  instanceId: string;
   /** The tab's short label (the shell/CLI label). */
   label: string;
 }
@@ -150,9 +152,13 @@ export function nextTabId(tabs: readonly TerminalTab[]): number {
   return tabs.reduce((max, t) => Math.max(max, t.id), 0) + 1;
 }
 
-/** A short tab title: the choice label + a per-session ordinal. */
-export function tabTitle(choice: Pick<ShellChoice, 'label'>, ordinal: number): string {
-  return `${choice.label} ${ordinal}`;
+/** A short tab title: the choice label + ordinal + fixed target. */
+export function tabTitle(
+  choice: Pick<ShellChoice, 'label'>,
+  ordinal: number,
+  targetName: string,
+): string {
+  return `${choice.label} ${ordinal} · ${targetName}`;
 }
 
 /** After closing `id`, which tab should become active (neighbor, else undefined). */
