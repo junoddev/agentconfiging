@@ -112,6 +112,8 @@ describe('Codex extension adapter', () => {
       'prefix_rule(pattern=["git status"])\n',
     );
     fs.writeFileSync(path.join(project, 'AGENTS.md'), '# project\n');
+    // codex.toml / .codex/config.toml at project scope are NOT inventoried:
+    // Codex reads config only from CODEX_HOME, so listing them would be dishonest.
     fs.writeFileSync(path.join(project, 'codex.toml'), 'model = "gpt-5-codex"\n');
     fs.writeFileSync(
       path.join(project, '.codex', 'rules', 'project.rules'),
@@ -126,7 +128,6 @@ describe('Codex extension adapter', () => {
       [
         '.codex/rules/project.rules',
         'AGENTS.md',
-        'codex.toml',
         '~/.codex/AGENTS.md',
         '~/.codex/config.toml',
         '~/.codex/rules/safe.rules',
