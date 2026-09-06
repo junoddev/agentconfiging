@@ -168,21 +168,69 @@ function isBlockedV4(host: string): boolean {
   return false;
 }
 
+/** Expand an IPv6 literal to its 8 hex groups (…:10.0.0.1 embedded-dotted tails
+ *  become two hex groups), or null when it is malformed. */
+function expandV6Groups(
+  host: string,
+): [number, number, number, number, number, number, number, number] | null {
+  // Normalize an embedded dotted-decimal tail (…:a.b.c.d) to two hex groups.
+  const dotted = /^(.*:)(\d{1,3}(?:\.\d{1,3}){3})$/.exec(host);
+  if (dotted) {
+    // The regex guarantees two capture groups and exactly four dotted parts.
+    const prefix = dotted[1] ?? '';
+    const o = (dotted[2] ?? '').split('.').map(Number) as [number, number, number, number];
+    if (o.some((n) => n > 255)) return null;
+    host = `${prefix}${((o[0] << 8) | o[1]).toString(16)}:${((o[2] << 8) | o[3]).toString(16)}`;
+  }
+  if (!/^[0-9a-f:]+$/.test(host)) return null;
+  const halves = host.split('::');
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(':') : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
+  const fill = 8 - head.length - tail.length;
+  if (fill < 0 || (halves.length === 1 && fill !== 0)) return null;
+  const groups = [...head, ...Array<string>(fill).fill('0'), ...tail];
+  return groups.every((g) => /^[0-9a-f]{1,4}$/.test(g))
+    ? (groups.map((g) => parseInt(g, 16)) as [
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+      ])
+    : null;
+}
+
 /**
  * True when an http node must NOT reach `hostname` — the cloud metadata IP,
  * loopback, link-local, and private ranges. IP-LITERAL check only (no DNS
  * resolution): it blocks the obvious `http://169.254.169.254/…`,
- * `http://127.0.0.1/…`, `http://10.x/…` shapes (direct or via a redirect). A
- * hostname that resolves to a private IP is a documented residual (see header).
+ * `http://127.0.0.1/…`, `http://10.x/…` shapes (direct or via a redirect).
+ * IPv6 literals are expanded to full form first so every spelling of a
+ * v4-mapped address (e.g. `::ffff:a00:1`, `0:0:0:0:0:ffff:10.0.0.1`) hits the
+ * v4 check; a malformed literal fails closed. A hostname that resolves to a
+ * private IP is a documented residual (see header).
  */
 export function isBlockedHttpHost(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/^\[|\]$/g, ''); // strip IPv6 brackets
   if (host === 'localhost' || host.endsWith('.localhost')) return true;
   if (host.includes(':')) {
     // IPv6 literal (a DNS name never contains ':').
-    if (host === '::1' || host === '::') return true; // loopback / unspecified
-    if (/^(fe80:|fc|fd)/.test(host)) return true; // link-local (fe80::/10) + ULA (fc00::/7)
-    if (host.startsWith('::ffff:')) return isBlockedV4(host.slice(7)); // v4-mapped
+    const groups = expandV6Groups(host);
+    if (groups === null) return true; // malformed literal: fail closed
+    const g0 = groups[0];
+    if ((g0 >= 0xfe80 && g0 <= 0xfebf) || (g0 >= 0xfc00 && g0 <= 0xfdff)) return true; // link-local (fe80::/10) + ULA (fc00::/7)
+    if (groups.every((g) => g === 0)) return true; // unspecified ::
+    if (groups.slice(0, 7).every((g) => g === 0) && groups[7] === 1) return true; // loopback ::1
+    // v4-mapped (::ffff:0:0/96): the last 32 bits are a v4 address.
+    if (groups.slice(0, 5).every((g) => g === 0) && groups[5] === 0xffff) {
+      const hi = groups[6];
+      const lo = groups[7];
+      return isBlockedV4(`${(hi >> 8) & 255}.${hi & 255}.${(lo >> 8) & 255}.${lo & 255}`);
+    }
     return false;
   }
   return isBlockedV4(host);

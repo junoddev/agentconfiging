@@ -23,7 +23,7 @@
  * currently change the result.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FileContent } from '../api/index.js';
 import { errorText } from './errors.js';
 import { isRedactedFile } from './redacted.js';
@@ -69,6 +69,11 @@ export function useFileEditor(opts: FileEditorOptions): FileEditorState {
   const [draft, setDraft] = useState('');
   const [status, setStatus] = useState<FileEditorStatus>('idle');
   const [errMsg, setErrMsg] = useState('');
+  // Latest selection, read by in-flight reloads (same cancel-safety as the load
+  // effect: a reload resolving after the user switched files must not clobber
+  // the new selection with the old file's content).
+  const pathRef = useRef(path);
+  pathRef.current = path;
 
   // Load on selection change (cancel-safe). When nothing is selected the file is
   // released but the draft is LEFT ALONE (template/create callers own it then).
@@ -102,6 +107,7 @@ export function useFileEditor(opts: FileEditorOptions): FileEditorState {
     if (path === undefined) return;
     getFile(path)
       .then((loaded) => {
+        if (pathRef.current !== path) return; // selection changed mid-flight
         setFile(loaded);
         setDraft(loaded.content);
       })
