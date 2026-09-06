@@ -1,0 +1,29 @@
+---
+import AgentChanges from '../components/AgentChanges.astro';
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="Agent profile changelog — agentconfig.ing"
+  description="A dated, reviewable history of changes observed in AI agent configuration contracts."
+  canonicalPath="/changelog"
+>
+  <header class="topbar">
+    <div class="shell topbar-inner">
+      <a class="brand" href="/">agentconfig<span class="brand-dot">.</span>ing</a>
+      <nav class="nav" aria-label="Primary"><a href="/">Home</a><a href="/changelog">Changelog</a></nav>
+    </div>
+  </header>
+  <main>
+    <div class="shell changelog-hero">
+      <p class="eyebrow">Agent profile changelog</p>
+      <h1>Agent configuration changes, over time.</h1>
+      <p class="lede">
+        Dated before-and-after summaries derived from official upstream sources. Observed changes
+        remain visibly pending until a maintainer promotes them into the canonical profiles.
+      </p>
+    </div>
+    <section><div class="shell"><AgentChanges /></div></section>
+  </main>
+  <footer><div class="shell footer"><a class="brand" href="/">agentconfig<span class="brand-dot">.</span>ing</a><a href="/">Home</a><a href="https://github.com/junoddev/agentconfiging">GitHub</a><span>MIT</span></div></footer>
+</BaseLayout>

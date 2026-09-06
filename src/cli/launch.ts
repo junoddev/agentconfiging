@@ -15,6 +15,7 @@
 
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import dns from 'node:dns/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { buildReport, detect, discoverProjects, scanProject } from '../core/index.js';
@@ -57,6 +58,7 @@ export interface ServerFactoryOptions {
   /** Extra roots (the restored workspace) to seed as lazy instances. */
   instances?: readonly string[];
   host?: string;
+  acceptAll?: boolean;
   port?: number;
   distDir?: string;
 }
@@ -68,6 +70,8 @@ export interface LaunchOptions {
   open: boolean;
   /** Quitting the UI leaves the server running (--detach). */
   detach: boolean;
+  /** Bind all interfaces and accept arbitrary Host/Origin values. */
+  acceptAll?: boolean;
 }
 
 export interface InstanceCounts {
@@ -92,6 +96,37 @@ export interface LaunchDeps {
   platform?: NodeJS.Platform;
   homeDir?: string;
   now?: () => Date;
+  /** Discover names/addresses advertised for --accept-all sample URLs. */
+  discoverHosts?: () => Promise<string[]>;
+}
+
+/** Discover usable local names and addresses, including reverse-DNS names. */
+export async function discoverNetworkHosts(): Promise<string[]> {
+  const hosts = new Set<string>(['127.0.0.1', 'localhost']);
+  const hostname = os.hostname().trim();
+  if (hostname) hosts.add(hostname);
+  const addresses = new Set<string>();
+  for (const entries of Object.values(os.networkInterfaces())) {
+    for (const entry of entries ?? []) {
+      if (!entry.internal) addresses.add(entry.address.split('%')[0] as string);
+    }
+  }
+  for (const address of addresses) hosts.add(address);
+  await Promise.all(
+    [...addresses].map(async (address) => {
+      try {
+        for (const name of await dns.reverse(address)) hosts.add(name);
+      } catch {
+        // Reverse DNS is best-effort; the numeric address remains usable.
+      }
+    }),
+  );
+  return [...hosts];
+}
+
+export function sampleUrl(host: string, port: number, token: string): string {
+  const urlHost = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+  return `http://${urlHost}:${port}/#token=${token}`;
 }
 
 /** Platform browser-opener command; pure so tests can assert on it. */
@@ -198,6 +233,7 @@ export async function runLaunch(opts: LaunchOptions, deps: LaunchDeps): Promise<
     server = await (deps.serverFactory ?? defaultServerFactory)({
       root: cwd,
       instances: restoredRoots,
+      acceptAll: opts.acceptAll,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -207,6 +243,12 @@ export async function runLaunch(opts: LaunchOptions, deps: LaunchDeps): Promise<
   }
 
   emit('ok', `SERVER UP · ${server.url}`);
+  if (opts.acceptAll) {
+    emit('warn', 'ACCEPT ALL · exposed on every network interface');
+    const hosts = await (deps.discoverHosts ?? discoverNetworkHosts)();
+    for (const host of hosts)
+      emit('info', `SAMPLE URL · ${sampleUrl(host, server.port, server.token)}`);
+  }
 
   // First instance = cwd, loaded eagerly so the list shows real counts. The
   // restored roots follow as lazy instances (○, counts unknown until opened).

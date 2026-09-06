@@ -25,6 +25,39 @@ export interface AgentFiles {
 }
 
 /**
+ * The runtimes available to the shell picker. Project detections take
+ * precedence, but machine-global detections keep the picker usable for a
+ * project that has no local config of its own. A runtime can be detected by
+ * more than one global config directory, so collapse those entries by kind.
+ */
+export function availableAgents(
+  projectAgents: readonly DetectedAgent[],
+  globalEntries: readonly unknown[],
+): DetectedAgent[] {
+  const merged = new Map<string, DetectedAgent>();
+  const add = (agent: DetectedAgent) => {
+    const existing = merged.get(agent.kind);
+    if (existing === undefined) {
+      merged.set(agent.kind, agent);
+      return;
+    }
+    merged.set(agent.kind, {
+      ...existing,
+      files: [...new Set([...existing.files, ...agent.files])],
+    });
+  };
+
+  for (const agent of projectAgents) add(agent);
+  for (const entry of globalEntries) {
+    if (typeof entry !== 'object' || entry === null || !('agents' in entry)) continue;
+    const agents = entry.agents;
+    if (!Array.isArray(agents)) continue;
+    for (const agent of agents) add(agent as DetectedAgent);
+  }
+  return [...merged.values()];
+}
+
+/**
  * Resolve the effective active agent: the stored/selected kind when this
  * report detected it, else the first detected agent (report order), else
  * undefined (no agents detected — pages render their empty states).

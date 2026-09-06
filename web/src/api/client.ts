@@ -13,7 +13,9 @@
 import type {
   ApplyFixResponse,
   CatalogInstallResponse,
+  ContextCost,
   ContextHealth,
+  ExtensionInventoryResponse,
   CatalogRemoveResponse,
   CatalogResponse,
   FileContent,
@@ -42,6 +44,7 @@ import type {
   KnownProjectsResponse,
   MarketplaceResponse,
   PtyStatusResponse,
+  ProfilesResponse,
   RemoveResponse,
   Report,
   ScanResponse,
@@ -168,6 +171,11 @@ export class ApiClient {
     return this.#get<HealthResponse>('/api/health');
   }
 
+  /** Public, content-safe upstream knowledge summaries (never local detection data). */
+  getProfiles(): Promise<ProfilesResponse> {
+    return this.#get<ProfilesResponse>('/api/profiles');
+  }
+
   /** GET a single in-scope config file's REDACTED content + mark spans (secrets
    *  are stripped server-side; render as text only). */
   getFile(path: string): Promise<FileContent> {
@@ -277,6 +285,16 @@ export class ApiClient {
     return this.#get<ContextHealth>(`/api/context-health${qs}`);
   }
 
+  /**
+   * CONTEXT COST (agentconfig-ub3.5) — per-agent initial-context token usage
+   * from the ub3.2 core/server pass. Kept separate from the byte-oriented
+   * aggregate context-health endpoint so existing health behavior is unchanged.
+   */
+  getContextCost(instance?: string): Promise<ContextCost> {
+    const qs = instance ? `?instance=${encodeURIComponent(instance)}` : '';
+    return this.#get<ContextCost>(`/api/context-cost${qs}`);
+  }
+
   /** GET the embedded-terminal capability probe (ngs.2) for an instance. */
   getPtyStatus(instance?: string): Promise<PtyStatusResponse> {
     const qs = instance ? `?instance=${encodeURIComponent(instance)}` : '';
@@ -352,6 +370,11 @@ export class ApiClient {
   /** The installed Claude Code plugins (version/scope/date). */
   getInstalledPlugins(): Promise<InstalledPluginsResponse> {
     return this.#get<InstalledPluginsResponse>('/api/marketplace/installed');
+  }
+
+  /** Normalized read-only inventory across configured runtime providers. */
+  getExtensions(): Promise<ExtensionInventoryResponse> {
+    return this.#get<ExtensionInventoryResponse>('/api/extensions');
   }
 
   /**

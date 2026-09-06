@@ -3,6 +3,7 @@ import { EmptyState, ToastProvider } from './components/core/index.js';
 import { GalleryPage } from './gallery/GalleryPage.js';
 import { AgentDetail } from './pages/AgentDetail.js';
 import { Agents } from './pages/Agents.js';
+import { Profiles } from './pages/Profiles.js';
 import { Artifacts } from './pages/Artifacts.js';
 import { Findings } from './pages/Findings.js';
 import { Instances } from './pages/Instances.js';
@@ -18,6 +19,7 @@ import { Keybindings } from './pages/Keybindings.js';
 import { Sync } from './pages/Sync.js';
 import { Catalog } from './pages/Catalog.js';
 import { Marketplace } from './pages/Marketplace.js';
+import { Extensions } from './pages/Extensions.js';
 import { Dashboard } from './pages/Dashboard.js';
 import { Sessions } from './pages/Sessions.js';
 import { Search } from './pages/Search.js';
@@ -63,6 +65,8 @@ function renderRoute(route: Route) {
       return <Overview />;
     case 'agents':
       return <Agents />;
+    case 'profiles':
+      return <Profiles />;
     case 'agent':
       return <AgentDetail kind={route.kind} />;
     case 'findings':
@@ -93,6 +97,8 @@ function renderRoute(route: Route) {
       return <Catalog />;
     case 'marketplace':
       return <Marketplace />;
+    case 'extensions':
+      return <Extensions />;
     case 'dashboard':
       return <Dashboard />;
     case 'sessions':
@@ -102,13 +108,13 @@ function renderRoute(route: Route) {
     case 'context':
       return <ContextHealth />;
     case 'git':
-      return <Git />;
+      return <Git target={route.target} />;
     case 'terminal':
       // The terminal is rendered persistently at the shell (see App) so its tabs
       // + live PTYs survive navigation; the routed slot renders nothing.
       return null;
     case 'pipelines':
-      return <Pipelines />;
+      return <Pipelines target={route.target} />;
     case 'gallery':
       return <GalleryPage />;
   }
@@ -197,6 +203,7 @@ export function App() {
     <ToastProvider>
       <div className="layout-shell">
         <TopBar
+          route={route}
           theme={theme}
           onToggleTheme={toggleTheme}
           onAbout={() => setAboutOpen(true)}
@@ -211,7 +218,7 @@ export function App() {
               {unauthorized ? (
                 <main className="layout-main page">
                   <section className="page__section">
-                    <EmptyState instruction="reopen agentconfig from the CLI — session token missing" />
+                    <EmptyState instruction="reopen agentconfig.ing from the CLI — session token missing" />
                   </section>
                 </main>
               ) : (
@@ -219,7 +226,11 @@ export function App() {
                   {renderRoute(route)}
                   {/* Persistent terminal: mounted once, only hidden off-route, so
                     its tabs + live PTYs survive navigation (ngs.2). */}
-                  <Terminal active={route.name === 'terminal'} theme={theme} />
+                  <Terminal
+                    active={route.name === 'terminal'}
+                    theme={theme}
+                    target={route.name === 'terminal' ? route.target : undefined}
+                  />
                 </>
               )}
             </div>
@@ -229,6 +240,7 @@ export function App() {
         <CommandPalette
           open={paletteOpen}
           theme={theme}
+          route={route}
           onClose={() => setPaletteOpen(false)}
           onRun={runCommand}
         />

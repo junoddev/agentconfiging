@@ -1,14 +1,18 @@
 node_modules/
 dist/
 coverage/
+profile-refresh-output/
 docs/
 # Imported Console reference (read-only source of truth — never reformat)
 opendesign/
 fixtures/
-.beads/
 .agents/
 .claude/
 .codex/
+.github/agents/
+.github/hooks/
+.github/skills/
+.impeccable/
 package-lock.json
 *.md
 

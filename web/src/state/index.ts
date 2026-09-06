@@ -20,6 +20,7 @@ export {
 } from './appState.js';
 export {
   agentKindsForFile,
+  availableAgents,
   displayNameForKind,
   isClaudeKind,
   otherAgentKinds,

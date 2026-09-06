@@ -137,7 +137,7 @@ function Frame({ children }: { children: ReactNode }) {
 }
 
 function KeybindingsBody() {
-  const { getFile, report, loading, error, activeAgent } = useAppState();
+  const { getFile, report, loading, error, agentScopeKind } = useAppState();
   const { entries: globalEntries } = useGlobalConfig();
   const flow = useWriteFlow();
   const toast = useToast();
@@ -367,7 +367,7 @@ function KeybindingsBody() {
   // Code alone, so any other active agent gets an honest not-applicable state.
   // Placed AFTER every hook call so the hook order never changes.
   const notApplicable =
-    activeAgent !== undefined && !sectionApplies('keybindings', activeAgent.kind);
+    agentScopeKind !== undefined && !sectionApplies('keybindings', agentScopeKind);
   if (notApplicable) {
     return (
       <main className="layout-main page">
@@ -378,7 +378,7 @@ function KeybindingsBody() {
           </div>
         </div>
         <Notice tone="info">
-          <strong>Not applicable to {displayNameForKind(activeAgent.kind)}.</strong>{' '}
+          <strong>Not applicable to {displayNameForKind(agentScopeKind)}.</strong>{' '}
           .claude/keybindings.json is a Claude Code surface — switch the Agent picker to Claude Code
           to view or edit it.
         </Notice>

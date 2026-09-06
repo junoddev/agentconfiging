@@ -1,0 +1,33 @@
+/* Marketing-site subset of web/src/styles/tokens.css. Keep shared values aligned. */
+:root {
+  color-scheme: light;
+  --bg: oklch(98% 0.005 250);
+  --surface: oklch(100% 0 0);
+  --fg: oklch(22% 0.02 240);
+  --muted: oklch(50% 0.018 240);
+  --border: oklch(90% 0.008 240);
+  --accent: oklch(58% 0.16 145);
+  --warn: oklch(62% 0.14 85);
+  --danger: oklch(56% 0.19 25);
+  --accent-soft: color-mix(in oklch, var(--accent) 14%, transparent);
+  --warn-soft: color-mix(in oklch, var(--warn) 16%, transparent);
+  --danger-soft: color-mix(in oklch, var(--danger) 14%, transparent);
+  --fg-soft: color-mix(in oklch, var(--fg) 6%, transparent);
+  --font-display: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  --radius: 8px;
+  --radius-lg: 12px;
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: oklch(17% 0.012 245);
+  --surface: oklch(21% 0.014 245);
+  --fg: oklch(93% 0.008 240);
+  --muted: oklch(64% 0.015 240);
+  --border: oklch(30% 0.014 245);
+  --accent: oklch(72% 0.17 148);
+  --warn: oklch(76% 0.14 85);
+  --danger: oklch(66% 0.18 25);
+}

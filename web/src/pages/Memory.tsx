@@ -84,11 +84,11 @@ export function Memory() {
 }
 
 function MemoryPage() {
-  const { report, getFile, activeAgent } = useAppState();
+  const { report, getFile, agentScopeKind } = useAppState();
   const { entries: globalDirs } = useGlobalConfig();
   const flow = useWriteFlow();
   const toast = useToast();
-  const agentKind = activeAgent?.kind;
+  const agentKind = agentScopeKind;
 
   // Scoped to the ACTIVE agent (bead a6y); each row notes the other detected
   // agents that read the same file via the AlsoAgents badge.
@@ -230,7 +230,7 @@ function MemoryPage() {
 
   // The sidebar hides MEMORY for agents without the concept (bead a6y); this
   // covers deep links with an honest not-applicable state. After all hooks.
-  const notApplicable = activeAgent !== undefined && !sectionApplies('memory', activeAgent.kind);
+  const notApplicable = agentScopeKind !== undefined && !sectionApplies('memory', agentScopeKind);
   if (notApplicable) {
     return (
       <main className="layout-main">
@@ -241,7 +241,7 @@ function MemoryPage() {
           </div>
         </div>
         <Notice tone="info">
-          <strong>Not applicable to {displayNameForKind(activeAgent.kind)}.</strong> Memory files
+          <strong>Not applicable to {displayNameForKind(agentScopeKind)}.</strong> Memory files
           (.claude/memory/*.md) are a Claude Code surface — switch the Agent picker to Claude Code
           to view or edit them.
         </Notice>

@@ -18,11 +18,16 @@
 import {
   buildGlobalEntries,
   buildReport,
+  computeContextCost,
   computeContextHealth,
+  CONTEXT_COST_BUDGET_TOKENS,
   detect,
   scanProject,
   toReportFinding,
+  type ContextCost,
   type ContextHealth,
+  type ContextCostOptions,
+  type AgentConfigQuality,
   type DetectedAgent,
   type Fix,
   type GlobalEntry,
@@ -31,6 +36,7 @@ import {
   type ReportFinding,
   type ScanOptions,
 } from '../core/index.js';
+import { redactJsonValue } from './http.js';
 
 /** Scopes a per-instance ReportStore serves — project-only by design; the
  *  machine-global report lives in the server-owned {@link GlobalStore}. */
@@ -44,8 +50,25 @@ export interface ServedReport {
   scope: 'project' | 'global';
   localOnly: boolean;
   agents: DetectedAgent[];
+  quality: AgentConfigQuality;
   findings: ReportFinding[];
   stats: ManifestStats;
+}
+
+function contextCostCacheKey(scope: ReportScope, opts: ContextCostOptions): string {
+  const factors = Object.entries(opts.runtimeFudgeFactors ?? {})
+    .filter(([, value]) => value !== undefined)
+    .sort(([a], [b]) => a.localeCompare(b));
+  return `${scope}\0${JSON.stringify({
+    budgetTokens: opts.budgetTokens ?? CONTEXT_COST_BUDGET_TOKENS,
+    runtimeFudgeFactors: factors,
+  })}`;
+}
+
+function deleteContextCostScope(cache: Map<string, ContextCost>, scope: ReportScope): void {
+  for (const key of cache.keys()) {
+    if (key.startsWith(`${scope}\0`)) cache.delete(key);
+  }
 }
 
 export class ReportStore {
@@ -60,6 +83,8 @@ export class ReportStore {
    * populated in the single `#build` pass, so it costs no extra scan.
    */
   readonly #contextHealth = new Map<ReportScope, ContextHealth>();
+  /** CONTEXT-COST views keyed by scope and normalized effective options. */
+  readonly #contextCost = new Map<string, ContextCost>();
   /**
    * Per-scope map of finding id → fix payload. SERVER-INTERNAL by design: it
    * holds the `fix.edits[].patch` (complete replacement file content, possibly
@@ -120,41 +145,69 @@ export class ReportStore {
     return this.#contextHealth.get(scope) as ContextHealth;
   }
 
+  /**
+   * The per-agent initial-context token-cost view for `scope`, computed on
+   * first access or when `fresh` is set (mirrors {@link get}). Reuses the same
+   * scan/detect pass as the report and context-health caches.
+   */
+  contextCost(
+    scope: ReportScope,
+    opts: { fresh?: boolean } & ContextCostOptions = {},
+  ): ContextCost {
+    const key = contextCostCacheKey(scope, opts);
+    if (!opts.fresh) {
+      const hit = this.#contextCost.get(key);
+      if (hit) return hit;
+    }
+    this.#build(scope, opts);
+    return this.#contextCost.get(key) as ContextCost;
+  }
+
   /** Drop cached reports + fixes (one scope, or all). Watcher-bead hook. */
   invalidate(scope?: ReportScope): void {
     if (scope) {
       this.#cache.delete(scope);
       this.#fixes.delete(scope);
       this.#contextHealth.delete(scope);
+      deleteContextCostScope(this.#contextCost, scope);
     } else {
       this.#cache.clear();
       this.#fixes.clear();
       this.#contextHealth.clear();
+      this.#contextCost.clear();
     }
   }
 
   /** Scan + analyze once, populating BOTH the served-report cache and the
    *  (server-internal) fix cache from the single computation, then return the
    *  served report. */
-  #build(scope: ReportScope): ServedReport {
+  #build(scope: ReportScope, contextCostOptions: ContextCostOptions = {}): ServedReport {
     const manifest = scanProject(this.#root, this.#scanOptions);
     const agents = detect(manifest);
-    const { findings } = buildReport(manifest, agents);
-    const report: ServedReport = {
+    const { findings, quality } = buildReport(manifest, agents);
+    const report = redactJsonValue<ServedReport>({
       version: this.#version,
       generatedAt: new Date().toISOString(),
       root: manifest.root,
       scope: manifest.scope ?? 'project',
       localOnly: manifest.localOnly ?? false,
       agents,
+      quality,
       findings: findings.map(toReportFinding),
       stats: manifest.stats,
-    };
+    });
     const fixes = new Map<string, Fix>();
     for (const finding of findings) if (finding.fix) fixes.set(finding.id, finding.fix);
     this.#cache.set(scope, report);
     this.#fixes.set(scope, fixes);
     this.#contextHealth.set(scope, computeContextHealth(manifest));
+    // A build rescans the project, so option variants derived from the prior
+    // manifest must not survive as apparently valid cache hits.
+    deleteContextCostScope(this.#contextCost, scope);
+    this.#contextCost.set(
+      contextCostCacheKey(scope, contextCostOptions),
+      computeContextCost(manifest, agents, contextCostOptions),
+    );
     return report;
   }
 }
@@ -205,13 +258,13 @@ export class GlobalStore {
    */
   get(opts: { fresh?: boolean } = {}): ServedGlobalReport {
     if (!opts.fresh && this.#cache) return this.#cache;
-    this.#cache = {
+    this.#cache = redactJsonValue<ServedGlobalReport>({
       version: this.#version,
       generatedAt: new Date().toISOString(),
       scope: 'global',
       localOnly: true,
       entries: buildGlobalEntries(this.#homeDir),
-    };
+    });
     return this.#cache;
   }
 }

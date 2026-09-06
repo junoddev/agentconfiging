@@ -75,6 +75,12 @@ describe('fixture findings matrix', () => {
     expect(findings.map((f) => f.id)).toEqual([
       'conflicting-instructions-claude-md-agents-md',
       'duplicate-rules-cursorrules-and-cursor-rules',
+      'quality-bloat-contradiction-indentation-cursorrules-4-claude-md-14',
+      'quality-bloat-contradiction-indentation-cursorrules-4-github-copilot-instructions-md-6',
+      'quality-bloat-contradiction-indentation-github-copilot-instructions-md-6-claude-md-14',
+      'quality-bloat-contradiction-retry-count-cursorrules-6-agents-md-6',
+      'quality-bloat-contradiction-retry-count-cursorrules-6-github-copilot-instructions-md-8',
+      'quality-bloat-score',
       'no-agents-no-skills',
       'rules-drift',
     ]);

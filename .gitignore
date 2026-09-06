@@ -1,15 +1,12 @@
 
-# Beads / Dolt files (added by bd init)
-.dolt/
-*.db
-.beads-credential-key
-.beads/proxieddb/
-
 # Node / build output
 node_modules/
 dist/
+site/.astro/
+.wrangler/
 coverage/
 *.tsbuildinfo
+profile-refresh-output/
 
 # QA scratch
 .qa-screenshots/

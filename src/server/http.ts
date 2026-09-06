@@ -9,6 +9,7 @@
  */
 
 import type { Context } from 'hono';
+import { redact } from '../core/redact/index.js';
 import type { InstanceRegistry, RegistryInstance } from './registry.js';
 
 /**
@@ -24,6 +25,40 @@ export function jsonError(status: JsonErrorStatus, message: string): Response {
     status,
     headers: { 'content-type': 'application/json' },
   });
+}
+
+function redactStringForKey(value: string, key?: string): string {
+  const direct = redact(value).text;
+  if (direct !== value || key === undefined) return direct;
+  const probe = JSON.stringify({ [key]: value });
+  const redacted = redact(probe).text;
+  if (redacted === probe) return value;
+  try {
+    const parsed = JSON.parse(redacted) as Record<string, unknown>;
+    const next = parsed[key];
+    return typeof next === 'string' ? next : direct;
+  } catch {
+    return direct;
+  }
+}
+
+/**
+ * Redact a JSON-serializable value while preserving its shape. String leaves are
+ * redacted directly; when an object key is available, the redactor also sees the
+ * key/value pair so secret-named fields such as `OPENAI_API_KEY` are covered.
+ */
+export function redactJsonValue<T>(value: T): T {
+  const visit = (v: unknown, key?: string): unknown => {
+    if (typeof v === 'string') return redactStringForKey(v, key);
+    if (Array.isArray(v)) return v.map((item) => visit(item));
+    if (v !== null && typeof v === 'object') {
+      const out: Record<string, unknown> = {};
+      for (const [childKey, child] of Object.entries(v)) out[childKey] = visit(child, childKey);
+      return out;
+    }
+    return v;
+  };
+  return visit(value) as T;
 }
 
 /** True for a plain (non-array, non-null) object. */

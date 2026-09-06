@@ -22,7 +22,7 @@ import { useCatalogFlow } from './useCatalogFlow.js';
 
 export interface CatalogCardProps {
   entry: CatalogEntryMeta;
-  /** The installed record for this entry, when agentconfig installed it. */
+  /** The installed record for this entry, when agentconfig.ing installed it. */
   installed?: InstalledRecord;
   client: ApiClient;
   instance?: string;

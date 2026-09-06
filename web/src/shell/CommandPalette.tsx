@@ -17,11 +17,14 @@ import {
 import { Dialog, formatIndex } from '../components/core/index.js';
 import {
   buildCommands,
+  commandTargetContext,
   filterCommands,
   moveSelection,
   type CommandAction,
 } from '../command/commands.js';
 import { EDITOR_ROUTES, type RouteName } from '../routes.js';
+import { integrationInventoryTerm } from '../lib/agentTerminology.js';
+import type { Route } from '../routes.js';
 import { sectionApplies, useAppState } from '../state/index.js';
 import type { Theme } from './theme.js';
 import '../command/command.css';
@@ -29,25 +32,41 @@ import '../command/command.css';
 export interface CommandPaletteProps {
   open: boolean;
   theme: Theme;
+  /** Current route, including an explicit deep-link target when present. */
+  route?: Route;
   onClose: () => void;
   /** Run a chosen command's action (the shell performs the effect). */
   onRun: (action: CommandAction) => void;
 }
 
-export function CommandPalette({ open, theme, onClose, onRun }: CommandPaletteProps) {
+export function CommandPalette({ open, theme, route, onClose, onRun }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { activeAgent } = useAppState();
+  const { agentScopeKind, currentInstance } = useAppState();
 
   // Mirror the sidebar's adaptive rail (bead a6y): no nav commands for
   // Configure sections the active agent has no concept of.
   const hiddenRoutes = useMemo(() => {
-    const kind = activeAgent?.kind;
-    return new Set<RouteName>(EDITOR_ROUTES.filter((name) => !sectionApplies(name, kind)));
-  }, [activeAgent]);
+    return new Set<RouteName>(
+      EDITOR_ROUTES.filter((name) => !sectionApplies(name, agentScopeKind)),
+    );
+  }, [agentScopeKind]);
 
-  const commands = useMemo(() => buildCommands(theme, hiddenRoutes), [theme, hiddenRoutes]);
+  const contextTarget = useMemo(() => {
+    return {
+      ...(currentInstance?.id !== undefined ? { instanceId: currentInstance.id } : {}),
+      ...(agentScopeKind !== undefined ? { agentKind: agentScopeKind } : {}),
+    };
+  }, [agentScopeKind, currentInstance?.id]);
+  const targets = useMemo(() => commandTargetContext(route, contextTarget), [contextTarget, route]);
+  const commands = useMemo(
+    () =>
+      buildCommands(theme, hiddenRoutes, targets.contextTarget, targets.operateTarget, {
+        extensions: integrationInventoryTerm(agentScopeKind),
+      }),
+    [theme, hiddenRoutes, targets, agentScopeKind],
+  );
   const results = useMemo(() => filterCommands(commands, query), [commands, query]);
 
   // Reset + focus each time it opens (after the Dialog's showModal, which

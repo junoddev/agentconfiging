@@ -24,7 +24,7 @@ Until real captures land, this is the shell (see [DESIGN.md](../DESIGN.md) §4):
 
 ```
 +--------+-------------------------------------------------------------+
-| AGENTCONFIG        ~/projects/acme            ● LIVE  $2.14  [PAPER] | 48px top bar
+| AGENTCONFIG.ING    ~/projects/acme            ● LIVE  $2.14  [PAPER] | 48px top bar
 +--------+-------------------------------------------------------------+
 | 01 SIGNAL   |                                                        |
 | 02 AGENTS   |    2                 3                14               |

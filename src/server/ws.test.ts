@@ -171,6 +171,21 @@ describe('authorizeUpgrade gates (WS bypasses CORS — these are the defense)', 
     });
   });
 
+  it('accept-all permits foreign Host and Origin while still requiring the token', () => {
+    const headers = {
+      ...validHeaders(),
+      host: 'workstation.example:9999',
+      origin: 'http://workstation.example:9999',
+    };
+    expect(authorizeUpgrade(fakeReq(headers), { ...config, acceptAll: true }).ok).toBe(true);
+    expect(
+      authorizeUpgrade(fakeReq({ ...headers, 'sec-websocket-protocol': 'wrong' }), {
+        ...config,
+        acceptAll: true,
+      }),
+    ).toEqual({ ok: false, status: 401 });
+  });
+
   it('rejects a missing Sec-WebSocket-Key → 400', () => {
     const h = validHeaders();
     delete (h as Record<string, string>)['sec-websocket-key'];

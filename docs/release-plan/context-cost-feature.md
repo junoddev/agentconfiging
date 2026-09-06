@@ -79,11 +79,18 @@ A is the shared foundation (also unblocks `3hi`). D is independent and reusable.
 E needs B/C for data and D for the links. Ship order: A → (B, D in parallel) →
 C → E.
 
-## Launch-blocking?
+## Launch-blocking split (DECIDED 2026-08-01)
 
-`3hi` (bloat score) is already launch-blocking. This feature is its natural
-extension but **larger** — D (route infra) and C (section parsing) are real
-work. **Open question for the maintainer:** make the per-agent token tile
-(A+B+E-lite) launch-blocking alongside `3hi`, and treat per-section deep links
-(C+D) as the first fast-follow? That gets the headline number at launch without
-the heavier addressing work on the critical path.
+Maintainer chose **token tile at launch, deep links follow**:
+
+- **Launch-blocking:** A (`ub3.1` token util) + B (`ub3.2` per-agent pass) +
+  E-lite (`ub3.5` per-agent context tile, no section links). Ships the headline
+  "this agent starts with N tokens" number alongside the `3hi` bloat score.
+  `ub3.1` is also a hard dependency of the launch-blocking `3hi`.
+- **Fast-follow (post-launch):** C (`ub3.3` per-section attribution) + D
+  (`ub3.4` file/section route infra) + `ub3.6` (linked per-section breakdown).
+  The heavier addressing work stays off the launch critical path; when it lands
+  it upgrades the tile into full click-to-section navigation.
+
+Beads: epic `agentconfig-ub3`; `ub3.1/.2/.5` are P1 launch-blocking,
+`ub3.3/.4/.6` are P2 fast-follow. `3hi` depends on `ub3.1`.

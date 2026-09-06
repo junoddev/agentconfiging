@@ -353,6 +353,19 @@ describe('scanGlobal', () => {
     expect(manifests[0]?.stats.skipped).toBeGreaterThanOrEqual(2);
   });
 
+  it('prunes Codex application state without hiding global rules', () => {
+    const home = makeTempDir();
+    write(home, '.codex/config.toml', 'model = "gpt-5-codex"\n');
+    write(home, '.codex/rules/default.rules', 'prefix_rule(pattern=["git status"])\n');
+    for (let i = 0; i < CAPS.maxFiles + 20; i++) {
+      write(home, `.codex/sessions/2026/session-${i}.jsonl`, '{}\n');
+    }
+
+    const manifests = scanGlobal(home);
+    expect(manifests).toHaveLength(1);
+    expect(manifests[0]?.files.map((f) => f.path)).toEqual(['config.toml', 'rules/default.rules']);
+  });
+
   it('returns an empty list for a home with no agent config', () => {
     const home = makeTempDir();
     write(home, 'notes.md', 'nothing agenty\n');
