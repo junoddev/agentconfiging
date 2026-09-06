@@ -18,3 +18,4 @@ package-lock.json
 
 # Generated registry seed snapshot (regenerate via build-seed.ts, not prettier)
 src/core/registry/seed/index.json
+.beads/

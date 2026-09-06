@@ -24,6 +24,7 @@ import {
   STRIPPED_ENV_KEYS,
   buildChildEnv,
   defaultRuntimes,
+  isBlockedHttpHost,
   isValidGitArg,
 } from './runtimes.js';
 import type { HttpFetch, NodeRunArgs, RuntimeContext } from './types.js';
@@ -227,6 +228,65 @@ describe('http runtime', () => {
       await assertion;
     } finally {
       vi.useRealTimers();
+    }
+  });
+});
+
+describe('isBlockedHttpHost', () => {
+  it('blocks v4 literals in every blocked range', () => {
+    for (const host of [
+      '127.0.0.1',
+      '0.0.0.0',
+      '10.0.0.1',
+      '172.16.0.1',
+      '172.31.255.255',
+      '192.168.1.1',
+      '169.254.169.254',
+    ]) {
+      expect(isBlockedHttpHost(host), host).toBe(true);
+    }
+    expect(isBlockedHttpHost('8.8.8.8')).toBe(false);
+  });
+
+  it('fails closed on malformed or octal-ambiguous v4 literals', () => {
+    for (const host of ['1.2.3.999', '999.1.1.1', '0177.0.0.1', '10.00.0.1']) {
+      expect(isBlockedHttpHost(host), host).toBe(true);
+    }
+  });
+
+  it('blocks v4-mapped IPv6 in hex AND dotted spellings (incl. full form)', () => {
+    for (const host of [
+      '::ffff:10.0.0.1',
+      '::ffff:a00:1',
+      '::ffff:a00:0001',
+      '0:0:0:0:0:ffff:a00:1',
+      '::0:ffff:169.254.169.254',
+      '::ffff:c0a8:1',
+    ]) {
+      expect(isBlockedHttpHost(host), host).toBe(true);
+    }
+    expect(isBlockedHttpHost('::ffff:808:808')).toBe(false); // public 8.8.8.8
+  });
+
+  it('blocks v6 loopback/unspecified/link-local/ULA and localhost names', () => {
+    for (const host of [
+      '::1',
+      '::',
+      'fe80::1',
+      'febf::1',
+      'fc00::1',
+      'fdff::1',
+      'localhost',
+      'a.localhost',
+    ]) {
+      expect(isBlockedHttpHost(host), host).toBe(true);
+    }
+    expect(isBlockedHttpHost('2606:4700::1')).toBe(false);
+  });
+
+  it('fails closed on malformed IPv6 literals', () => {
+    for (const host of ['1:2:3:4:5:6:7:8:9', 'zz::1', '::ffff:1.2.3.999', '12345::']) {
+      expect(isBlockedHttpHost(host), host).toBe(true);
     }
   });
 });

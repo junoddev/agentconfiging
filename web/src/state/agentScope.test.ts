@@ -62,6 +62,28 @@ describe('availableAgents', () => {
     expect(result[0]?.confidence).toBe(local.confidence);
     expect(result[0]?.files).toEqual(['.claude/settings.json', 'settings.json']);
   });
+
+  it('skips malformed global agents instead of crashing the picker merge', () => {
+    const good = agent('codex', ['AGENTS.md']);
+    const result = availableAgents(
+      [],
+      [
+        {
+          agents: [
+            good,
+            null,
+            42,
+            { kind: 7, files: ['x'] }, // non-string kind
+            { kind: '', files: ['x'] }, // empty kind
+            { kind: 'cursor', files: 'not-an-array' }, // non-array files
+            { kind: 'warp', files: [1, 'ok'] }, // non-string file entry
+            { kind: 'opencode' }, // missing files entirely
+          ],
+        },
+      ],
+    );
+    expect(result).toEqual([good]);
+  });
 });
 
 describe('scopedAgents / scopeReport', () => {

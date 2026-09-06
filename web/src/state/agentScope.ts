@@ -52,7 +52,27 @@ export function availableAgents(
     if (typeof entry !== 'object' || entry === null || !('agents' in entry)) continue;
     const agents = entry.agents;
     if (!Array.isArray(agents)) continue;
-    for (const agent of agents) add(agent as DetectedAgent);
+    for (const agent of agents) {
+      // Report data is untrusted (GlobalEntryError flows through the same
+      // list): only accept well-formed agents so a malformed entry cannot
+      // reach the picker or crash the files merge below.
+      if (typeof agent !== 'object' || agent === null) continue;
+      const kind = (agent as { kind?: unknown }).kind;
+      const files = (agent as { files?: unknown }).files;
+      if (typeof kind !== 'string' || kind === '') continue;
+      if (!Array.isArray(files) || !files.every((f) => typeof f === 'string')) continue;
+      const confidence = (agent as { confidence?: unknown }).confidence;
+      const extras = (agent as { extras?: unknown }).extras;
+      add({
+        kind,
+        confidence:
+          confidence === 'high' || confidence === 'medium' || confidence === 'low'
+            ? confidence
+            : 'low',
+        files: [...files],
+        extras: typeof extras === 'object' && extras !== null ? { ...extras } : {},
+      });
+    }
   }
   return [...merged.values()];
 }
