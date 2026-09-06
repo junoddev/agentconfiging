@@ -22,7 +22,7 @@ This is a planning document; nothing in it has been executed.
 
 ### What PUBLISHING.md already covers (verified accurate)
 
-`/Users/tranqy/projects/agentconfig/PUBLISHING.md` is a real runbook, and its
+`PUBLISHING.md` (repo root) is a real runbook, and its
 claims check out against the repo:
 
 - Pre-flight done: `publishConfig.access: public`, `prepublishOnly` runs a fresh build, tarball verified via `npm pack --dry-run` (21 files, ~693 kB, no src/tests/maps/fixtures).
